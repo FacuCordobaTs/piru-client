@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client'
 import './index.css'
 import { createBrowserRouter } from "react-router";
 import { RouterProvider } from "react-router/dom";
+import { Toaster } from 'sonner'
 import { ThemeProvider } from './components/ThemeProvider'
 import Welcome from './pages/Welcome'
 import Nombre from './pages/Nombre'
@@ -16,7 +17,7 @@ const router = createBrowserRouter([
     element: <Welcome />,
   },
   {
-    path: "/nombre",
+    path: "/mesa/:qrToken",
     element: <Nombre />,
   },
   {
@@ -37,6 +38,11 @@ createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <ThemeProvider defaultTheme="system" storageKey="piru-ui-theme">
       <RouterProvider router={router} />
+      <Toaster 
+        position="top-center"
+        richColors
+        closeButton
+      />
     </ThemeProvider>
   </StrictMode>,
 )

@@ -1,0 +1,174 @@
+import { useEffect, useRef, useState } from 'react'
+import { useMesaStore } from '@/store/mesaStore'
+
+interface ItemPedido {
+  id: number
+  productoId: number
+  clienteNombre: string
+  cantidad: number
+  precioUnitario: string
+  nombre?: string
+  precio?: number // Para compatibilidad con ItemCarrito
+}
+
+interface WebSocketState {
+  items: ItemPedido[]
+  total: string
+  estado: 'pending' | 'preparing' | 'delivered' | 'closed'
+}
+
+interface UseClienteWebSocketReturn {
+  state: WebSocketState | null
+  isConnected: boolean
+  error: string | null
+  sendMessage: (message: any) => void
+}
+
+const WS_URL = import.meta.env.VITE_WS_URL || 'ws://localhost:3000'
+
+export const useClienteWebSocket = (): UseClienteWebSocketReturn => {
+  const { qrToken, clienteId, clienteNombre, setClientes, setPedidoId } = useMesaStore()
+  const [state, setState] = useState<WebSocketState | null>(null)
+  const [isConnected, setIsConnected] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const wsRef = useRef<WebSocket | null>(null)
+  const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const hasConnectedRef = useRef(false)
+
+  const sendMessage = (message: any) => {
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify(message))
+    } else {
+      console.error('WebSocket no está conectado')
+    }
+  }
+
+  useEffect(() => {
+    if (!qrToken) return
+
+    const connect = () => {
+      try {
+        const ws = new WebSocket(`${WS_URL}/ws/${qrToken}`)
+        wsRef.current = ws
+
+        ws.onopen = () => {
+          console.log('WebSocket conectado para cliente:', qrToken)
+          setIsConnected(true)
+          setError(null)
+
+          // Enviar mensaje de cliente conectado si tenemos la info
+          if (clienteId && clienteNombre && !hasConnectedRef.current) {
+            hasConnectedRef.current = true
+            sendMessage({
+              type: 'CLIENTE_CONECTADO',
+              payload: {
+                clienteId,
+                nombre: clienteNombre,
+              },
+            })
+          }
+        }
+
+        ws.onmessage = (event) => {
+          try {
+            const data = JSON.parse(event.data)
+            console.log('Mensaje WebSocket recibido:', data)
+
+            switch (data.type) {
+              case 'ESTADO_INICIAL':
+                setState({
+                  items: data.payload.items || [],
+                  total: data.payload.total || '0.00',
+                  estado: data.payload.estado || 'pending',
+                })
+                setClientes(data.payload.clientes || [])
+                setPedidoId(data.payload.pedidoId)
+                break
+
+              case 'CLIENTE_UNIDO':
+                setClientes(data.payload.clientes || [])
+                break
+
+              case 'CLIENTE_DESCONECTADO':
+                setClientes(data.payload.clientes || [])
+                break
+
+              case 'ITEM_AGREGADO':
+                setState((prev) => prev ? {
+                  ...prev,
+                  items: data.payload.items || prev.items,
+                  total: data.payload.total || prev.total,
+                } : null)
+                break
+
+              case 'ITEM_ELIMINADO':
+                setState((prev) => prev ? {
+                  ...prev,
+                  items: data.payload.items || prev.items,
+                  total: data.payload.total || prev.total,
+                } : null)
+                break
+
+              case 'CANTIDAD_ACTUALIZADA':
+                setState((prev) => prev ? {
+                  ...prev,
+                  items: data.payload.items || prev.items,
+                  total: data.payload.total || prev.total,
+                } : null)
+                break
+
+              case 'PEDIDO_CONFIRMADO':
+                setState((prev) => prev ? {
+                  ...prev,
+                  estado: 'preparing',
+                } : null)
+                break
+
+              case 'ERROR':
+                console.error('Error del servidor:', data.payload)
+                setError(data.payload.message)
+                break
+            }
+          } catch (err) {
+            console.error('Error parseando mensaje WebSocket:', err)
+          }
+        }
+
+        ws.onerror = (event) => {
+          console.error('Error WebSocket:', event)
+          setError('Error de conexión WebSocket')
+          setIsConnected(false)
+        }
+
+        ws.onclose = () => {
+          console.log('WebSocket cerrado, intentando reconectar...')
+          setIsConnected(false)
+          hasConnectedRef.current = false
+          
+          // Intentar reconectar después de 3 segundos
+          reconnectTimeoutRef.current = setTimeout(() => {
+            connect()
+          }, 3000)
+        }
+      } catch (err) {
+        console.error('Error creando WebSocket:', err)
+        setError('No se pudo conectar al servidor')
+      }
+    }
+
+    connect()
+
+    return () => {
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current)
+      }
+      if (wsRef.current) {
+        wsRef.current.close()
+      }
+      hasConnectedRef.current = false
+    }
+  }, [qrToken, clienteId, clienteNombre])
+
+  return { state, isConnected, error, sendMessage }
+}
+

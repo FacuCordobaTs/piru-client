@@ -9,10 +9,10 @@ import { Star, Plus, Minus } from 'lucide-react'
 interface Product {
   id: number
   nombre: string
-  descripcion: string
-  precio: number
-  imagenUrl: string
-  categoria: string
+  descripcion: string | null
+  precio: number | string
+  imagenUrl: string | null
+  categoria?: string
 }
 
 interface ProductDetailDrawerProps {
@@ -40,11 +40,17 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder }: Pr
           <>
             {/* 2. Image Container: flex-1 allows it to grow/shrink. min-h-0 is crucial for flex-shrink to work */}
             <div className="relative flex-1 min-h-0 w-full bg-secondary">
-              <img 
-                src={product.imagenUrl} 
-                alt={product.nombre} 
-                className="absolute inset-0 w-full h-full object-cover" 
-              />
+              {product.imagenUrl ? (
+                <img 
+                  src={product.imagenUrl} 
+                  alt={product.nombre} 
+                  className="absolute inset-0 w-full h-full object-cover" 
+                />
+              ) : (
+                <div className="absolute inset-0 w-full h-full flex items-center justify-center">
+                  <span className="text-muted-foreground">Sin imagen</span>
+                </div>
+              )}
             </div>
 
             {/* 3. Content Container: shrink-0 ensures this area doesn't get squished by the image */}
@@ -52,7 +58,7 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder }: Pr
               <div className="flex items-start justify-between gap-4">
                 <div className="flex-1">
                   <h3 className="text-2xl font-bold text-foreground mb-1 leading-tight">{product.nombre}</h3>
-                  <p className="text-sm text-muted-foreground">{product.categoria}</p>
+                  <p className="text-sm text-muted-foreground">{product.categoria || 'Sin categoría'}</p>
                 </div>
                 <Button size="sm" variant="ghost" className="rounded-full bg-primary/10 text-primary px-3 h-8">
                   <Star className="w-3 h-3 mr-1 fill-primary" />
@@ -64,7 +70,7 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder }: Pr
               <div className="space-y-1">
                 <h4 className="font-semibold text-sm text-foreground">Descripción</h4>
                 <p className="text-sm text-muted-foreground leading-relaxed line-clamp-3">
-                  {product.descripcion}
+                  {product.descripcion || 'Sin descripción'}
                 </p>
               </div>
 
@@ -98,7 +104,7 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder }: Pr
               <div className="flex items-center justify-between pt-4 border-t border-border">
                 <div>
                   <p className="text-xs text-muted-foreground mb-1">Total</p>
-                  <p className="text-2xl font-bold text-primary">${(product.precio * quantity).toFixed(2)}</p>
+                  <p className="text-2xl font-bold text-primary">${(parseFloat(String(product.precio)) * quantity).toFixed(2)}</p>
                 </div>
                 <Button
                   size="lg"

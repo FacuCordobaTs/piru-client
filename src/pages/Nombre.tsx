@@ -1,24 +1,103 @@
-import { useState } from 'react'
-import { useNavigate, useSearchParams } from 'react-router'
+import { useState, useEffect } from 'react'
+import { useNavigate, useParams } from 'react-router'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { User } from 'lucide-react'
+import { useMesaStore } from '@/store/mesaStore'
+import { mesaApi, ApiError } from '@/lib/api'
+import { toast } from 'sonner'
+import { User, Loader2 } from 'lucide-react'
 
 const Nombre = () => {
   const navigate = useNavigate()
-  const [searchParams] = useSearchParams()
+  const { qrToken } = useParams<{ qrToken: string }>()
   const [nombre, setNombre] = useState('')
-  const qrToken = searchParams.get('token') || 'demo'
+  const [isLoading, setIsLoading] = useState(true)
+  const { setMesa, setProductos, setQrToken, setClienteInfo } = useMesaStore()
+
+  useEffect(() => {
+    const cargarMesa = async () => {
+      if (!qrToken) {
+        toast.error('Token de mesa no válido')
+        navigate('/')
+        return
+      }
+
+      setQrToken(qrToken)
+      setIsLoading(true)
+
+      try {
+        const response = await mesaApi.join(qrToken) as {
+          success: boolean
+          data?: {
+            mesa: {
+              id: number
+              nombre: string
+              restauranteId: number
+              qrToken: string
+              createdAt: string
+            }
+            productos: Array<{
+              id: number
+              nombre: string
+              descripcion: string | null
+              precio: string
+              imagenUrl: string | null
+              categoria?: string
+            }>
+          }
+        }
+        
+        if (response.success && response.data) {
+          setMesa(response.data.mesa)
+          setProductos(response.data.productos || [])
+          toast.success('Mesa encontrada', {
+            description: `Bienvenido a ${response.data.mesa.nombre}`,
+          })
+        } else {
+          toast.error('Error al cargar la mesa')
+          navigate('/')
+        }
+      } catch (error) {
+        console.error('Error cargando mesa:', error)
+        if (error instanceof ApiError) {
+          toast.error('Mesa no encontrada', {
+            description: error.message,
+          })
+        } else {
+          toast.error('Error de conexión')
+        }
+        navigate('/')
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    cargarMesa()
+  }, [qrToken])
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     if (nombre.trim()) {
-      // Guardar nombre en localStorage o contexto
-      localStorage.setItem('clienteNombre', nombre.trim())
-      navigate(`/menu?token=${qrToken}`)
+      // Generar ID único para el cliente
+      const clienteId = `cliente-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+      setClienteInfo(clienteId, nombre.trim())
+      navigate('/menu')
     }
+  }
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-linear-to-br from-primary/10 via-background to-primary/5 flex items-center justify-center p-4">
+        <Card className="w-full max-w-md">
+          <CardContent className="p-12 flex flex-col items-center">
+            <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
+            <p className="text-muted-foreground">Cargando mesa...</p>
+          </CardContent>
+        </Card>
+      </div>
+    )
   }
 
   return (

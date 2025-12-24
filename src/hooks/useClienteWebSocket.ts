@@ -24,7 +24,7 @@ interface UseClienteWebSocketReturn {
   sendMessage: (message: any) => void
 }
 
-const WS_URL = import.meta.env.VITE_WS_URL || 'wss://api.piru.app'
+const WS_URL = import.meta.env.VITE_WS_URL || 'ws://api.piru.app'
 
 export const useClienteWebSocket = (): UseClienteWebSocketReturn => {
   const { qrToken, clienteId, clienteNombre, setClientes, setPedidoId } = useMesaStore()

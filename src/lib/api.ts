@@ -36,7 +36,7 @@ async function fetchApi<T>(
         data
       )
     }
-
+    console.log('data', data)
     return data
   } catch (error) {
     if (error instanceof ApiError) {

@@ -71,7 +71,7 @@ const Nombre = () => {
           toast.error('Error de conexión')
           console.error('Error de conexión:', error)
         }
-        // navigate('/')
+        navigate('/')
       } finally {
         setIsLoading(false)
       }

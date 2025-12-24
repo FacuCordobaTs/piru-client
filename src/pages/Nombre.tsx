@@ -47,7 +47,9 @@ const Nombre = () => {
               categoria?: string
             }>
           }
-        }
+        } 
+
+        console.log('response', response)
         
         if (response.success && response.data) {
           setMesa(response.data.mesa)

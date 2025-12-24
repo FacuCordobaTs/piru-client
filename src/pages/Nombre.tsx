@@ -55,7 +55,7 @@ const Nombre = () => {
           setMesa(response.data.mesa)
           setProductos(response.data.productos || [])
           toast.success('Mesa encontrada', {
-            description: `Bienvenido a ${response.data.mesa.nombre}`,
+            // description: `Bienvenido a ${response.data.mesa.nombre}`,
           })
         } else {
           toast.error('Error al cargar la mesa')

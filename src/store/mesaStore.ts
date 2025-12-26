@@ -21,11 +21,20 @@ interface Cliente {
   nombre: string
 }
 
+interface Pedido {
+  id: number
+  mesaId: number
+  restauranteId: number
+  estado: string
+  total: string
+  createdAt: string
+}
 interface MesaState {
   mesa: Mesa | null
   productos: Producto[]
   clientes: Cliente[]
   pedidoId: number | null
+  pedido: Pedido | null
   clienteId: string | null
   clienteNombre: string | null
   qrToken: string | null
@@ -35,6 +44,7 @@ interface MesaState {
   setProductos: (productos: Producto[]) => void
   setClientes: (clientes: Cliente[]) => void
   setPedidoId: (pedidoId: number) => void
+  setPedido: (pedido: Pedido) => void
   setClienteInfo: (id: string, nombre: string) => void
   setQrToken: (token: string) => void
   setLoading: (loading: boolean) => void
@@ -47,6 +57,7 @@ export const useMesaStore = create<MesaState>((set) => ({
   productos: [],
   clientes: [],
   pedidoId: null,
+  pedido: null,
   clienteId: null,
   clienteNombre: null,
   qrToken: null,
@@ -57,11 +68,11 @@ export const useMesaStore = create<MesaState>((set) => ({
   setProductos: (productos) => set({ productos }),
   setClientes: (clientes) => set({ clientes }),
   setPedidoId: (pedidoId) => set({ pedidoId }),
+  setPedido: (pedido) => set({ pedido }),
   setClienteInfo: (id, nombre) => set({ clienteId: id, clienteNombre: nombre }),
   setQrToken: (token) => set({ qrToken: token }),
   setLoading: (loading) => set({ isLoading: loading }),
   setError: (error) => set({ error }),
-  
   reset: () => set({
     mesa: null,
     productos: [],

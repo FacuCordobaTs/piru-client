@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useMesaStore } from '@/store/mesaStore'
+import { useCarritoStore } from '@/store/carritoStore'
 
 interface ItemPedido {
   id: number
@@ -7,8 +8,10 @@ interface ItemPedido {
   clienteNombre: string
   cantidad: number
   precioUnitario: string
-  nombre?: string
+  nombreProducto?: string // Nombre del producto desde el servidor
+  nombre?: string // Para compatibilidad
   precio?: number // Para compatibilidad con ItemCarrito
+  imagenUrl?: string | null // URL de la imagen del producto
 }
 
 interface WebSocketState {
@@ -27,7 +30,8 @@ interface UseClienteWebSocketReturn {
 const WS_URL = import.meta.env.VITE_WS_URL || 'wss://api.piru.app'
 
 export const useClienteWebSocket = (): UseClienteWebSocketReturn => {
-  const { qrToken, clienteId, clienteNombre, setClientes, setPedidoId } = useMesaStore()
+  const { qrToken, clienteId, clienteNombre, setClientes, setPedidoId, pedidoId } = useMesaStore()
+  const { clearCarrito } = useCarritoStore()
   const [state, setState] = useState<WebSocketState | null>(null)
   const [isConnected, setIsConnected] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -37,7 +41,15 @@ export const useClienteWebSocket = (): UseClienteWebSocketReturn => {
 
   const sendMessage = (message: any) => {
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify(message))
+      // No enviar mesaId ni pedidoId, el backend ya los tiene guardados en el WebSocket
+      let newMessage = {
+        type: message.type,
+        payload: {
+          ...message.payload,
+        },
+      }
+      console.log('Enviando mensaje a WebSocket:', newMessage)
+      wsRef.current.send(JSON.stringify(newMessage))
     } else {
       console.error('WebSocket no está conectado')
     }
@@ -115,6 +127,18 @@ export const useClienteWebSocket = (): UseClienteWebSocketReturn => {
                   items: data.payload.items || prev.items,
                   total: data.payload.total || prev.total,
                 } : null)
+                break
+
+              case 'PEDIDO_ACTUALIZADO':
+                // Actualizar el estado con los items y pedido del servidor
+                setState({
+                  items: data.payload.items || [],
+                  total: data.payload.pedido?.total || '0.00',
+                  estado: data.payload.pedido?.estado || 'pending',
+                })
+                // Limpiar el carrito local ya que el servidor es la fuente de verdad
+                // Esto evita duplicados y mantiene sincronización
+                clearCarrito()
                 break
 
               case 'PEDIDO_CONFIRMADO':

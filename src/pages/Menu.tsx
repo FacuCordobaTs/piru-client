@@ -7,7 +7,6 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTr
 import { Separator } from '@/components/ui/separator'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { useMesaStore } from '@/store/mesaStore'
-import { useCarritoStore } from '@/store/carritoStore'
 import { useClienteWebSocket } from '@/hooks/useClienteWebSocket'
 import { toast } from 'sonner'
 import { ShoppingCart, Plus, Minus, Trash2, Users, CheckCircle, ArrowLeft, MapPin, Wifi, WifiOff, Package } from 'lucide-react'
@@ -17,7 +16,6 @@ import { ThemeToggle } from '@/components/ThemeToggle'
 const Menu = () => {
   const navigate = useNavigate()
   const { mesa, productos, clientes, clienteNombre, qrToken } = useMesaStore()
-  const { items, addItem, updateCantidad, removeItem, getTotal, getMisItems } = useCarritoStore()
   const { state: wsState, isConnected, sendMessage } = useClienteWebSocket()
   
   const [carritoAbierto, setCarritoAbierto] = useState(false)
@@ -48,16 +46,8 @@ const Menu = () => {
   const agregarAlPedido = (producto: typeof productos[0] | { id: number; nombre: string; descripcion: string | null; precio: number | string; imagenUrl: string | null; categoria?: string }, cantidad: number = 1) => {
     if (!clienteNombre) return
 
-    addItem({
-      productoId: producto.id,
-      nombre: producto.nombre,
-      precio: typeof producto.precio === 'number' ? producto.precio : parseFloat(producto.precio),
-      cantidad,
-      clienteNombre,
-      imagenUrl: producto.imagenUrl,
-    })
-
-    // Enviar al WebSocket
+    // Enviar al WebSocket - el servidor guardará en BD y notificará a todos
+    // No agregar al carrito local porque se sincronizará automáticamente cuando llegue PEDIDO_ACTUALIZADO
     sendMessage({
       type: 'AGREGAR_ITEM',
       payload: {
@@ -74,49 +64,42 @@ const Menu = () => {
     setCarritoAbierto(true)
   }
 
-  const handleAumentarCantidad = (itemId: number) => {
-    const item = items.find(i => i.id === itemId)
+  const handleAumentarCantidad = (itemPedidoId: number) => {
+    // Buscar el item en todosLosItems (que viene del servidor)
+    const item = todosLosItems.find(i => i.id === itemPedidoId)
     if (!item) return
 
-    updateCantidad(itemId, item.cantidad + 1)
-
-    // TODO: Enviar actualización al WebSocket
+    // Usar el ID real del itemPedido (no el productoId)
     sendMessage({
       type: 'ACTUALIZAR_CANTIDAD',
       payload: {
-        itemId: item.productoId,
+        itemId: itemPedidoId,
         cantidad: item.cantidad + 1,
       },
     })
   }
 
-  const handleDisminuirCantidad = (itemId: number) => {
-    const item = items.find(i => i.id === itemId)
+  const handleDisminuirCantidad = (itemPedidoId: number) => {
+    // Buscar el item en todosLosItems (que viene del servidor)
+    const item = todosLosItems.find(i => i.id === itemPedidoId)
     if (!item || item.cantidad <= 1) return
 
-    updateCantidad(itemId, item.cantidad - 1)
-
-    // TODO: Enviar actualización al WebSocket
+    // Usar el ID real del itemPedido (no el productoId)
     sendMessage({
       type: 'ACTUALIZAR_CANTIDAD',
       payload: {
-        itemId: item.productoId,
+        itemId: itemPedidoId,
         cantidad: item.cantidad - 1,
       },
     })
   }
 
-  const handleEliminarItem = (itemId: number) => {
-    const item = items.find(i => i.id === itemId)
-    if (!item) return
-
-    removeItem(itemId)
-
-    // TODO: Enviar eliminación al WebSocket
+  const handleEliminarItem = (itemPedidoId: number) => {
+    // Usar el ID real del itemPedido (no el productoId)
     sendMessage({
       type: 'ELIMINAR_ITEM',
       payload: {
-        itemId: item.productoId,
+        itemId: itemPedidoId,
       },
     })
 
@@ -135,9 +118,12 @@ const Menu = () => {
     setCarritoAbierto(false)
   }
 
-  const total = getTotal()
-  const misItems = getMisItems(clienteNombre || '')
-  const todosLosItems = wsState?.items || items
+  // Usar wsState como fuente de verdad cuando esté disponible
+  const todosLosItems = wsState?.items || []
+  const totalPedido = wsState?.total || '0.00'
+  
+  // Filtrar mis items del estado del servidor
+  const misItems = todosLosItems.filter(item => item.clienteNombre === clienteNombre)
 
   return (
     <div className="min-h-screen pb-24 bg-background">
@@ -197,13 +183,13 @@ const Menu = () => {
                         <p className="text-muted-foreground">El pedido está vacío</p>
                       </div>
                     ) : (
-                      todosLosItems.map((item, index) => (
-                        <Card key={index}>
+                      todosLosItems.map((item) => (
+                        <Card key={item.id}>
                           <CardContent className="p-4">
                             <div className="flex items-start justify-between">
                               <div className="flex-1">
                                 <div className="flex items-center gap-2 mb-1">
-                                  <p className="font-semibold">{item.nombre}</p>
+                                  <p className="font-semibold">{item.nombreProducto || item.nombre}</p>
                                   <Badge variant={item.clienteNombre === clienteNombre ? "default" : "outline"} className="text-xs">
                                     {item.clienteNombre}
                                   </Badge>
@@ -260,7 +246,7 @@ const Menu = () => {
                       <div className="space-y-3">
                         <div className="flex justify-between items-center text-lg font-bold">
                           <span>Total:</span>
-                          <span className="text-primary">${(wsState?.total || total.toFixed(2))}</span>
+                          <span className="text-primary">${totalPedido}</span>
                         </div>
                         <Button 
                           className="w-full rounded-2xl h-14 bg-primary hover:bg-primary/90" 

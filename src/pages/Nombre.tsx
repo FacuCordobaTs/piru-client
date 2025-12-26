@@ -14,7 +14,7 @@ const Nombre = () => {
   const { qrToken } = useParams<{ qrToken: string }>()
   const [nombre, setNombre] = useState('')
   const [isLoading, setIsLoading] = useState(true)
-  const { setMesa, setProductos, setQrToken, setClienteInfo } = useMesaStore()
+  const { setMesa, setProductos, setQrToken, setClienteInfo, setPedidoId, setPedido } = useMesaStore()
 
   useEffect(() => {
     const cargarMesa = async () => {
@@ -46,6 +46,14 @@ const Nombre = () => {
               imagenUrl: string | null
               categoria?: string
             }>
+            pedido: {
+              id: number
+              mesaId: number
+              restauranteId: number
+              estado: string
+              total: string
+              createdAt: string
+            }
           }
         } 
 
@@ -54,6 +62,8 @@ const Nombre = () => {
         if (response.success && response.data) {
           setMesa(response.data.mesa)
           setProductos(response.data.productos || [])
+          setPedidoId(response.data.pedido.id)
+          setPedido(response.data.pedido)
           toast.success('Mesa encontrada', {
             // description: `Bienvenido a ${response.data.mesa.nombre}`,
           })

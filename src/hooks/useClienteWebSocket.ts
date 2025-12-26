@@ -30,7 +30,7 @@ interface UseClienteWebSocketReturn {
 const WS_URL = import.meta.env.VITE_WS_URL || 'wss://api.piru.app'
 
 export const useClienteWebSocket = (): UseClienteWebSocketReturn => {
-  const { qrToken, clienteId, clienteNombre, setClientes, setPedidoId, pedidoId } = useMesaStore()
+  const { qrToken, clienteId, clienteNombre, setClientes, setPedidoId } = useMesaStore()
   const { clearCarrito } = useCarritoStore()
   const [state, setState] = useState<WebSocketState | null>(null)
   const [isConnected, setIsConnected] = useState(false)

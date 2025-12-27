@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useEffect } from 'react'
 import { useNavigate } from 'react-router'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -14,7 +14,7 @@ const PedidoCerrado = () => {
   const { mesa, productos, clienteNombre, qrToken } = useMesaStore()
   const { state: wsState, sendMessage } = useClienteWebSocket()
   
-  const [metodoPago, setMetodoPago] = useState<'efectivo' | 'mercadopago' | null>(null)
+
 
   useEffect(() => {
     if (!clienteNombre || !qrToken) {
@@ -122,7 +122,6 @@ const PedidoCerrado = () => {
           <Button
             onClick={handlePagarEfectivo}
             className="w-full h-14 text-base font-semibold rounded-2xl"
-            variant={metodoPago === 'efectivo' ? 'default' : 'outline'}
           >
             <DollarSign className="w-5 h-5 mr-2" />
             Pagar en Efectivo
@@ -131,7 +130,6 @@ const PedidoCerrado = () => {
           <Button
             onClick={handlePagarMercadoPago}
             className="w-full h-14 text-base font-semibold rounded-2xl"
-            variant={metodoPago === 'mercadopago' ? 'default' : 'outline'}
             disabled
           >
             <CreditCard className="w-5 h-5 mr-2" />

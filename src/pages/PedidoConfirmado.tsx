@@ -15,8 +15,8 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 
 const PedidoConfirmado = () => {
   const navigate = useNavigate()
-  const { mesa, productos, clienteNombre, qrToken, pedido } = useMesaStore()
-  const { state: wsState, isConnected, sendMessage } = useClienteWebSocket()
+  const { productos, clienteNombre, qrToken } = useMesaStore()
+  const { state: wsState, sendMessage } = useClienteWebSocket()
   
   const [verPedidoAbierto, setVerPedidoAbierto] = useState(false)
   const [llamarMozoAbierto, setLlamarMozoAbierto] = useState(false)

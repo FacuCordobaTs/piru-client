@@ -1,15 +1,17 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router'
-import { Card, CardContent } from '@/components/ui/card'
+import { Card } from '@/components/ui/card' // Eliminé CardContent que no usaremos
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet'
-import { Separator } from '@/components/ui/separator'
+import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { useMesaStore } from '@/store/mesaStore'
 import { useClienteWebSocket } from '@/hooks/useClienteWebSocket'
 import { toast } from 'sonner'
-import { ShoppingCart, Plus, Minus, Trash2, Users, CheckCircle, ArrowLeft, MapPin, Wifi, WifiOff, Package } from 'lucide-react'
+import { 
+  Plus, Minus, Trash2, ArrowLeft, 
+  Wifi, WifiOff, Package, ChefHat, UtensilsCrossed, Receipt 
+} from 'lucide-react'
 import { ProductDetailDrawer } from '@/components/ProductDetailDrawer'
 import { ThemeToggle } from '@/components/ThemeToggle'
 
@@ -22,9 +24,8 @@ const Menu = () => {
   const [selectedProduct, setSelectedProduct] = useState<typeof productos[0] | null>(null)
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [selectedCategory, setSelectedCategory] = useState<string>('All')
-  const [clientesAbierto, setClientesAbierto] = useState(false)
 
-  // Verificar que el usuario haya ingresado su nombre
+  // Verificar nombre
   useEffect(() => {
     if (!clienteNombre || !qrToken) {
       toast.error('Debes ingresar tu nombre primero')
@@ -32,7 +33,7 @@ const Menu = () => {
     }
   }, [clienteNombre, qrToken])
 
-  // Obtener categorías únicas de los productos
+  // Categorías y filtrado
   const categorias = ['All', ...Array.from(new Set(productos.map(p => p.categoria).filter(Boolean)))]
   const productosFiltrados = selectedCategory === 'All' 
     ? productos 
@@ -43,11 +44,8 @@ const Menu = () => {
     setDrawerOpen(true)
   }
 
-  const agregarAlPedido = (producto: typeof productos[0] | { id: number; nombre: string; descripcion: string | null; precio: number | string; imagenUrl: string | null; categoria?: string }, cantidad: number = 1) => {
+  const agregarAlPedido = (producto: typeof productos[0] | any, cantidad: number = 1) => {
     if (!clienteNombre) return
-
-    // Enviar al WebSocket - el servidor guardará en BD y notificará a todos
-    // No agregar al carrito local porque se sincronizará automáticamente cuando llegue PEDIDO_ACTUALIZADO
     sendMessage({
       type: 'AGREGAR_ITEM',
       payload: {
@@ -55,328 +53,196 @@ const Menu = () => {
         clienteNombre,
         cantidad,
         precioUnitario: String(producto.precio),
+        imagenUrl: producto.imagenUrl 
       },
     })
-
-    toast.success('Agregado al pedido', {
-      description: `${producto.nombre} x${cantidad}`,
-    })
-    setCarritoAbierto(true)
+    toast.success('Agregado a la orden', { description: `${producto.nombre}`, duration: 1500 })
   }
 
   const handleAumentarCantidad = (itemPedidoId: number) => {
-    // Buscar el item en todosLosItems (que viene del servidor)
     const item = todosLosItems.find(i => i.id === itemPedidoId)
     if (!item) return
-
-    // Usar el ID real del itemPedido (no el productoId)
-    sendMessage({
-      type: 'ACTUALIZAR_CANTIDAD',
-      payload: {
-        itemId: itemPedidoId,
-        cantidad: item.cantidad + 1,
-      },
-    })
+    sendMessage({ type: 'ACTUALIZAR_CANTIDAD', payload: { itemId: itemPedidoId, cantidad: item.cantidad + 1 }, })
   }
 
   const handleDisminuirCantidad = (itemPedidoId: number) => {
-    // Buscar el item en todosLosItems (que viene del servidor)
     const item = todosLosItems.find(i => i.id === itemPedidoId)
     if (!item || item.cantidad <= 1) return
-
-    // Usar el ID real del itemPedido (no el productoId)
-    sendMessage({
-      type: 'ACTUALIZAR_CANTIDAD',
-      payload: {
-        itemId: itemPedidoId,
-        cantidad: item.cantidad - 1,
-      },
-    })
+    sendMessage({ type: 'ACTUALIZAR_CANTIDAD', payload: { itemId: itemPedidoId, cantidad: item.cantidad - 1 }, })
   }
 
   const handleEliminarItem = (itemPedidoId: number) => {
-    // Usar el ID real del itemPedido (no el productoId)
-    sendMessage({
-      type: 'ELIMINAR_ITEM',
-      payload: {
-        itemId: itemPedidoId,
-      },
-    })
-
-    toast.success('Item eliminado')
+    sendMessage({ type: 'ELIMINAR_ITEM', payload: { itemId: itemPedidoId }, })
+    toast.success('Producto eliminado')
   }
 
   const confirmarPedido = () => {
-    sendMessage({
-      type: 'CONFIRMAR_PEDIDO',
-      payload: {},
-    })
-
-    toast.success('¡Pedido confirmado!', {
-      description: 'Tu pedido ha sido enviado a la cocina',
-    })
+    sendMessage({ type: 'CONFIRMAR_PEDIDO', payload: {}, })
+    toast.success('¡Pedido enviado a cocina!', { icon: <ChefHat className="w-5 h-5" /> })
     setCarritoAbierto(false)
   }
 
-  // Usar wsState como fuente de verdad cuando esté disponible
   const todosLosItems = wsState?.items || []
   const totalPedido = wsState?.total || '0.00'
-  
-  // Filtrar mis items del estado del servidor
-  const misItems = todosLosItems.filter(item => item.clienteNombre === clienteNombre)
+  // const misItems = todosLosItems.filter(item => item.clienteNombre === clienteNombre)
 
   return (
-    <div className="min-h-screen pb-24 bg-background">
-      {/* Header */}
-      <div className="sticky top-0 z-20 bg-background/95 backdrop-blur-sm border-b border-border">
-        <div className="max-w-2xl mx-auto p-4">
-          <div className="flex items-center justify-between mb-4">
-            <Button 
-              variant="ghost" 
-              size="icon" 
-              className="rounded-full bg-secondary"
-              onClick={() => navigate('/')}
-            >
-              <ArrowLeft className="w-5 h-5" />
-            </Button>
-            <div className="flex items-center gap-2">
-              <ThemeToggle />
-              <Button 
-                variant="ghost" 
-                size="icon" 
-                className="rounded-full bg-secondary"
-                onClick={() => setClientesAbierto(true)}
-              >
-                <Users className="w-5 h-5" />
-                {clientes.length > 0 && (
-                  <Badge className="absolute -top-1 -right-1 h-5 w-5 flex items-center justify-center p-0 text-xs bg-primary">
-                    {clientes.length}
-                  </Badge>
-                )}
-              </Button>
-              <Sheet open={carritoAbierto} onOpenChange={setCarritoAbierto}>
-                <SheetTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="rounded-full bg-secondary relative"
-                  >
-                    <ShoppingCart className="w-5 h-5" />
-                    {misItems.length > 0 && (
-                      <Badge className="absolute -top-1 -right-1 h-5 w-5 flex items-center justify-center p-0 text-xs bg-primary">
-                        {misItems.length}
-                      </Badge>
-                    )}
-                  </Button>
-                </SheetTrigger>
-                <SheetContent side="bottom" className="h-[85vh]">
-                  <SheetHeader>
-                    <SheetTitle>Tu Pedido</SheetTitle>
-                    <SheetDescription>
-                      Revisa y confirma tu pedido
-                    </SheetDescription>
-                  </SheetHeader>
-                  <div className="mt-6 space-y-4 overflow-y-auto max-h-[60vh]">
-                    {todosLosItems.length === 0 ? (
-                      <div className="text-center py-12">
-                        <ShoppingCart className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                        <p className="text-muted-foreground">El pedido está vacío</p>
-                      </div>
-                    ) : (
-                      todosLosItems.map((item) => (
-                        <Card key={item.id}>
-                          <CardContent className="p-4">
-                            <div className="flex items-start justify-between">
-                              <div className="flex-1">
-                                <div className="flex items-center gap-2 mb-1">
-                                  <p className="font-semibold">{item.nombreProducto || item.nombre}</p>
-                                  <Badge variant={item.clienteNombre === clienteNombre ? "default" : "outline"} className="text-xs">
-                                    {item.clienteNombre}
-                                  </Badge>
-                                </div>
-                                <p className="text-sm text-muted-foreground mb-2">
-                                  ${parseFloat(item.precioUnitario || String(item.precio || 0)).toFixed(2)} c/u
-                                </p>
-                                {item.clienteNombre === clienteNombre && (
-                                  <div className="flex items-center gap-2">
-                                    <Button
-                                      variant="outline"
-                                      size="icon"
-                                      className="h-8 w-8 rounded-full"
-                                      onClick={() => handleDisminuirCantidad(item.id)}
-                                    >
-                                      <Minus className="h-4 w-4" />
-                                    </Button>
-                                    <span className="w-8 text-center font-medium">{item.cantidad}</span>
-                                    <Button
-                                      variant="outline"
-                                      size="icon"
-                                      className="h-8 w-8 rounded-full"
-                                      onClick={() => handleAumentarCantidad(item.id)}
-                                    >
-                                      <Plus className="h-4 w-4" />
-                                    </Button>
-                                  </div>
-                                )}
-                              </div>
-                              <div className="text-right ml-4">
-                                <p className="font-bold text-lg mb-2">
-                                  ${(parseFloat(item.precioUnitario || String(item.precio || 0)) * item.cantidad).toFixed(2)}
-                                </p>
-                                {item.clienteNombre === clienteNombre && (
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-8 w-8 text-destructive rounded-full"
-                                    onClick={() => handleEliminarItem(item.id)}
-                                  >
-                                    <Trash2 className="h-4 w-4" />
-                                  </Button>
-                                )}
-                              </div>
-                            </div>
-                          </CardContent>
-                        </Card>
-                      ))
-                    )}
+    <div className="min-h-screen pb-32 bg-background font-sans selection:bg-primary/20">
+      
+      {/* --- HEADER --- */}
+      <div className="sticky top-0 z-20 bg-background/80 backdrop-blur-md border-b border-border/50 supports-backdrop-filter:bg-background/60">
+        <div className="max-w-2xl mx-auto px-4 py-3">
+          <div className="flex items-center justify-between">
+            
+            <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-secondary/50">
+               {isConnected ? <Wifi className="w-3.5 h-3.5 text-green-500" /> : <WifiOff className="w-3.5 h-3.5 text-destructive" />}
+               <span className="text-xs font-medium text-muted-foreground hidden sm:inline-block">{mesa?.nombre}</span>
+            </div>
+
+            <ThemeToggle />
+          </div>
+        </div>
+      </div>
+
+      <div className="max-w-2xl mx-auto px-5 pt-4 space-y-6">
+        
+        {/* --- SECCIÓN BIENVENIDA & USUARIOS (MINIMALISTA) --- */}
+        <section className="space-y-4">
+          <div className="flex items-end justify-between px-1">
+            <div>
+              <p className="text-sm text-muted-foreground font-medium mb-0.5">Bienvenido,</p>
+              {/* Gradiente sutil solo en el texto */}
+              <h1 className="text-3xl font-extrabold tracking-tight bg-linear-to-r from-orange-800 to-orange-400 bg-clip-text text-transparent">
+                {clienteNombre}
+              </h1>
+            </div>
+            {/* Indicador sutil de mesa */}
+            <div className="text-right">
+              <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block">Mesa</span>
+              <span className="text-sm font-medium">{mesa?.nombre}</span>
+            </div>
+          </div>
+
+          {/* Lista de Usuarios - Scroll Horizontal Limpio */}
+          <div>
+             <div className="flex items-center gap-2 mb-2 px-1">
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                  En la mesa:
+                </p>
+             </div>
+             
+             <div className="flex -mx-5 pl-5 overflow-x-auto scrollbar-hide py-2 gap-4 snap-x">
+                {/* Usuario actual */}
+                <div className="flex flex-col items-center gap-1.5 min-w-[56px] snap-start">
+                  <div className="relative">
+                    <Avatar className="w-12 h-12 border-2 shadow-sm ring-2 ring-background">
+                      <AvatarFallback className="bg-primary text-primary-foreground font-bold text-sm">YO</AvatarFallback>
+                    </Avatar>
                   </div>
-                  {todosLosItems.length > 0 && (
-                    <>
-                      <Separator className="my-4" />
-                      <div className="space-y-3">
-                        <div className="flex justify-between items-center text-lg font-bold">
-                          <span>Total:</span>
-                          <span className="text-primary">${totalPedido}</span>
-                        </div>
-                        <Button 
-                          className="w-full rounded-2xl h-14 bg-primary hover:bg-primary/90" 
-                          size="lg"
-                          onClick={confirmarPedido}
-                        >
-                          <CheckCircle className="mr-2 h-5 w-5" />
-                          Confirmar Pedido
-                        </Button>
-                      </div>
-                    </>
-                  )}
-                </SheetContent>
-              </Sheet>
+                  <span className="text-xs font-medium truncate max-w-[60px] text-center">Tú</span>
+                </div>
+
+                {/* Otros usuarios */}
+                {clientes.filter(c => c.nombre !== clienteNombre).map((cliente) => (
+                  <div key={cliente.id} className="flex flex-col items-center gap-1.5 min-w-[56px] snap-start opacity-80 hover:opacity-100 transition-opacity">
+                    <Avatar className="w-12 h-12 border border-border shadow-xs">
+                      <AvatarFallback className="bg-secondary text-foreground text-xs font-medium">
+                        {cliente.nombre.slice(0, 2).toUpperCase()}
+                      </AvatarFallback>
+                    </Avatar>
+                    <span className="text-xs text-muted-foreground truncate max-w-[60px] text-center">
+                      {cliente.nombre}
+                    </span>
+                  </div>
+                ))}
+                
+                {clientes.length === 1 && (
+                  <div className="flex items-center justify-center pl-2">
+                    <p className="text-xs text-muted-foreground italic">Esperando...</p>
+                  </div>
+                )}
+                
+                {/* Espaciador final para respetar el padding */}
+                <div className="min-w-5 shrink-0"></div>
+             </div>
+          </div>
+        </section>
+
+
+        {/* --- CATEGORÍAS (Diseño Clean) --- */}
+        {categorias.length > 1 && (
+          <section className="space-y-3 pt-2">
+            <h2 className="text-lg font-bold text-foreground px-1">Categorías</h2>
+            <div className="flex gap-2 overflow-x-auto pb-2 -mx-5 px-5 scrollbar-hide snap-x">
+              {categorias.map((category) => (
+                <Button
+                  key={category}
+                  onClick={() => setSelectedCategory(category || 'All')}
+                  variant={selectedCategory === category ? "default" : "secondary"}
+                  className={`rounded-full px-5 h-9 text-xs font-medium whitespace-nowrap snap-start transition-all ${
+                    selectedCategory === category 
+                      ? "shadow-md" 
+                      : "bg-secondary/50 hover:bg-secondary border border-transparent"
+                  }`}
+                >
+                  {category === 'All' ? 'Todas' : category}
+                </Button>
+              ))}
             </div>
+          </section>
+        )}
+
+        {/* --- PRODUCTOS --- */}
+        <section className="space-y-4 min-h-[50vh]">
+          <div className="flex items-center justify-between px-1">
+             <h2 className="text-lg font-bold text-foreground">Menú</h2>
           </div>
 
-          {/* Location & Connection Status */}
-          <div className="flex items-center justify-between gap-2 mb-4">
-            <div className="flex items-center gap-2 flex-1">
-              <MapPin className="w-4 h-4 text-primary" />
-              <div className="flex-1">
-                <p className="text-sm text-muted-foreground">Mesa</p>
-                <p className="text-sm font-semibold text-foreground">{mesa?.nombre || 'Cargando...'}</p>
-              </div>
-            </div>
-            <Badge variant={isConnected ? "default" : "secondary"} className="flex items-center gap-1">
-              {isConnected ? <Wifi className="h-3 w-3" /> : <WifiOff className="h-3 w-3" />}
-              {isConnected ? 'Conectado' : 'Desconectado'}
-            </Badge>
-          </div>
-        </div>
-      </div>
-
-      {/* Promo Banner */}
-      <div className="max-w-2xl mx-auto px-4 pt-4 pb-6">
-        <Card className="bg-linear-to-r from-card to-secondary border-0 overflow-hidden">
-          <div className="flex items-center justify-between p-4">
-            <div className="flex-1">
-              <h3 className="font-bold text-foreground mb-1">¡Bienvenido {clienteNombre}!</h3>
-              <p className="text-xs text-muted-foreground mb-3">Pedidos rápidos, entrega directa a tu mesa</p>
-              <Button size="sm" className="bg-primary hover:bg-primary/90 h-8 px-4 rounded-full text-xs">
-                Ver Menú
-              </Button>
-            </div>
-          </div>
-        </Card>
-      </div>
-
-      {/* Categories */}
-      {categorias.length > 1 && (
-        <div className="max-w-2xl mx-auto px-4 pb-4">
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-lg font-bold text-foreground">Categorías</h2>
-          </div>
-          <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
-            {categorias.map((category) => (
-              <Button
-                key={category}
-                variant={selectedCategory === category ? "default" : "secondary"}
-                size="sm"
-                onClick={() => setSelectedCategory(category || 'All')}
-                className={`rounded-full whitespace-nowrap ${
-                  selectedCategory === category 
-                    ? "bg-primary hover:bg-primary/90" 
-                    : "bg-secondary hover:bg-secondary/80"
-                }`}
-              >
-                {category === 'All' ? 'Todas' : category}
-              </Button>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Products */}
-      <div className="max-w-2xl mx-auto px-4 space-y-4">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-bold text-foreground">Menú</h2>
-        </div>
-
-        {productosFiltrados.length === 0 ? (
-          <Card>
-            <CardContent className="p-12 flex flex-col items-center">
-              <Package className="h-12 w-12 text-muted-foreground mb-4" />
-              <p className="text-muted-foreground text-center">No hay productos disponibles</p>
-            </CardContent>
-          </Card>
-        ) : (
-          <div className="grid gap-4">
+          <div className="grid gap-4 sm:grid-cols-2">
             {productosFiltrados.map((producto) => (
-              <Card
-                key={producto.id}
-                className="overflow-hidden cursor-pointer hover:border-primary/50 transition-all bg-card border-border"
+              <Card 
+                key={producto.id} 
+                className="group border-0 bg-card/50 hover:bg-card transition-all duration-300 shadow-sm hover:shadow-md overflow-hidden cursor-pointer rounded-2xl ring-1 ring-border/50"
                 onClick={() => abrirDetalleProducto(producto)}
               >
-                <div className="flex gap-4 p-3">
-                  <div className="w-24 h-24 rounded-xl overflow-hidden shrink-0 bg-secondary">
+                <div className="flex p-3 gap-4">
+                  <div className="w-24 h-24 shrink-0 rounded-xl overflow-hidden bg-secondary relative">
                     {producto.imagenUrl ? (
                       <img 
                         src={producto.imagenUrl} 
                         alt={producto.nombre} 
-                        className="w-full h-full object-cover" 
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" 
                       />
                     ) : (
-                      <div className="w-full h-full flex items-center justify-center">
-                        <Package className="h-8 w-8 text-muted-foreground" />
+                      <div className="w-full h-full flex items-center justify-center text-muted-foreground/30">
+                        <Package className="w-8 h-8" />
                       </div>
                     )}
                   </div>
-                  <div className="flex-1 min-w-0 flex flex-col justify-between py-1">
+                  
+                  <div className="flex flex-col flex-1 justify-between py-0.5 min-w-0">
                     <div>
-                      <h3 className="font-semibold text-foreground text-base mb-1 truncate">
+                      <h3 className="font-bold text-foreground text-sm leading-tight truncate pr-2">
                         {producto.nombre}
                       </h3>
-                      <p className="text-xs text-muted-foreground line-clamp-2 mb-2">
-                        {producto.descripcion || 'Sin descripción'}
+                      <p className="text-xs text-muted-foreground mt-1 line-clamp-2 leading-relaxed">
+                        {producto.descripcion || 'Sin descripción disponible.'}
                       </p>
                     </div>
-                    <div className="flex items-center justify-between">
-                      <p className="text-lg font-bold text-primary">${parseFloat(producto.precio).toFixed(2)}</p>
+                    
+                    <div className="flex items-end justify-between mt-2">
+                      <span className="font-bold text-base text-foreground">
+                        ${parseFloat(producto.precio).toFixed(2)}
+                      </span>
                       <Button 
-                        size="sm" 
-                        className="bg-primary hover:bg-primary/90 h-8 px-4 rounded-full text-xs"
+                        size="icon"
+                        className="h-8 w-8 rounded-full shadow-sm bg-primary text-primary-foreground hover:scale-105 transition-transform"
                         onClick={(e) => {
                           e.stopPropagation()
                           agregarAlPedido(producto)
                         }}
                       >
-                        Agregar
+                        <Plus className="w-4 h-4" />
                       </Button>
                     </div>
                   </div>
@@ -384,65 +250,184 @@ const Menu = () => {
               </Card>
             ))}
           </div>
-        )}
+          
+          {productosFiltrados.length === 0 && (
+             <div className="flex flex-col items-center justify-center py-20 text-muted-foreground opacity-50">
+                <Package className="w-10 h-10 mb-2" />
+                <p className="text-sm">Sin productos.</p>
+             </div>
+          )}
+        </section>
       </div>
 
-      {/* Floating Cart Button */}
-      {misItems.length > 0 && (
-        <div className="fixed bottom-0 left-0 right-0 p-4 bg-background/95 backdrop-blur-sm border-t border-border">
-          <div className="max-w-2xl mx-auto">
-            <Button
-              onClick={() => setCarritoAbierto(true)}
-              size="lg"
-              className="w-full text-base h-14 rounded-2xl bg-primary hover:bg-primary/90 shadow-lg"
-            >
-              Ver mi pedido ({misItems.length} {misItems.length === 1 ? "plato" : "platos"})
-            </Button>
-          </div>
-        </div>
-      )}
+      {/* --- BOTÓN FLOTANTE (DARK MODE FIXED) --- */}
+      <div className="fixed bottom-6 left-0 right-0 flex justify-center z-40 transition-all duration-500 translate-y-0 opacity-100">
+        <button
+          onClick={() => setCarritoAbierto(true)}
+          className={`
+            group relative flex items-center gap-4 pl-5 pr-6 py-3.5 rounded-full 
+            shadow-2xl hover:scale-[1.02] active:scale-95 transition-all duration-300
+            
+            /* LIGHT MODE: Sólido, oscuro y elegante */
+            bg-zinc-900 text-white shadow-zinc-900/20
 
-      {/* Clientes Conectados Sheet */}
-      <Sheet open={clientesAbierto} onOpenChange={setClientesAbierto}>
-        <SheetContent side="right" className="w-80">
-          <SheetHeader>
-            <SheetTitle>Clientes Conectados</SheetTitle>
-            <SheetDescription>
-              Personas en esta mesa
-            </SheetDescription>
-          </SheetHeader>
-          <div className="mt-6 space-y-3">
-            {clientes.length === 0 ? (
-              <div className="text-center py-12">
-                <Users className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                <p className="text-muted-foreground">No hay clientes conectados</p>
+            /* DARK MODE: Glassmorphism translúcido (Blanco Frost) */
+            dark:bg-white/10 dark:text-white dark:backdrop-blur-xl 
+            dark:border dark:border-white/10 dark:shadow-[0_0_20px_rgba(255,255,255,0.05)]
+          `}
+        >
+          {/* Badge */}
+          <div className="absolute -top-2 -right-1 bg-red-500 text-white text-[10px] font-bold h-5 min-w-[20px] px-1 flex items-center justify-center rounded-full border-2 border-background z-10">
+            {todosLosItems.length}
+          </div>
+
+          <div className="flex items-center gap-2.5">
+            <Receipt className="w-5 h-5 text-current opacity-90" />
+            <span className="font-semibold text-sm tracking-wide">Ver Pedido</span>
+          </div>
+          
+          {/* Separador adaptativo */}
+          <div className="h-4 w-px bg-current opacity-20"></div>
+          
+          <span className="font-bold text-base font-mono">
+            ${totalPedido}
+          </span>
+        </button>
+      </div>
+
+      {/* --- DRAWER DEL PEDIDO (FULL SCREEN DESDE DERECHA) --- */}
+      <Sheet open={carritoAbierto} onOpenChange={setCarritoAbierto}>
+        <SheetContent 
+          side="right" 
+          className="w-full sm:max-w-md p-0 border-l-0 sm:border-l bg-background" 
+        >
+          <div className="flex flex-col h-full">
+            
+            {/* Header Drawer */}
+            <div className="px-5 py-4 flex items-center gap-4 border-b border-border/50 bg-background/80 backdrop-blur-md sticky top-0 z-10">
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                className="rounded-full -ml-2 hover:bg-secondary"
+                onClick={() => setCarritoAbierto(false)}
+              >
+                <ArrowLeft className="w-6 h-6" />
+              </Button>
+              <div>
+                <SheetTitle className="text-xl">Tu Pedido</SheetTitle>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Mesa {mesa?.nombre} • {todosLosItems.length} items
+                </p>
               </div>
-            ) : (
-              clientes.map((cliente) => (
-                <Card key={cliente.id}>
-                  <CardContent className="p-4">
-                    <div className="flex items-center gap-3">
-                      <Avatar>
-                        <AvatarFallback className="bg-primary text-primary-foreground">
-                          {cliente.nombre.charAt(0).toUpperCase()}
-                        </AvatarFallback>
-                      </Avatar>
-                      <div className="flex-1">
-                        <p className="font-semibold">{cliente.nombre}</p>
-                        {cliente.nombre === clienteNombre && (
-                          <Badge variant="default" className="text-xs">Tú</Badge>
+            </div>
+
+            {/* Lista Items */}
+            <div className="flex-1 overflow-y-auto px-5 py-6 space-y-4">
+              {todosLosItems.length === 0 ? (
+                <div className="h-full flex flex-col items-center justify-center text-center space-y-4 opacity-60">
+                  <div className="bg-secondary p-6 rounded-full">
+                    <UtensilsCrossed className="w-10 h-10" />
+                  </div>
+                  <p className="font-medium">El pedido está vacío.</p>
+                  <Button variant="link" onClick={() => setCarritoAbierto(false)}>Ir al menú</Button>
+                </div>
+              ) : (
+                todosLosItems.map((item) => {
+                  const esMio = item.clienteNombre === clienteNombre;
+                  const prodOriginal = productos.find(p => p.id === (item.productoId || item.id)); 
+                  const imagen = item.imagenUrl || prodOriginal?.imagenUrl;
+                  const precio = parseFloat(item.precioUnitario || String(item.precio || 0));
+
+                  return (
+                    <div 
+                      key={item.id} 
+                      className={`relative flex gap-4 p-3 rounded-2xl border transition-all ${
+                        esMio ? 'bg-card border-primary/20 shadow-sm' : 'bg-secondary/30 border-transparent opacity-90 grayscale-[0.3]'
+                      }`}
+                    >
+                      <div className="w-20 h-20 shrink-0 rounded-xl overflow-hidden bg-secondary">
+                        {imagen ? (
+                          <img src={imagen} alt="img" className="w-full h-full object-cover" />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center text-muted-foreground">
+                            <Package className="w-6 h-6" />
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="flex-1 flex flex-col justify-between py-0.5 min-w-0">
+                        <div className="flex justify-between items-start gap-2">
+                          <div className="min-w-0">
+                            <p className="font-bold text-sm truncate">{item.nombreProducto || item.nombre}</p>
+                            <div className="flex items-center gap-1.5 mt-1">
+                               <Badge variant="secondary" className={`h-5 text-[10px] px-1.5 font-normal rounded-md ${esMio ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-300' : ''}`}>
+                                  {esMio ? 'Tú' : item.clienteNombre}
+                               </Badge>
+                            </div>
+                          </div>
+                          <p className="font-bold text-base">
+                            ${(precio * item.cantidad).toFixed(2)}
+                          </p>
+                        </div>
+
+                        {esMio ? (
+                          <div className="flex items-center justify-end gap-3 mt-2">
+                             {item.cantidad === 1 ? (
+                               <button 
+                                 onClick={() => handleEliminarItem(item.id)}
+                                 className="w-8 h-8 flex items-center justify-center rounded-full bg-destructive/10 text-destructive hover:bg-destructive hover:text-white transition-colors"
+                               >
+                                 <Trash2 className="w-4 h-4" />
+                               </button>
+                             ) : (
+                               <button 
+                                 onClick={() => handleDisminuirCantidad(item.id)}
+                                 className="w-8 h-8 flex items-center justify-center rounded-full bg-secondary hover:bg-secondary/80 text-foreground transition-colors"
+                               >
+                                 <Minus className="w-3.5 h-3.5" />
+                               </button>
+                             )}
+                             <span className="w-4 text-center text-sm font-semibold tabular-nums">{item.cantidad}</span>
+                             <button 
+                               onClick={() => handleAumentarCantidad(item.id)}
+                               className="w-8 h-8 flex items-center justify-center rounded-full bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+                             >
+                               <Plus className="w-3.5 h-3.5" />
+                             </button>
+                          </div>
+                        ) : (
+                           <div className="flex justify-end mt-2">
+                             <span className="text-xs text-muted-foreground">x{item.cantidad} unidades</span>
+                           </div>
                         )}
                       </div>
                     </div>
-                  </CardContent>
-                </Card>
-              ))
+                  )
+                })
+              )}
+            </div>
+
+            {/* Footer Drawer */}
+            {todosLosItems.length > 0 && (
+              <div className="p-5 bg-background border-t border-border shadow-[0_-5px_20px_rgba(0,0,0,0.05)] z-20">
+                 <div className="flex justify-between items-center mb-4">
+                    <span className="text-muted-foreground text-sm">Total a pagar</span>
+                    <span className="text-2xl font-black tracking-tight">${totalPedido}</span>
+                 </div>
+                 <Button 
+                   className="w-full h-14 text-base font-bold rounded-2xl shadow-lg shadow-primary/20" 
+                   size="lg"
+                   onClick={confirmarPedido}
+                 >
+                   Confirmar Pedido
+                   <ArrowLeft className="w-5 h-5 ml-2 rotate-180" />
+                 </Button>
+              </div>
             )}
           </div>
         </SheetContent>
       </Sheet>
 
-      {/* Product Detail Drawer */}
       <ProductDetailDrawer
         product={selectedProduct}
         open={drawerOpen}
@@ -457,4 +442,3 @@ const Menu = () => {
 }
 
 export default Menu
-

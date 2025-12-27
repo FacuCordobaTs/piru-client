@@ -8,6 +8,9 @@ import { ThemeProvider } from './components/ThemeProvider'
 import Welcome from './pages/Welcome'
 import Nombre from './pages/Nombre'
 import Menu from './pages/Menu'
+import PedidoConfirmado from './pages/PedidoConfirmado'
+import AgregarProducto from './pages/AgregarProducto'
+import PedidoCerrado from './pages/PedidoCerrado'
 import Pago from './pages/Pago'
 import Factura from './pages/Factura'
 
@@ -23,6 +26,18 @@ const router = createBrowserRouter([
   {
     path: "/menu",
     element: <Menu />,
+  },
+  {
+    path: "/pedido-confirmado",
+    element: <PedidoConfirmado />,
+  },
+  {
+    path: "/agregar-producto",
+    element: <AgregarProducto />,
+  },
+  {
+    path: "/pedido-cerrado",
+    element: <PedidoCerrado />,
   },
   {
     path: "/pago",

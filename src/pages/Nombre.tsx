@@ -14,7 +14,7 @@ const Nombre = () => {
   const { qrToken } = useParams<{ qrToken: string }>()
   const [nombre, setNombre] = useState('')
   const [isLoading, setIsLoading] = useState(true)
-  const { setMesa, setProductos, setQrToken, setClienteInfo, setPedidoId, setPedido } = useMesaStore()
+  const { setMesa, setProductos, setQrToken, setClienteInfo, setPedidoId, setPedido, pedido } = useMesaStore()
 
   useEffect(() => {
     const cargarMesa = async () => {
@@ -96,7 +96,16 @@ const Nombre = () => {
       // Generar ID único para el cliente
       const clienteId = `cliente-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
       setClienteInfo(clienteId, nombre.trim())
-      navigate('/menu')
+      
+      // Redirigir según el estado del pedido
+      const estadoPedido = pedido?.estado
+      if (estadoPedido === 'preparing') {
+        navigate('/pedido-confirmado')
+      } else if (estadoPedido === 'closed') {
+        navigate('/pedido-cerrado')
+      } else {
+        navigate('/menu')
+      }
     }
   }
 

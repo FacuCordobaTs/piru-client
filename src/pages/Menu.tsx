@@ -25,13 +25,23 @@ const Menu = () => {
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [selectedCategory, setSelectedCategory] = useState<string>('All')
 
-  // Verificar nombre
+  // Verificar nombre y redirigir según estado del pedido
   useEffect(() => {
     if (!clienteNombre || !qrToken) {
       toast.error('Debes ingresar tu nombre primero')
       navigate(`/mesa/${qrToken || 'invalid'}`)
+      return
     }
-  }, [clienteNombre, qrToken])
+    
+    // Redirigir según el estado del pedido
+    if (wsState?.estado) {
+      if (wsState.estado === 'preparing') {
+        navigate('/pedido-confirmado')
+      } else if (wsState.estado === 'closed') {
+        navigate('/pedido-cerrado')
+      }
+    }
+  }, [clienteNombre, qrToken, wsState?.estado, navigate])
 
   // Categorías y filtrado
   const categorias = ['All', ...Array.from(new Set(productos.map(p => p.categoria).filter(Boolean)))]

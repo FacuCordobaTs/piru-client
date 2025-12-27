@@ -142,10 +142,27 @@ export const useClienteWebSocket = (): UseClienteWebSocketReturn => {
                 break
 
               case 'PEDIDO_CONFIRMADO':
-                setState((prev) => prev ? {
-                  ...prev,
+                setState({
+                  items: data.payload.items || [],
+                  total: data.payload.pedido?.total || '0.00',
                   estado: 'preparing',
-                } : null)
+                })
+                // Redirigir a la pantalla de pedido confirmado
+                window.location.href = '/pedido-confirmado'
+                break
+
+              case 'PEDIDO_CERRADO':
+                setState({
+                  items: data.payload.items || [],
+                  total: data.payload.pedido?.total || '0.00',
+                  estado: 'closed',
+                })
+                // Redirigir a la pantalla de pedido cerrado
+                window.location.href = '/pedido-cerrado'
+                break
+
+              case 'MOZO_NOTIFICADO':
+                // Este mensaje se maneja en la página PedidoConfirmado
                 break
 
               case 'ERROR':

@@ -24,7 +24,7 @@ const PedidoConfirmado = () => {
 
   useEffect(() => {
     if (!clienteNombre || !qrToken) {
-      navigate(`/mesa/${qrToken || 'invalid'}`)
+      // navigate(`/mesa/${qrToken || 'invalid'}`)
     }
     // Si el pedido no está en estado preparing, redirigir
     if (wsState?.estado && wsState.estado !== 'preparing' && wsState.estado !== 'pending') {

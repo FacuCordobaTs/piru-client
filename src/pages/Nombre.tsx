@@ -11,24 +11,58 @@ import { User, Loader2 } from 'lucide-react'
 
 const Nombre = () => {
   const navigate = useNavigate()
-  const { qrToken } = useParams<{ qrToken: string }>()
+  const { qrToken: urlQrToken } = useParams<{ qrToken: string }>()
   const [nombre, setNombre] = useState('')
   const [isLoading, setIsLoading] = useState(true)
-  const { setMesa, setProductos, setQrToken, setClienteInfo, setPedidoId, setPedido, pedido } = useMesaStore()
+  const [shouldAskName, setShouldAskName] = useState(false)
+  const { 
+    setMesa, setProductos, setQrToken, setClienteInfo, setPedidoId, setPedido, 
+    pedido, clienteNombre, qrToken: storedQrToken, isHydrated, sessionEnded, 
+    reset, clearPedidoCerrado
+  } = useMesaStore()
 
+  // Efecto para verificar si el usuario ya tiene datos guardados
+  useEffect(() => {
+    // Esperar a que el store se hidrate
+    if (!isHydrated) return
+    
+    // Si es un nuevo QR diferente al guardado, o la sesión terminó, limpiar datos
+    if (urlQrToken && (urlQrToken !== storedQrToken || sessionEnded)) {
+      console.log('Nuevo QR o sesión terminada, limpiando datos anteriores')
+      reset()
+      clearPedidoCerrado()
+    }
+    
+    // Si ya tiene nombre para este mismo QR y la sesión no terminó, redirigir automáticamente
+    if (urlQrToken === storedQrToken && clienteNombre && !sessionEnded) {
+      console.log('Usuario ya registrado, redirigiendo según estado del pedido')
+      const estadoPedido = pedido?.estado
+      if (estadoPedido === 'preparing') {
+        navigate('/pedido-confirmado')
+      } else if (estadoPedido === 'closed') {
+        navigate('/pedido-cerrado')
+      } else {
+        navigate('/menu')
+      }
+    } else {
+      setShouldAskName(true)
+    }
+  }, [isHydrated, urlQrToken, storedQrToken, clienteNombre, sessionEnded, pedido?.estado, navigate])
+
+  // Efecto para cargar datos de la mesa
   useEffect(() => {
     const cargarMesa = async () => {
-      if (!qrToken) {
+      if (!urlQrToken) {
         toast.error('Token de mesa no válido')
         navigate('/')
         return
       }
 
-      setQrToken(qrToken)
+      setQrToken(urlQrToken)
       setIsLoading(true)
 
       try {
-        const response = await mesaApi.join(qrToken) as {
+        const response = await mesaApi.join(urlQrToken) as {
           success: boolean
           data?: {
             mesa: {
@@ -64,9 +98,7 @@ const Nombre = () => {
           setProductos(response.data.productos || [])
           setPedidoId(response.data.pedido.id)
           setPedido(response.data.pedido)
-          toast.success('Mesa encontrada', {
-            // description: `Bienvenido a ${response.data.mesa.nombre}`,
-          })
+          toast.success('Mesa encontrada')
         } else {
           toast.error('Error al cargar la mesa')
           navigate('/')
@@ -88,7 +120,7 @@ const Nombre = () => {
     }
 
     cargarMesa()
-  }, [qrToken])
+  }, [urlQrToken])
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -109,7 +141,8 @@ const Nombre = () => {
     }
   }
 
-  if (isLoading) {
+  // Mostrar cargando mientras se hidrata el store o se carga la mesa
+  if (isLoading || !isHydrated || !shouldAskName) {
     return (
       <div className="min-h-screen bg-linear-to-br from-primary/10 via-background to-primary/5 flex items-center justify-center p-4">
         <Card className="w-full max-w-md">

@@ -17,7 +17,7 @@ import { ThemeToggle } from '@/components/ThemeToggle'
 
 const Menu = () => {
   const navigate = useNavigate()
-  const { mesa, productos, clientes, clienteNombre, qrToken } = useMesaStore()
+  const { mesa, productos, clientes, clienteNombre, qrToken, isHydrated, sessionEnded } = useMesaStore()
   const { state: wsState, isConnected, sendMessage } = useClienteWebSocket()
   
   const [carritoAbierto, setCarritoAbierto] = useState(false)
@@ -27,6 +27,12 @@ const Menu = () => {
 
   // Verificar nombre y redirigir según estado del pedido
   useEffect(() => {
+    // Esperar a que el store se hidrate
+    if (!isHydrated) return
+    
+    // Si la sesión terminó, no hacer nada
+    if (sessionEnded) return
+    
     if (!clienteNombre || !qrToken) {
       toast.error('Debes ingresar tu nombre primero')
       navigate(`/mesa/${qrToken || 'invalid'}`)
@@ -41,7 +47,7 @@ const Menu = () => {
         navigate('/pedido-cerrado')
       }
     }
-  }, [clienteNombre, qrToken, wsState?.estado, navigate])
+  }, [clienteNombre, qrToken, wsState?.estado, navigate, isHydrated, sessionEnded])
 
   // Categorías y filtrado
   const categorias = ['All', ...Array.from(new Set(productos.map(p => p.categoria).filter(Boolean)))]

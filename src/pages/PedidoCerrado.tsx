@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -7,41 +7,58 @@ import { Separator } from '@/components/ui/separator'
 import { useMesaStore } from '@/store/mesaStore'
 import { useClienteWebSocket } from '@/hooks/useClienteWebSocket'
 import { toast } from 'sonner'
-import { Receipt, Package, DollarSign, CreditCard, CheckCircle2 } from 'lucide-react'
+import { Receipt, Package, DollarSign, CreditCard, CheckCircle2, PartyPopper } from 'lucide-react'
 
 const PedidoCerrado = () => {
   const navigate = useNavigate()
-  const { mesa, productos, clienteNombre, qrToken } = useMesaStore()
+  const { 
+    mesa, productos, clienteNombre, qrToken, pedidoCerrado, 
+    clearPedidoCerrado, endSession, sessionEnded, isHydrated 
+  } = useMesaStore()
   const { state: wsState, sendMessage } = useClienteWebSocket()
-  
-
+  const [pagado, setPagado] = useState(false)
 
   useEffect(() => {
+    // Si ya se pagó o la sesión terminó, no hacer nada
+    if (pagado || sessionEnded) return
+    
+    // Esperar a que el store se hidrate
+    if (!isHydrated) return
+    
+    // Si no hay datos del cliente, redirigir a escanear QR
     if (!clienteNombre || !qrToken) {
       navigate(`/mesa/${qrToken || 'invalid'}`)
+      return
     }
-    // Si el pedido no está cerrado, redirigir
-    if (wsState?.estado && wsState.estado !== 'closed') {
+    
+    // Si no hay datos del pedido cerrado y el estado no es 'closed', redirigir
+    if (!pedidoCerrado && wsState?.estado && wsState.estado !== 'closed') {
       if (wsState.estado === 'preparing') {
         navigate('/pedido-confirmado')
-      } else {
+      } else if (wsState.estado === 'pending') {
         navigate('/menu')
       }
     }
-  }, [clienteNombre, qrToken, wsState?.estado])
+  }, [clienteNombre, qrToken, wsState?.estado, pedidoCerrado, navigate, pagado, sessionEnded, isHydrated])
 
-  const todosLosItems = wsState?.items || []
-  const totalPedido = wsState?.total || '0.00'
+  // Usar datos del pedido cerrado del store (persistido) o del wsState como fallback
+  const todosLosItems = pedidoCerrado?.items || wsState?.items || []
+  const totalPedido = pedidoCerrado?.total || wsState?.total || '0.00'
 
   const handlePagarEfectivo = () => {
+    // Enviar mensaje de pago antes de terminar la sesión
     sendMessage({ 
       type: 'PAGAR_PEDIDO', 
       payload: { metodo: 'efectivo' } 
     })
-    toast.success('Pago registrado', {
+    
+    // Marcar como pagado y terminar la sesión
+    setPagado(true)
+    endSession() // Esto evita reconexiones y loops
+    
+    toast.success('¡Pago registrado!', {
       description: 'Gracias por tu visita',
     })
-    // Aquí podrías redirigir a una pantalla de agradecimiento o cerrar
   }
 
   const handlePagarMercadoPago = () => {
@@ -49,6 +66,35 @@ const PedidoCerrado = () => {
     toast.info('Próximamente', {
       description: 'La integración con MercadoPago estará disponible pronto',
     })
+  }
+
+  // Si ya pagó, mostrar pantalla de agradecimiento
+  if (pagado || sessionEnded) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="max-w-md mx-auto px-5 text-center space-y-6">
+          <div className="inline-flex items-center justify-center w-24 h-24 rounded-full bg-green-100 dark:bg-green-900/30 mb-4">
+            <PartyPopper className="w-12 h-12 text-green-600 dark:text-green-400" />
+          </div>
+          <h1 className="text-3xl font-bold">¡Gracias por tu visita!</h1>
+          <p className="text-muted-foreground">
+            Tu pago ha sido registrado. Esperamos verte pronto.
+          </p>
+          
+          {/* Resumen del pedido */}
+          <Card className="p-4 text-left">
+            <div className="flex justify-between items-center">
+              <span className="text-muted-foreground">Total pagado</span>
+              <span className="text-xl font-bold">${totalPedido}</span>
+            </div>
+          </Card>
+          
+          <p className="text-xs text-muted-foreground">
+            Puedes cerrar esta pestaña
+          </p>
+        </div>
+      </div>
+    )
   }
 
   return (

@@ -15,7 +15,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 
 const PedidoConfirmado = () => {
   const navigate = useNavigate()
-  const { productos, clienteNombre, qrToken } = useMesaStore()
+  const { productos, clienteNombre, qrToken, isHydrated, sessionEnded } = useMesaStore()
   const { state: wsState, sendMessage } = useClienteWebSocket()
   
   const [verPedidoAbierto, setVerPedidoAbierto] = useState(false)
@@ -23,18 +23,25 @@ const PedidoConfirmado = () => {
   const [pedirCuentaAbierto, setPedirCuentaAbierto] = useState(false)
 
   useEffect(() => {
+    // Esperar a que el store se hidrate
+    if (!isHydrated) return
+    
+    // Si la sesión terminó, no redirigir
+    if (sessionEnded) return
+    
+    // Si no hay datos del cliente, redirigir a escanear QR
     if (!clienteNombre || !qrToken) {
-      // navigate(`/mesa/${qrToken || 'invalid'}`)
+      navigate(`/mesa/${qrToken || 'invalid'}`)
+      return
     }
+
     // Si el pedido no está en estado preparing, redirigir
     if (wsState?.estado && wsState.estado !== 'preparing' && wsState.estado !== 'pending') {
       if (wsState.estado === 'closed') {
         navigate('/pedido-cerrado')
-      } else {
-        navigate('/menu')
       }
     }
-  }, [clienteNombre, qrToken, wsState?.estado])
+  }, [clienteNombre, qrToken, wsState?.estado, navigate, isHydrated, sessionEnded])
 
   const todosLosItems = wsState?.items || []
   const totalPedido = wsState?.total || '0.00'
@@ -71,6 +78,19 @@ const PedidoConfirmado = () => {
   const handleEliminarItem = (itemPedidoId: number) => {
     sendMessage({ type: 'ELIMINAR_ITEM', payload: { itemId: itemPedidoId } })
     toast.success('Producto eliminado')
+  }
+
+
+  // Mostrar cargando mientras se hidrata el store
+  if (!isHydrated || (!clienteNombre && !qrToken)) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Cargando...</p>
+        </div>
+      </div>
+    )
   }
 
   return (

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router'
 import { Card } from '@/components/ui/card' // Eliminé CardContent que no usaremos
 import { Button } from '@/components/ui/button'
@@ -24,6 +24,56 @@ const Menu = () => {
   const [selectedProduct, setSelectedProduct] = useState<typeof productos[0] | null>(null)
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [selectedCategory, setSelectedCategory] = useState<string>('All')
+
+  // Funciones para abrir/cerrar drawers con soporte para botón "atrás"
+  const abrirCarrito = useCallback(() => {
+    // Agregar estado al historial para que "atrás" cierre el drawer
+    window.history.pushState({ drawer: 'carrito' }, '')
+    setCarritoAbierto(true)
+  }, [])
+
+  const cerrarCarrito = useCallback(() => {
+    setCarritoAbierto(false)
+    // Si el estado actual es del drawer, volver atrás para limpiarlo
+    if (window.history.state?.drawer === 'carrito') {
+      window.history.back()
+    }
+  }, [])
+
+  const abrirProductoDrawer = useCallback(() => {
+    window.history.pushState({ drawer: 'producto' }, '')
+    setDrawerOpen(true)
+  }, [])
+
+  const cerrarProductoDrawer = useCallback(() => {
+    setDrawerOpen(false)
+    setTimeout(() => setSelectedProduct(null), 300)
+    if (window.history.state?.drawer === 'producto') {
+      window.history.back()
+    }
+  }, [])
+
+  // Escuchar el evento popstate (botón "atrás" del navegador)
+  useEffect(() => {
+    const handlePopState = (event: PopStateEvent) => {
+      // Si hay un drawer abierto, cerrarlo
+      if (carritoAbierto) {
+        setCarritoAbierto(false)
+        // Prevenir navegación
+        event.preventDefault()
+        return
+      }
+      if (drawerOpen) {
+        setDrawerOpen(false)
+        setTimeout(() => setSelectedProduct(null), 300)
+        event.preventDefault()
+        return
+      }
+    }
+
+    window.addEventListener('popstate', handlePopState)
+    return () => window.removeEventListener('popstate', handlePopState)
+  }, [carritoAbierto, drawerOpen])
 
   // Verificar nombre y redirigir según estado del pedido
   useEffect(() => {
@@ -57,7 +107,7 @@ const Menu = () => {
 
   const abrirDetalleProducto = (producto: typeof productos[0]) => {
     setSelectedProduct(producto)
-    setDrawerOpen(true)
+    abrirProductoDrawer()
   }
 
   const agregarAlPedido = (producto: typeof productos[0] | any, cantidad: number = 1) => {
@@ -95,7 +145,7 @@ const Menu = () => {
   const confirmarPedido = () => {
     sendMessage({ type: 'CONFIRMAR_PEDIDO', payload: {}, })
     toast.success('¡Pedido enviado a cocina!', { icon: <ChefHat className="w-5 h-5" /> })
-    setCarritoAbierto(false)
+    cerrarCarrito()
   }
 
   const todosLosItems = wsState?.items || []
@@ -279,7 +329,7 @@ const Menu = () => {
       {/* --- BOTÓN FLOTANTE (DARK MODE FIXED) --- */}
       <div className="fixed bottom-6 left-0 right-0 flex justify-center z-40 transition-all duration-500 translate-y-0 opacity-100">
         <button
-          onClick={() => setCarritoAbierto(true)}
+          onClick={abrirCarrito}
           className={`
             group relative flex items-center gap-4 pl-5 pr-6 py-3.5 rounded-full 
             shadow-2xl hover:scale-[1.02] active:scale-95 transition-all duration-300
@@ -312,7 +362,7 @@ const Menu = () => {
       </div>
 
       {/* --- DRAWER DEL PEDIDO (FULL SCREEN DESDE DERECHA) --- */}
-      <Sheet open={carritoAbierto} onOpenChange={setCarritoAbierto}>
+      <Sheet open={carritoAbierto} onOpenChange={(open) => !open && cerrarCarrito()}>
         <SheetContent 
           side="right" 
           className="w-full sm:max-w-md p-0 border-l-0 sm:border-l bg-background" 
@@ -325,7 +375,7 @@ const Menu = () => {
                 variant="ghost" 
                 size="icon" 
                 className="rounded-full -ml-2 hover:bg-secondary"
-                onClick={() => setCarritoAbierto(false)}
+                onClick={cerrarCarrito}
               >
                 <ArrowLeft className="w-6 h-6" />
               </Button>
@@ -345,7 +395,7 @@ const Menu = () => {
                     <UtensilsCrossed className="w-10 h-10" />
                   </div>
                   <p className="font-medium">El pedido está vacío.</p>
-                  <Button variant="link" onClick={() => setCarritoAbierto(false)}>Ir al menú</Button>
+                  <Button variant="link" onClick={cerrarCarrito}>Ir al menú</Button>
                 </div>
               ) : (
                 todosLosItems.map((item) => {
@@ -447,10 +497,7 @@ const Menu = () => {
       <ProductDetailDrawer
         product={selectedProduct}
         open={drawerOpen}
-        onClose={() => {
-          setDrawerOpen(false)
-          setTimeout(() => setSelectedProduct(null), 300)
-        }}
+        onClose={cerrarProductoDrawer}
         onAddToOrder={agregarAlPedido}
       />
     </div>

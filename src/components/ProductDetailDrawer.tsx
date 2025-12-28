@@ -33,7 +33,7 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder }: Pr
   }
 
   return (
-    <Drawer open={open} onOpenChange={onClose}>
+    <Drawer open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
       {/* 1. Fixed height set to 75vh (3/4 of screen) and flex-col layout */}
       <DrawerContent className="h-[75vh] flex flex-col overflow-hidden">
         {product ? (

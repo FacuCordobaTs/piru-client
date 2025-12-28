@@ -13,7 +13,7 @@ const PedidoCerrado = () => {
   const navigate = useNavigate()
   const { 
     mesa, productos, clienteNombre, qrToken, pedidoCerrado, 
-    clearPedidoCerrado, endSession, sessionEnded, isHydrated 
+    endSession, sessionEnded, isHydrated 
   } = useMesaStore()
   const { state: wsState, sendMessage } = useClienteWebSocket()
   const [pagado, setPagado] = useState(false)

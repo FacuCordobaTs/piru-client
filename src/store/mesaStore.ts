@@ -8,6 +8,12 @@ interface Mesa {
   restauranteId: number
 }
 
+interface Restaurante {
+  id: number
+  nombre: string
+  imagenUrl: string | null
+}
+
 interface Producto {
   id: number
   nombre: string
@@ -51,6 +57,7 @@ interface PedidoCerradoData {
 
 interface MesaState {
   mesa: Mesa | null
+  restaurante: Restaurante | null
   productos: Producto[]
   clientes: Cliente[]
   pedidoId: number | null
@@ -67,6 +74,7 @@ interface MesaState {
   // Flag para saber si el store ya se hidrató desde localStorage
   isHydrated: boolean
   setMesa: (mesa: Mesa) => void
+  setRestaurante: (restaurante: Restaurante | null) => void
   setProductos: (productos: Producto[]) => void
   setClientes: (clientes: Cliente[]) => void
   setPedidoId: (pedidoId: number) => void
@@ -86,6 +94,7 @@ export const useMesaStore = create<MesaState>()(
   persist(
     (set) => ({
       mesa: null,
+      restaurante: null,
       productos: [],
       clientes: [],
       pedidoId: null,
@@ -100,6 +109,7 @@ export const useMesaStore = create<MesaState>()(
       isHydrated: false,
 
       setMesa: (mesa) => set({ mesa }),
+      setRestaurante: (restaurante) => set({ restaurante }),
       setProductos: (productos) => set({ productos }),
       setClientes: (clientes) => set({ clientes }),
       setPedidoId: (pedidoId) => set({ pedidoId }),
@@ -114,6 +124,7 @@ export const useMesaStore = create<MesaState>()(
       setHydrated: () => set({ isHydrated: true }),
       reset: () => set({
         mesa: null,
+        restaurante: null,
         productos: [],
         clientes: [],
         pedidoId: null,
@@ -135,6 +146,7 @@ export const useMesaStore = create<MesaState>()(
         qrToken: state.qrToken,
         pedidoId: state.pedidoId,
         mesa: state.mesa,
+        restaurante: state.restaurante,
         pedido: state.pedido,
         productos: state.productos,
         pedidoCerrado: state.pedidoCerrado,

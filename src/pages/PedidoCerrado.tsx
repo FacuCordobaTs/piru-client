@@ -1,18 +1,16 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router'
-import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { useMesaStore } from '@/store/mesaStore'
 import { useClienteWebSocket } from '@/hooks/useClienteWebSocket'
 import { toast } from 'sonner'
-import { Receipt, Package, DollarSign, CreditCard, CheckCircle2, PartyPopper } from 'lucide-react'
+import { Receipt, DollarSign, CreditCard, Banknote, Sparkles } from 'lucide-react'
 
 const PedidoCerrado = () => {
   const navigate = useNavigate()
   const { 
-    mesa, productos, clienteNombre, qrToken, pedidoCerrado, 
+    mesa, clienteNombre, qrToken, pedidoCerrado, restaurante,
     endSession, sessionEnded, isHydrated 
   } = useMesaStore()
   const { state: wsState, sendMessage } = useClienteWebSocket()
@@ -47,17 +45,21 @@ const PedidoCerrado = () => {
 
   const handlePagarEfectivo = () => {
     // Enviar mensaje de pago antes de terminar la sesión
+    // Incluir el total para que el admin vea el monto correcto
     sendMessage({ 
       type: 'PAGAR_PEDIDO', 
-      payload: { metodo: 'efectivo' } 
+      payload: { 
+        metodo: 'efectivo',
+        total: totalPedido 
+      } 
     })
     
     // Marcar como pagado y terminar la sesión
     setPagado(true)
     endSession() // Esto evita reconexiones y loops
     
-    toast.success('¡Pago registrado!', {
-      description: 'Gracias por tu visita',
+    toast.success('¡Listo!', {
+      description: 'Acércate a la caja para pagar',
     })
   }
 
@@ -68,29 +70,122 @@ const PedidoCerrado = () => {
     })
   }
 
-  // Si ya pagó, mostrar pantalla de agradecimiento
+  // Componente de recibo/factura reutilizable
+  const ReceiptCard = ({ showPaymentInfo = false }: { showPaymentInfo?: boolean }) => (
+    <div className="bg-white text-neutral-900 rounded-2xl shadow-xl overflow-hidden mx-4">
+      {/* Header del recibo */}
+      <div className="bg-neutral-50 px-6 py-5 text-center border-b border-dashed border-neutral-200">
+        {restaurante?.imagenUrl ? (
+          <img 
+            src={restaurante.imagenUrl} 
+            alt={restaurante.nombre || 'Restaurante'}
+            className="w-14 h-14 rounded-xl object-cover mx-auto mb-3"
+          />
+        ) : (
+          <div className="w-14 h-14 rounded-xl bg-neutral-900 flex items-center justify-center mx-auto mb-3">
+            <Receipt className="w-7 h-7 text-white" />
+          </div>
+        )}
+        <h2 className="font-bold text-lg text-neutral-900">
+          {restaurante?.nombre || 'Restaurante'}
+        </h2>
+        <p className="text-sm text-neutral-500 mt-1">Mesa {mesa?.nombre}</p>
+      </div>
+
+      {/* Lista de productos */}
+      <div className="px-6 py-4">
+        <div className="space-y-3">
+          {todosLosItems.map((item) => {
+            const precio = parseFloat(item.precioUnitario || '0')
+            const subtotal = precio * item.cantidad
+
+            return (
+              <div key={item.id} className="flex justify-between items-start gap-4">
+                <div className="flex-1 min-w-0">
+                  <p className="font-medium text-sm text-neutral-900 leading-tight">
+                    {item.nombreProducto || item.nombre}
+                  </p>
+                  <p className="text-xs text-neutral-500 mt-0.5">
+                    {item.cantidad} × ${precio.toFixed(2)} · {item.clienteNombre}
+                  </p>
+                </div>
+                <p className="font-semibold text-sm text-neutral-900 tabular-nums">
+                  ${subtotal.toFixed(2)}
+                </p>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+
+      {/* Separador estilo ticket */}
+      <div className="relative px-6">
+        <div className="absolute left-0 w-4 h-4 bg-neutral-100 dark:bg-neutral-950 rounded-full -translate-x-1/2" />
+        <div className="absolute right-0 w-4 h-4 bg-neutral-100 dark:bg-neutral-950 rounded-full translate-x-1/2" />
+        <Separator className="border-dashed" />
+      </div>
+
+      {/* Total */}
+      <div className="px-6 py-4">
+        <div className="flex justify-between items-center">
+          <span className="text-base font-bold text-neutral-900">TOTAL</span>
+          <span className="text-2xl font-black text-neutral-900">${totalPedido}</span>
+        </div>
+      </div>
+
+      {/* Info de pago en efectivo */}
+      {showPaymentInfo && (
+        <>
+          <div className="relative px-6">
+            <div className="absolute left-0 w-4 h-4 bg-neutral-100 dark:bg-neutral-950 rounded-full -translate-x-1/2" />
+            <div className="absolute right-0 w-4 h-4 bg-neutral-100 dark:bg-neutral-950 rounded-full translate-x-1/2" />
+            <Separator className="border-dashed" />
+          </div>
+          <div className="px-6 py-4 bg-amber-50 text-center">
+            <div className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-amber-100 mb-2">
+              <Banknote className="w-5 h-5 text-amber-600" />
+            </div>
+            <p className="text-sm font-semibold text-amber-900">Pago en efectivo</p>
+            <p className="text-xs text-amber-700 mt-1">
+              Acércate a la caja para abonar
+            </p>
+          </div>
+        </>
+      )}
+
+      {/* Footer del recibo */}
+      <div className="bg-neutral-50 px-6 py-4 text-center border-t border-dashed border-neutral-200">
+        <p className="text-[10px] text-neutral-400 uppercase tracking-wider">
+          Powered by Piru
+        </p>
+      </div>
+    </div>
+  )
+
+  // Pantalla después de elegir pagar en efectivo
   if (pagado || sessionEnded) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="max-w-md mx-auto px-5 text-center space-y-6">
-          <div className="inline-flex items-center justify-center w-24 h-24 rounded-full bg-green-100 dark:bg-green-900/30 mb-4">
-            <PartyPopper className="w-12 h-12 text-green-600 dark:text-green-400" />
-          </div>
-          <h1 className="text-3xl font-bold">¡Gracias por tu visita!</h1>
-          <p className="text-muted-foreground">
-            Tu pago ha sido registrado. Esperamos verte pronto.
-          </p>
-          
-          {/* Resumen del pedido */}
-          <Card className="p-4 text-left">
-            <div className="flex justify-between items-center">
-              <span className="text-muted-foreground">Total pagado</span>
-              <span className="text-xl font-bold">${totalPedido}</span>
+      <div className="min-h-screen bg-linear-to-b from-neutral-100 to-neutral-200 dark:from-neutral-950 dark:to-neutral-900 py-8">
+        <div className="max-w-md mx-auto space-y-6">
+          {/* Mensaje de agradecimiento */}
+          <div className="text-center px-6 space-y-3">
+            <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-emerald-100 dark:bg-emerald-900/30 mb-2">
+              <Sparkles className="w-8 h-8 text-emerald-600 dark:text-emerald-400" />
             </div>
-          </Card>
-          
-          <p className="text-xs text-muted-foreground">
-            Puedes cerrar esta pestaña
+            <h1 className="text-2xl font-bold text-neutral-900 dark:text-white">
+              ¡Gracias por tu visita!
+            </h1>
+            <p className="text-sm text-neutral-600 dark:text-neutral-400">
+              Esperamos que hayas disfrutado. ¡Vuelve pronto!
+            </p>
+          </div>
+
+          {/* Recibo con info de pago */}
+          <ReceiptCard showPaymentInfo={true} />
+
+          {/* Mensaje final */}
+          <p className="text-center text-xs text-neutral-400 dark:text-neutral-600 px-6">
+            Puedes cerrar esta pestaña después de pagar
           </p>
         </div>
       </div>
@@ -98,76 +193,32 @@ const PedidoCerrado = () => {
   }
 
   return (
-    <div className="min-h-screen bg-background pb-24">
-      <div className="max-w-2xl mx-auto px-5 pt-8 space-y-6">
+    <div className="min-h-screen bg-linear-to-b from-neutral-100 to-neutral-200 dark:from-neutral-950 dark:to-neutral-900 py-8 pb-32">
+      <div className="max-w-md mx-auto space-y-6">
         
         {/* Header */}
-        <div className="text-center space-y-4">
-          <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-primary/10 mb-4">
-            <Receipt className="w-10 h-10 text-primary" />
+        <div className="text-center px-6 space-y-2">
+          <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-neutral-900 dark:bg-white mb-2">
+            <Receipt className="w-7 h-7 text-white dark:text-neutral-900" />
           </div>
-          <h1 className="text-3xl font-bold">Factura</h1>
-          <p className="text-muted-foreground">
-            Mesa {mesa?.nombre}
+          <h1 className="text-2xl font-bold text-neutral-900 dark:text-white">Tu cuenta</h1>
+          <p className="text-sm text-neutral-500 dark:text-neutral-400">
+            Revisa el detalle y elige cómo pagar
           </p>
         </div>
 
-        {/* Factura */}
-        <Card className="p-6 space-y-4">
-          <div className="space-y-3">
-            {todosLosItems.map((item) => {
-              const prodOriginal = productos.find(p => p.id === (item.productoId || item.id))
-              const imagen = item.imagenUrl || prodOriginal?.imagenUrl
-              const precio = parseFloat(item.precioUnitario || '0')
-              const esMio = item.clienteNombre === clienteNombre
-
-              return (
-                <div key={item.id} className="flex gap-3 items-start">
-                  <div className="w-16 h-16 shrink-0 rounded-lg overflow-hidden bg-secondary">
-                    {imagen ? (
-                      <img src={imagen} alt="img" className="w-full h-full object-cover" />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center text-muted-foreground">
-                        <Package className="w-5 h-5" />
-                      </div>
-                    )}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex justify-between items-start gap-2">
-                      <div className="min-w-0">
-                        <p className="font-semibold text-sm truncate">{item.nombreProducto || item.nombre}</p>
-                        <div className="flex items-center gap-2 mt-1">
-                          <Badge variant="secondary" className="text-[10px] h-4 px-1.5">
-                            {esMio ? 'Tú' : item.clienteNombre}
-                          </Badge>
-                          <span className="text-xs text-muted-foreground">x{item.cantidad}</span>
-                        </div>
-                      </div>
-                      <p className="font-bold text-sm shrink-0">
-                        ${(precio * item.cantidad).toFixed(2)}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-
-          <Separator />
-
-          <div className="flex justify-between items-center">
-            <span className="text-lg font-semibold">Total</span>
-            <span className="text-2xl font-black">${totalPedido}</span>
-          </div>
-        </Card>
+        {/* Recibo */}
+        <ReceiptCard />
 
         {/* Métodos de Pago */}
-        <div className="space-y-3">
-          <h2 className="text-lg font-bold px-1">Método de Pago</h2>
+        <div className="px-4 space-y-3">
+          <p className="text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase tracking-wider px-2">
+            Método de pago
+          </p>
           
           <Button
             onClick={handlePagarEfectivo}
-            className="w-full h-14 text-base font-semibold rounded-2xl"
+            className="w-full h-14 text-base font-semibold rounded-2xl bg-neutral-900 hover:bg-neutral-800 dark:bg-white dark:hover:bg-neutral-100 dark:text-neutral-900 shadow-lg"
           >
             <DollarSign className="w-5 h-5 mr-2" />
             Pagar en Efectivo
@@ -175,29 +226,20 @@ const PedidoCerrado = () => {
 
           <Button
             onClick={handlePagarMercadoPago}
-            className="w-full h-14 text-base font-semibold rounded-2xl"
+            variant="outline"
+            className="w-full h-14 text-base font-semibold rounded-2xl border-2"
             disabled
           >
             <CreditCard className="w-5 h-5 mr-2" />
-            Pagar con MercadoPago
-            <Badge variant="secondary" className="ml-2 text-xs">Próximamente</Badge>
+            MercadoPago
+            <span className="ml-2 text-xs bg-neutral-100 dark:bg-neutral-800 px-2 py-0.5 rounded-full text-neutral-500">
+              Próximamente
+            </span>
           </Button>
         </div>
-
-        {/* Info adicional */}
-        <Card className="p-4 bg-secondary/30">
-          <div className="flex items-center gap-3">
-            <CheckCircle2 className="w-5 h-5 text-primary" />
-            <div>
-              <p className="text-sm font-medium">Pedido cerrado</p>
-              <p className="text-xs text-muted-foreground">Gracias por tu visita</p>
-            </div>
-          </div>
-        </Card>
       </div>
     </div>
   )
 }
 
 export default PedidoCerrado
-

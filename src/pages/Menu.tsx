@@ -589,7 +589,7 @@ const Menu = () => {
       </Sheet>
 
       <ProductDetailDrawer
-        product={selectedProduct}
+        product={selectedProduct ? { ...selectedProduct, categoria: selectedProduct.categoria ?? undefined } : null}
         open={drawerOpen}
         onClose={cerrarProductoDrawer}
         onAddToOrder={agregarAlPedido}

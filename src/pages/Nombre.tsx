@@ -76,7 +76,8 @@ const Nombre = () => {
               descripcion: string | null
               precio: string
               imagenUrl: string | null
-              categoria?: string
+              categoriaId: number | null
+              categoria: string | null
             }>
             pedido: {
               id: number

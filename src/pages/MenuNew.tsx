@@ -458,7 +458,7 @@ const Menu = () => {
 
       {/* Product Detail Drawer */}
       <ProductDetailDrawer
-        product={selectedProduct}
+        product={selectedProduct ? { ...selectedProduct, categoria: selectedProduct.categoria ?? undefined } : null}
         open={drawerOpen}
         onClose={() => {
           setDrawerOpen(false)

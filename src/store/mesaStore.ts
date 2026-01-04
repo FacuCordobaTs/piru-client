@@ -20,7 +20,8 @@ interface Producto {
   descripcion: string | null
   precio: string
   imagenUrl: string | null
-  categoria?: string
+  categoriaId: number | null
+  categoria: string | null
 }
 
 interface Cliente {

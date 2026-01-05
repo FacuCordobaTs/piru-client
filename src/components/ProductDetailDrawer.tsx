@@ -5,7 +5,7 @@ import {
 } from '@/components/ui/drawer'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
-import { Star, Plus, Minus, X } from 'lucide-react'
+import { Star, X } from 'lucide-react'
 
 interface Ingrediente {
   id: number
@@ -43,14 +43,23 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder }: Pr
     }
   }, [open, product?.id])
 
+  // Inicialmente todos los ingredientes están incluidos (ninguno excluido)
+  // Al hacer clic, se excluye o se vuelve a incluir
   const toggleIngrediente = (ingredienteId: number) => {
     setIngredientesExcluidos(prev => {
       if (prev.includes(ingredienteId)) {
+        // Si estaba excluido, lo incluimos de nuevo (lo removemos de la lista de excluidos)
         return prev.filter(id => id !== ingredienteId)
       } else {
+        // Si estaba incluido, lo excluimos (lo agregamos a la lista de excluidos)
         return [...prev, ingredienteId]
       }
     })
+  }
+
+  // Verificar si un ingrediente está incluido (no está en la lista de excluidos)
+  const isIngredienteIncluido = (ingredienteId: number) => {
+    return !ingredientesExcluidos.includes(ingredienteId)
   }
 
   const handleAdd = () => {
@@ -118,33 +127,11 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder }: Pr
                       Modificar Ingredientes
                     </Button>
                   )}
-                  <div>
-                    <p className="text-xs text-muted-foreground mb-2">Cantidad</p>
-                    <div className="flex items-center gap-3">
-                      <Button
-                        variant="outline"
-                        size="icon"
-                        className="rounded-full h-9 w-9"
-                        onClick={() => setQuantity(Math.max(1, quantity - 1))}
-                      >
-                        <Minus className="h-4 w-4" />
-                      </Button>
-                      <span className="text-lg font-bold w-6 text-center">{quantity}</span>
-                      <Button
-                        variant="outline"
-                        size="icon"
-                        className="rounded-full h-9 w-9"
-                        onClick={() => setQuantity(quantity + 1)}
-                      >
-                        <Plus className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </div>
-                </div>
+              </div>
               ) : (
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
-                    <p className="text-sm font-semibold">Selecciona ingredientes a excluir</p>
+                    <p className="text-sm font-semibold">Confirma los ingredientes incluidos</p>
                     <Button
                       variant="ghost"
                       size="sm"
@@ -155,22 +142,22 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder }: Pr
                   </div>
                   <div className="space-y-2 max-h-64 overflow-y-auto border rounded-lg p-3">
                     {product.ingredientes?.map((ingrediente) => {
-                      const estaExcluido = ingredientesExcluidos.includes(ingrediente.id)
+                      const estaIncluido = isIngredienteIncluido(ingrediente.id)
                       return (
                         <div
                           key={ingrediente.id}
                           className={`flex items-center space-x-3 p-2 rounded-lg cursor-pointer transition-colors ${
-                            estaExcluido
-                              ? 'bg-destructive/10 border border-destructive/30'
-                              : 'bg-background hover:bg-muted border border-transparent'
+                            estaIncluido
+                              ? 'bg-primary/10 border border-primary/30'
+                              : 'bg-destructive/10 border border-destructive/30'
                           }`}
                           onClick={() => toggleIngrediente(ingrediente.id)}
                         >
                           <Checkbox
-                            checked={estaExcluido}
+                            checked={estaIncluido}
                             onCheckedChange={() => toggleIngrediente(ingrediente.id)}
                           />
-                          <span className={`text-sm flex-1 ${estaExcluido ? 'line-through text-muted-foreground' : ''}`}>
+                          <span className={`text-sm flex-1 ${estaIncluido ? '' : 'line-through text-muted-foreground'}`}>
                             {ingrediente.nombre}
                           </span>
                         </div>
@@ -178,7 +165,7 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder }: Pr
                     })}
                   </div>
                   {ingredientesExcluidos.length > 0 && (
-                    <p className="text-xs text-muted-foreground">
+                    <p className="text-xs text-orange-600 dark:text-orange-400 font-medium">
                       {ingredientesExcluidos.length} ingrediente{ingredientesExcluidos.length !== 1 ? 's' : ''} excluido{ingredientesExcluidos.length !== 1 ? 's' : ''}
                     </p>
                   )}

@@ -12,6 +12,8 @@ interface ItemPedido {
   nombre?: string // Para compatibilidad
   precio?: number // Para compatibilidad con ItemCarrito
   imagenUrl?: string | null // URL de la imagen del producto
+  ingredientesExcluidos?: number[] // IDs de ingredientes excluidos
+  ingredientesExcluidosNombres?: string[] // Nombres de ingredientes excluidos
 }
 
 interface WebSocketState {

@@ -237,6 +237,11 @@ const PedidoConfirmado = () => {
                                 {esMio ? 'Tú' : item.clienteNombre}
                               </Badge>
                             </div>
+                            {(item as any).ingredientesExcluidosNombres && (item as any).ingredientesExcluidosNombres.length > 0 && (
+                              <p className="text-xs text-orange-600 dark:text-orange-400 font-medium mt-1">
+                                ⚠️ Sin: {(item as any).ingredientesExcluidosNombres.join(', ')}
+                              </p>
+                            )}
                           </div>
                           <p className="font-bold text-base">
                             ${(precio * item.cantidad).toFixed(2)}

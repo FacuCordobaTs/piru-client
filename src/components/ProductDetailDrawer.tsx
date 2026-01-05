@@ -155,7 +155,6 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder }: Pr
                         >
                           <Checkbox
                             checked={estaIncluido}
-                            onCheckedChange={() => toggleIngrediente(ingrediente.id)}
                           />
                           <span className={`text-sm flex-1 ${estaIncluido ? '' : 'line-through text-muted-foreground'}`}>
                             {ingrediente.nombre}

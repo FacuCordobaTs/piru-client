@@ -14,6 +14,11 @@ interface Restaurante {
   imagenUrl: string | null
 }
 
+interface Ingrediente {
+  id: number
+  nombre: string
+}
+
 interface Producto {
   id: number
   nombre: string
@@ -22,6 +27,7 @@ interface Producto {
   imagenUrl: string | null
   categoriaId: number | null
   categoria: string | null
+  ingredientes?: Ingrediente[]
 }
 
 interface Cliente {

@@ -128,7 +128,7 @@ const Menu = () => {
     abrirProductoDrawer()
   }
 
-  const agregarAlPedido = (producto: typeof productos[0] | any, cantidad: number = 1) => {
+  const agregarAlPedido = (producto: typeof productos[0] | any, cantidad: number = 1, ingredientesExcluidos?: number[]) => {
     if (!clienteNombre) return
     sendMessage({
       type: 'AGREGAR_ITEM',
@@ -137,10 +137,14 @@ const Menu = () => {
         clienteNombre,
         cantidad,
         precioUnitario: String(producto.precio),
-        imagenUrl: producto.imagenUrl 
+        imagenUrl: producto.imagenUrl,
+        ingredientesExcluidos: ingredientesExcluidos || []
       },
     })
-    toast.success('Agregado a la orden', { description: `${producto.nombre}`, duration: 1500 })
+    const mensaje = ingredientesExcluidos && ingredientesExcluidos.length > 0 
+      ? `${producto.nombre} (sin ${ingredientesExcluidos.length} ingrediente${ingredientesExcluidos.length !== 1 ? 's' : ''})`
+      : producto.nombre
+    toast.success('Agregado a la orden', { description: mensaje, duration: 1500 })
   }
 
   const handleAumentarCantidad = (itemPedidoId: number) => {

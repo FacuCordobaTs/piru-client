@@ -1,10 +1,16 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import {
   Drawer,
   DrawerContent
 } from '@/components/ui/drawer'
 import { Button } from '@/components/ui/button'
-import { Star, Plus, Minus } from 'lucide-react'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Star, Plus, Minus, X } from 'lucide-react'
+
+interface Ingrediente {
+  id: number
+  nombre: string
+}
 
 interface Product {
   id: number
@@ -13,24 +19,50 @@ interface Product {
   precio: number | string
   imagenUrl: string | null
   categoria?: string
+  ingredientes?: Ingrediente[]
 }
 
 interface ProductDetailDrawerProps {
   product: Product | null
   open: boolean
   onClose: () => void
-  onAddToOrder: (product: Product, quantity: number) => void
+  onAddToOrder: (product: Product, quantity: number, ingredientesExcluidos?: number[]) => void
 }
 
 export function ProductDetailDrawer({ product, open, onClose, onAddToOrder }: ProductDetailDrawerProps) {
   const [quantity, setQuantity] = useState(1)
+  const [mostrarIngredientes, setMostrarIngredientes] = useState(false)
+  const [ingredientesExcluidos, setIngredientesExcluidos] = useState<number[]>([])
+
+  // Resetear estado cuando se abre/cierra el drawer o cambia el producto
+  useEffect(() => {
+    if (open && product) {
+      setMostrarIngredientes(false)
+      setIngredientesExcluidos([])
+      setQuantity(1)
+    }
+  }, [open, product?.id])
+
+  const toggleIngrediente = (ingredienteId: number) => {
+    setIngredientesExcluidos(prev => {
+      if (prev.includes(ingredienteId)) {
+        return prev.filter(id => id !== ingredienteId)
+      } else {
+        return [...prev, ingredienteId]
+      }
+    })
+  }
 
   const handleAdd = () => {
     if (!product) return
-    onAddToOrder(product, quantity)
+    onAddToOrder(product, quantity, ingredientesExcluidos.length > 0 ? ingredientesExcluidos : undefined)
     setQuantity(1)
+    setIngredientesExcluidos([])
+    setMostrarIngredientes(false)
     onClose()
   }
+
+  const tieneIngredientes = product?.ingredientes && product.ingredientes.length > 0
 
   return (
     <Drawer open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
@@ -74,31 +106,84 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder }: Pr
                 </p>
               </div>
 
-              {/* Quantity Selector */}
-              <div className="flex items-center justify-between py-2">
-                <div>
-                  <p className="text-xs text-muted-foreground mb-2">Cantidad</p>
-                  <div className="flex items-center gap-3">
+              {/* Modificar Ingredientes o Cantidad */}
+              {!mostrarIngredientes ? (
+                <div className="space-y-3">
+                  {tieneIngredientes && (
                     <Button
                       variant="outline"
-                      size="icon"
-                      className="rounded-full h-9 w-9"
-                      onClick={() => setQuantity(Math.max(1, quantity - 1))}
+                      className="w-full"
+                      onClick={() => setMostrarIngredientes(true)}
                     >
-                      <Minus className="h-4 w-4" />
+                      Modificar Ingredientes
                     </Button>
-                    <span className="text-lg font-bold w-6 text-center">{quantity}</span>
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      className="rounded-full h-9 w-9"
-                      onClick={() => setQuantity(quantity + 1)}
-                    >
-                      <Plus className="h-4 w-4" />
-                    </Button>
+                  )}
+                  <div>
+                    <p className="text-xs text-muted-foreground mb-2">Cantidad</p>
+                    <div className="flex items-center gap-3">
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        className="rounded-full h-9 w-9"
+                        onClick={() => setQuantity(Math.max(1, quantity - 1))}
+                      >
+                        <Minus className="h-4 w-4" />
+                      </Button>
+                      <span className="text-lg font-bold w-6 text-center">{quantity}</span>
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        className="rounded-full h-9 w-9"
+                        onClick={() => setQuantity(quantity + 1)}
+                      >
+                        <Plus className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </div>
                 </div>
-              </div>
+              ) : (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm font-semibold">Selecciona ingredientes a excluir</p>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setMostrarIngredientes(false)}
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                  <div className="space-y-2 max-h-64 overflow-y-auto border rounded-lg p-3">
+                    {product.ingredientes?.map((ingrediente) => {
+                      const estaExcluido = ingredientesExcluidos.includes(ingrediente.id)
+                      return (
+                        <div
+                          key={ingrediente.id}
+                          className={`flex items-center space-x-3 p-2 rounded-lg cursor-pointer transition-colors ${
+                            estaExcluido
+                              ? 'bg-destructive/10 border border-destructive/30'
+                              : 'bg-background hover:bg-muted border border-transparent'
+                          }`}
+                          onClick={() => toggleIngrediente(ingrediente.id)}
+                        >
+                          <Checkbox
+                            checked={estaExcluido}
+                            onCheckedChange={() => toggleIngrediente(ingrediente.id)}
+                          />
+                          <span className={`text-sm flex-1 ${estaExcluido ? 'line-through text-muted-foreground' : ''}`}>
+                            {ingrediente.nombre}
+                          </span>
+                        </div>
+                      )
+                    })}
+                  </div>
+                  {ingredientesExcluidos.length > 0 && (
+                    <p className="text-xs text-muted-foreground">
+                      {ingredientesExcluidos.length} ingrediente{ingredientesExcluidos.length !== 1 ? 's' : ''} excluido{ingredientesExcluidos.length !== 1 ? 's' : ''}
+                    </p>
+                  )}
+                </div>
+              )}
 
               {/* Total Amount & Add Button */}
               <div className="flex items-center justify-between pt-4 border-t border-border">

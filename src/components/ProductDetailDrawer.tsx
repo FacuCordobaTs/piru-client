@@ -5,7 +5,7 @@ import {
 } from '@/components/ui/drawer'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
-import { Star, X } from 'lucide-react'
+import { X } from 'lucide-react'
 
 interface Ingrediente {
   id: number
@@ -101,10 +101,6 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder }: Pr
                   <h3 className="text-2xl font-bold text-foreground mb-1 leading-tight">{product.nombre}</h3>
                   <p className="text-sm text-muted-foreground">{product.categoria || 'Sin categoría'}</p>
                 </div>
-                <Button size="sm" variant="ghost" className="rounded-full bg-primary/10 text-primary px-3 h-8">
-                  <Star className="w-3 h-3 mr-1 fill-primary" />
-                  4.9
-                </Button>
               </div>
 
               {/* Description: We use line-clamp to ensure the text doesn't push the layout if it's exceptionally long */}

@@ -1,11 +1,10 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router'
-import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { useMesaStore } from '@/store/mesaStore'
 import { useClienteWebSocket } from '@/hooks/useClienteWebSocket'
 import { toast } from 'sonner'
-import { ArrowLeft, Plus, Package } from 'lucide-react'
+import { ArrowLeft, Package } from 'lucide-react'
 import { ProductDetailDrawer } from '@/components/ProductDetailDrawer'
 
 const AgregarProducto = () => {
@@ -24,9 +23,25 @@ const AgregarProducto = () => {
   }, [clienteNombre, qrToken])
 
   const categorias = ['All', ...Array.from(new Set(productos.map(p => p.categoria).filter(Boolean)))]
+  
+  const productosPorCategoria = productos.reduce((acc, producto) => {
+    const categoria = producto.categoria || 'Sin categoría'
+    if (!acc[categoria]) {
+      acc[categoria] = []
+    }
+    acc[categoria].push(producto)
+    return acc
+  }, {} as Record<string, typeof productos>)
+
   const productosFiltrados = selectedCategory === 'All' 
     ? productos 
     : productos.filter(p => p.categoria === selectedCategory)
+  
+  const categoriasOrdenadas = Object.keys(productosPorCategoria).sort((a, b) => {
+    if (a === 'Sin categoría') return 1
+    if (b === 'Sin categoría') return -1
+    return a.localeCompare(b)
+  })
 
   const agregarAlPedido = (producto: typeof productos[0] | any, cantidad: number = 1) => {
     if (!clienteNombre) return
@@ -72,13 +87,13 @@ const AgregarProducto = () => {
         {categorias.length > 1 && (
           <section className="space-y-3">
             <h2 className="text-lg font-bold px-1">Categorías</h2>
-            <div className="flex gap-2 overflow-x-auto pb-2 -mx-5 px-5 scrollbar-hide snap-x">
+            <div className="flex gap-2 overflow-x-auto pb-2 mx-2 scrollbar-hide snap-x">
               {categorias.map((category) => (
                 <Button
                   key={category}
                   onClick={() => setSelectedCategory(category || 'All')}
                   variant={selectedCategory === category ? "default" : "secondary"}
-                  className={`rounded-full px-5 h-9 text-xs font-medium whitespace-nowrap snap-start transition-all ${
+                  className={`rounded-lg px-5 h-10 text-xs font-medium whitespace-nowrap snap-start transition-all ${
                     selectedCategory === category 
                       ? "shadow-md" 
                       : "bg-secondary/50 hover:bg-secondary border border-transparent"
@@ -92,66 +107,54 @@ const AgregarProducto = () => {
         )}
 
         {/* Productos */}
-        <section className="space-y-4">
-          <h2 className="text-lg font-bold px-1">Productos</h2>
-          <div className="grid gap-4 sm:grid-cols-2">
-            {productosFiltrados.map((producto) => (
-              <Card 
-                key={producto.id} 
-                className="group border-0 bg-card/50 hover:bg-card transition-all duration-300 shadow-sm hover:shadow-md overflow-hidden cursor-pointer rounded-2xl ring-1 ring-border/50"
-                onClick={() => abrirDetalleProducto(producto)}
-              >
-                <div className="flex p-3 gap-4">
-                  <div className="w-24 h-24 shrink-0 rounded-xl overflow-hidden bg-secondary relative">
-                    {producto.imagenUrl ? (
-                      <img 
-                        src={producto.imagenUrl} 
-                        alt={producto.nombre} 
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" 
-                      />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center text-muted-foreground/30">
-                        <Package className="w-8 h-8" />
-                      </div>
-                    )}
-                  </div>
-                  
-                  <div className="flex flex-col flex-1 justify-between py-0.5 min-w-0">
-                    <div>
-                      <h3 className="font-bold text-foreground text-sm leading-tight truncate pr-2">
-                        {producto.nombre}
-                      </h3>
-                      <p className="text-xs text-muted-foreground mt-1 line-clamp-2 leading-relaxed">
-                        {producto.descripcion || 'Sin descripción disponible.'}
-                      </p>
-                    </div>
-                    
-                    <div className="flex items-end justify-between mt-2">
-                      <span className="font-bold text-base text-foreground">
-                        ${parseFloat(producto.precio).toFixed(2)}
-                      </span>
-                      <Button 
-                        size="icon"
-                        className="h-8 w-8 rounded-full shadow-sm bg-primary text-primary-foreground hover:scale-105 transition-transform"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          agregarAlPedido(producto)
-                        }}
-                      >
-                        <Plus className="w-4 h-4" />
-                      </Button>
+        <section className="space-y-8 min-h-[50vh]">
+          {selectedCategory === 'All' ? (
+            categoriasOrdenadas.length > 0 ? (
+              categoriasOrdenadas.map((categoriaNombre) => {
+                const productosDeCategoria = productosPorCategoria[categoriaNombre]
+                if (!productosDeCategoria || productosDeCategoria.length === 0) return null
+                
+                return (
+                  <div key={categoriaNombre} className="space-y-4">
+                    <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider px-1">
+                      {categoriaNombre}
+                    </h3>
+                    <div className="flex gap-4 overflow-x-auto pb-3 ml-2 scrollbar-hide snap-x snap-mandatory">
+                      {productosDeCategoria.map((producto) => (
+                        <ProductoCard 
+                          key={producto.id} 
+                          producto={producto} 
+                          onClick={() => abrirDetalleProducto(producto)} 
+                        />
+                      ))}
+                      <div className="min-w-1 shrink-0" />
                     </div>
                   </div>
+                )
+              })
+            ) : (
+              <EmptyState />
+            )
+          ) : (
+            productosFiltrados.length > 0 ? (
+              <div className="space-y-4">
+                <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider px-1">
+                  {selectedCategory}
+                </h3>
+                <div className="flex gap-4 overflow-x-auto pb-3 ml-2 scrollbar-hide snap-x snap-mandatory">
+                  {productosFiltrados.map((producto) => (
+                    <ProductoCard 
+                      key={producto.id} 
+                      producto={producto} 
+                      onClick={() => abrirDetalleProducto(producto)} 
+                    />
+                  ))}
+                  <div className="min-w-1 shrink-0" />
                 </div>
-              </Card>
-            ))}
-          </div>
-          
-          {productosFiltrados.length === 0 && (
-            <div className="flex flex-col items-center justify-center py-20 text-muted-foreground opacity-50">
-              <Package className="w-10 h-10 mb-2" />
-              <p className="text-sm">Sin productos.</p>
-            </div>
+              </div>
+            ) : (
+              <EmptyState />
+            )
           )}
         </section>
       </div>
@@ -168,6 +171,59 @@ const AgregarProducto = () => {
     </div>
   )
 }
+
+// Componentes auxiliares
+const EmptyState = () => (
+  <div className="flex flex-col items-center justify-center py-20 text-muted-foreground opacity-50">
+    <Package className="w-10 h-10 mb-2" />
+    <p className="text-sm">Sin productos disponibles.</p>
+  </div>
+)
+
+const ProductoCard = ({ producto, onClick }: { producto: any, onClick: () => void }) => (
+  <div 
+    className="group relative w-44 h-52 shrink-0 rounded-3xl overflow-hidden cursor-pointer snap-start shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-[1.02] active:scale-[0.98]"
+    onClick={onClick}
+  >
+    {/* Background Image */}
+    <div className="absolute inset-0 bg-zinc-900">
+      {producto.imagenUrl ? (
+        <img 
+          src={producto.imagenUrl} 
+          alt={producto.nombre} 
+          className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700 ease-out" 
+        />
+      ) : (
+        <div className="w-full h-full flex items-center justify-center bg-linear-to-br from-zinc-800 to-zinc-900">
+          <Package className="w-12 h-12 text-zinc-600" />
+        </div>
+      )}
+    </div>
+    
+    {/* Gradient overlay */}
+    <div className="absolute inset-0 bg-linear-to-t from-black/60 via-transparent to-transparent" />
+    
+    {/* Glassmorphism overlay */}
+    <div className="absolute bottom-0 left-0 right-0 p-3.5">
+      <div 
+        className="
+          rounded-2xl p-3 
+          bg-white/70 dark:bg-white/10
+          backdrop-blur-md backdrop-saturate-150
+          border border-white/30 dark:border-white/10
+          shadow-[0_4px_30px_rgba(0,0,0,0.1)]
+        "
+      >
+        <h3 className="font-semibold text-sm text-zinc-900 dark:text-white truncate leading-tight">
+          {producto.nombre}
+        </h3>
+        <span className="font-bold text-lg text-zinc-800 dark:text-white/90 mt-0.5 block">
+          ${parseFloat(producto.precio).toFixed(2)}
+        </span>
+      </div>
+    </div>
+  </div>
+)
 
 export default AgregarProducto
 

@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet'
-import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { useMesaStore } from '@/store/mesaStore'
 import { useClienteWebSocket } from '@/hooks/useClienteWebSocket'
 import { toast } from 'sonner'
@@ -246,9 +245,9 @@ const Menu = () => {
                 {/* Usuario actual */}
                 <div className="flex flex-col items-center gap-1.5 min-w-[56px] snap-start">
                   <div className="relative">
-                    <Avatar className="w-12 h-12 border-2 shadow-sm ring-2 ring-background">
-                      <AvatarFallback className="bg-primary text-primary-foreground font-bold text-sm">YO</AvatarFallback>
-                    </Avatar>
+                    <div className="w-12 h-12 rounded-xl border-2 shadow-sm ring-2 ring-background bg-primary text-primary-foreground font-bold text-sm flex items-center justify-center">
+                      YO
+                    </div>
                   </div>
                   <span className="text-xs font-medium truncate max-w-[60px] text-center">Tú</span>
                 </div>
@@ -256,11 +255,9 @@ const Menu = () => {
                 {/* Otros usuarios */}
                 {clientes.filter(c => c.nombre !== clienteNombre).map((cliente) => (
                   <div key={cliente.id} className="flex flex-col items-center gap-1.5 min-w-[56px] snap-start opacity-80 hover:opacity-100 transition-opacity">
-                    <Avatar className="w-12 h-12 border border-border shadow-xs">
-                      <AvatarFallback className="bg-secondary text-foreground text-xs font-medium">
-                        {cliente.nombre.slice(0, 2).toUpperCase()}
-                      </AvatarFallback>
-                    </Avatar>
+                    <div className="w-12 h-12 rounded-xl border border-border shadow-xs bg-secondary text-foreground text-xs font-medium flex items-center justify-center">
+                      {cliente.nombre.slice(0, 2).toUpperCase()}
+                    </div>
                     <span className="text-xs text-muted-foreground truncate max-w-[60px] text-center">
                       {cliente.nombre}
                     </span>
@@ -288,7 +285,7 @@ const Menu = () => {
                   key={category}
                   onClick={() => setSelectedCategory(category || 'All')}
                   variant={selectedCategory === category ? "default" : "secondary"}
-                  className={`rounded-full px-5 h-9 text-xs font-medium whitespace-nowrap snap-start transition-all ${
+                  className={`rounded-lg px-5 h-10 text-xs font-medium whitespace-nowrap snap-start transition-all ${
                     selectedCategory === category 
                       ? "shadow-md" 
                       : "bg-secondary/50 hover:bg-secondary border border-transparent"
@@ -337,7 +334,7 @@ const Menu = () => {
                 <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider px-1">
                   {selectedCategory}
                 </h3>
-                <div className="flex gap-4 overflow-x-auto pb-3 -mx-5 px-5 scrollbar-hide snap-x snap-mandatory">
+                <div className="flex gap-4 overflow-x-auto pb-3 ml-2 px-5 scrollbar-hide snap-x snap-mandatory">
                   {productosFiltrados.map((producto) => (
                     <ProductoCard 
                       key={producto.id} 

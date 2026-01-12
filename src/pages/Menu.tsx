@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { useNavigate } from 'react-router'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet'
@@ -13,10 +14,11 @@ import {
 import { ProductDetailDrawer } from '@/components/ProductDetailDrawer'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { useRouteGuard } from '@/hooks/useRouteGuard'
+import { usePreventBackNavigation } from '@/hooks/usePreventBackNavigation'
 
 const Menu = () => {
-  const { mesa, productos, clientes, clienteNombre } = useMesaStore()
+  const navigate = useNavigate()
+  const { mesa, productos, clientes, clienteNombre, qrToken, isHydrated, sessionEnded } = useMesaStore()
   const { state: wsState, isConnected, sendMessage } = useClienteWebSocket()
   
   const [carritoAbierto, setCarritoAbierto] = useState(false)
@@ -28,8 +30,11 @@ const Menu = () => {
   const [confirmarMozoOpen, setConfirmarMozoOpen] = useState(false) // Paso 1: Confirmación
   const [mozoNotificadoOpen, setMozoNotificadoOpen] = useState(false) // Paso 2: Éxito
 
-  // Proteger la ruta: solo permitir estados 'pending' o null (sin pedido confirmado)
-  useRouteGuard(['pending', null])
+  // Hook para prevenir navegación hacia atrás (solo si no hay drawers abiertos)
+  const { ExitDialog } = usePreventBackNavigation(
+    true,
+    () => !carritoAbierto && !drawerOpen // Solo prevenir si no hay drawers abiertos
+  )
   const abrirCarrito = useCallback(() => {
     window.history.pushState({ drawer: 'carrito' }, '')
     setCarritoAbierto(true)
@@ -73,8 +78,24 @@ const Menu = () => {
     return () => window.removeEventListener('popstate', handlePopState)
   }, [carritoAbierto, drawerOpen])
 
-  // El useRouteGuard ya maneja todas las redirecciones según el estado del pedido
-  // No necesitamos este useEffect duplicado
+  useEffect(() => {
+    if (!isHydrated) return
+    if (sessionEnded) return
+    
+    if (!clienteNombre || !qrToken) {
+      toast.error('Debes ingresar tu nombre primero')
+      navigate(`/mesa/${qrToken || 'invalid'}`)
+      return
+    }
+    
+    if (wsState?.estado) {
+      if (wsState.estado === 'preparing') {
+        navigate('/pedido-confirmado')
+      } else if (wsState.estado === 'closed') {
+        navigate('/pedido-cerrado')
+      }
+    }
+  }, [clienteNombre, qrToken, wsState?.estado, navigate, isHydrated, sessionEnded])
 
   // Lógica de productos y categorías (se mantiene igual)
   const categorias = ['All', ...Array.from(new Set(productos.map(p => p.categoria).filter(Boolean)))]
@@ -532,6 +553,9 @@ const Menu = () => {
           </Button>
         </DialogContent>
       </Dialog>
+
+      {/* Dialog para prevenir navegación hacia atrás */}
+      <ExitDialog />
 
     </div>
   )

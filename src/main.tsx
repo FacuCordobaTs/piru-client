@@ -13,6 +13,7 @@ import AgregarProducto from './pages/AgregarProducto'
 import PedidoCerrado from './pages/PedidoCerrado'
 import Pago from './pages/Pago'
 import Factura from './pages/Factura'
+import { PagoExitoso, PagoFallido, PagoPendiente } from './pages/PagoResultado'
 
 const router = createBrowserRouter([
   {
@@ -46,6 +47,32 @@ const router = createBrowserRouter([
   {
     path: "/factura",
     element: <Factura />,
+  },
+  // Rutas de resultado de pago de MercadoPago
+  {
+    path: "/pago-exitoso",
+    element: <PagoExitoso />,
+  },
+  {
+    path: "/pago-fallido",
+    element: <PagoFallido />,
+  },
+  {
+    path: "/pago-pendiente",
+    element: <PagoPendiente />,
+  },
+  // También soportar las rutas con el qrToken en el path (legacy)
+  {
+    path: "/mesa/:qrToken/pago-exitoso",
+    element: <PagoExitoso />,
+  },
+  {
+    path: "/mesa/:qrToken/pago-fallido",
+    element: <PagoFallido />,
+  },
+  {
+    path: "/mesa/:qrToken/pago-pendiente",
+    element: <PagoPendiente />,
   },
 ]);
 

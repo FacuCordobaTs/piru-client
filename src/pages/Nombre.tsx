@@ -91,6 +91,7 @@ const Nombre = () => {
               id: number
               nombre: string
               imagenUrl: string | null
+              mpConnected: boolean | null
             } | null
           }
         } 

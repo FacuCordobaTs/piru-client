@@ -12,6 +12,7 @@ interface Restaurante {
   id: number
   nombre: string
   imagenUrl: string | null
+  mpConnected: boolean | null
 }
 
 interface Ingrediente {

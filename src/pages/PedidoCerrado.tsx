@@ -5,16 +5,22 @@ import { Separator } from '@/components/ui/separator'
 import { useMesaStore } from '@/store/mesaStore'
 import { useClienteWebSocket } from '@/hooks/useClienteWebSocket'
 import { toast } from 'sonner'
-import { Receipt, DollarSign, CreditCard, Banknote, Sparkles } from 'lucide-react'
+import { Receipt, DollarSign, CreditCard, Banknote, Sparkles, Loader2 } from 'lucide-react'
+
+const API_URL = import.meta.env.VITE_API_URL || 'https://api.piru.app/api'
 
 const PedidoCerrado = () => {
   const navigate = useNavigate()
   const { 
-    mesa, clienteNombre, qrToken, pedidoCerrado, restaurante,
+    mesa, clienteNombre, qrToken, pedidoCerrado, restaurante, pedidoId,
     endSession, sessionEnded, isHydrated 
   } = useMesaStore()
   const { state: wsState, sendMessage } = useClienteWebSocket()
   const [pagado, setPagado] = useState(false)
+  const [isLoadingMP, setIsLoadingMP] = useState(false)
+  
+  // Verificar si MercadoPago está disponible
+  const mpDisponible = restaurante?.mpConnected === true
 
   useEffect(() => {
     // Si ya se pagó o la sesión terminó, no hacer nada
@@ -63,11 +69,49 @@ const PedidoCerrado = () => {
     })
   }
 
-  const handlePagarMercadoPago = () => {
-    // TODO: Implementar integración con MercadoPago
-    toast.info('Próximamente', {
-      description: 'La integración con MercadoPago estará disponible pronto',
-    })
+  const handlePagarMercadoPago = async () => {
+    // Obtener el ID del pedido
+    const idPedido = pedidoCerrado?.pedidoId || pedidoId
+    
+    if (!idPedido) {
+      toast.error('Error', {
+        description: 'No se pudo obtener la información del pedido',
+      })
+      return
+    }
+
+    setIsLoadingMP(true)
+    
+    try {
+      const response = await fetch(`${API_URL}/mp/crear-preferencia`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          pedidoId: idPedido,
+          qrToken: qrToken,
+        }),
+      })
+
+      const data = await response.json()
+
+      if (data.success && data.url_pago) {
+        // Redirigir a MercadoPago
+        window.location.href = data.url_pago
+      } else {
+        toast.error('Error al procesar pago', {
+          description: data.error || 'No se pudo crear el link de pago',
+        })
+      }
+    } catch (error) {
+      console.error('Error al crear preferencia de pago:', error)
+      toast.error('Error de conexión', {
+        description: 'No se pudo conectar con el servidor de pagos',
+      })
+    } finally {
+      setIsLoadingMP(false)
+    }
   }
 
   // Componente de recibo/factura reutilizable
@@ -227,14 +271,29 @@ const PedidoCerrado = () => {
           <Button
             onClick={handlePagarMercadoPago}
             variant="outline"
-            className="w-full h-14 text-base font-semibold rounded-2xl border-2"
-            disabled
+            className={`w-full h-14 text-base font-semibold rounded-2xl border-2 ${
+              mpDisponible 
+                ? 'border-sky-500 text-sky-600 hover:bg-sky-50 dark:hover:bg-sky-950' 
+                : ''
+            }`}
+            disabled={!mpDisponible || isLoadingMP}
           >
-            <CreditCard className="w-5 h-5 mr-2" />
-            MercadoPago
-            <span className="ml-2 text-xs bg-neutral-100 dark:bg-neutral-800 px-2 py-0.5 rounded-full text-neutral-500">
-              Próximamente
-            </span>
+            {isLoadingMP ? (
+              <>
+                <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                Preparando pago...
+              </>
+            ) : (
+              <>
+                <CreditCard className="w-5 h-5 mr-2" />
+                MercadoPago
+                {!mpDisponible && (
+                  <span className="ml-2 text-xs bg-neutral-100 dark:bg-neutral-800 px-2 py-0.5 rounded-full text-neutral-500">
+                    No disponible
+                  </span>
+                )}
+              </>
+            )}
           </Button>
         </div>
       </div>

@@ -56,7 +56,7 @@ export const useRouteGuard = (
     const currentState = wsState?.estado || null
 
     // Verificar si el estado actual está permitido para esta ruta
-    const isStateAllowed = allowedStates.includes(currentState)
+    const isStateAllowed = allowedStates.includes(currentState as 'pending' | 'preparing' | 'closed' | null)
 
     // Si el estado no está permitido, redirigir a la pantalla correcta
     if (!isStateAllowed && !hasRedirected.current) {

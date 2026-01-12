@@ -1,5 +1,4 @@
-import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router'
+import {  useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
 import { useMesaStore } from '@/store/mesaStore'
@@ -11,10 +10,9 @@ import { useRouteGuard } from '@/hooks/useRouteGuard'
 const API_URL = import.meta.env.VITE_API_URL || 'https://api.piru.app/api'
 
 const PedidoCerrado = () => {
-  const navigate = useNavigate()
   const { 
-    mesa, clienteNombre, qrToken, pedidoCerrado, restaurante, pedidoId,
-    endSession, sessionEnded, isHydrated 
+    mesa,   qrToken, pedidoCerrado, restaurante, pedidoId,
+    endSession, sessionEnded 
   } = useMesaStore()
   const { state: wsState, sendMessage } = useClienteWebSocket()
   const [pagado, setPagado] = useState(false)

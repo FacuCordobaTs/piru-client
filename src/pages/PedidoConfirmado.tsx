@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useNavigate } from 'react-router'
 import { Button } from '@/components/ui/button'
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet'
@@ -15,7 +15,7 @@ import { useRouteGuard } from '@/hooks/useRouteGuard'
 
 const PedidoConfirmado = () => {
   const navigate = useNavigate()
-  const { productos, clienteNombre, qrToken, isHydrated, sessionEnded } = useMesaStore()
+  const { productos, clienteNombre, qrToken, isHydrated } = useMesaStore()
   const { state: wsState, sendMessage } = useClienteWebSocket()
   
   const [verPedidoAbierto, setVerPedidoAbierto] = useState(false)

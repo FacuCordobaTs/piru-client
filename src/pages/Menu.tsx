@@ -9,7 +9,7 @@ import { toast } from 'sonner'
 import { 
   Plus, Minus, Trash2, ArrowLeft, 
   Wifi, WifiOff, Package, ChefHat, UtensilsCrossed, Receipt, 
-  BellRing, HandPlatter // Usamos iconos más descriptivos
+  BellRing, HandPlatter, Check, X, Users, Loader2
 } from 'lucide-react'
 import { ProductDetailDrawer } from '@/components/ProductDetailDrawer'
 import { ThemeToggle } from '@/components/ThemeToggle'
@@ -17,8 +17,8 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 
 const Menu = () => {
   const navigate = useNavigate()
-  const { mesa, productos, clientes, clienteNombre, qrToken, isHydrated, sessionEnded } = useMesaStore()
-  const { state: wsState, isConnected, sendMessage } = useClienteWebSocket()
+  const { mesa, productos, clientes, clienteNombre, clienteId, qrToken, isHydrated, sessionEnded } = useMesaStore()
+  const { state: wsState, isConnected, sendMessage, confirmacionGrupal, confirmacionCancelada, clearConfirmacionCancelada } = useClienteWebSocket()
   
   const [carritoAbierto, setCarritoAbierto] = useState(false)
   const [selectedProduct, setSelectedProduct] = useState<typeof productos[0] | null>(null)
@@ -28,6 +28,9 @@ const Menu = () => {
   // ESTADOS PARA EL FLUJO DE LLAMAR AL MOZO
   const [confirmarMozoOpen, setConfirmarMozoOpen] = useState(false) // Paso 1: Confirmación
   const [mozoNotificadoOpen, setMozoNotificadoOpen] = useState(false) // Paso 2: Éxito
+  
+  // ESTADO PARA EL MODAL DE CONFIRMACIÓN GRUPAL
+  const [confirmacionGrupalOpen, setConfirmacionGrupalOpen] = useState(false)
 
   const abrirCarrito = useCallback(() => {
     window.history.pushState({ drawer: 'carrito' }, '')
@@ -154,11 +157,69 @@ const Menu = () => {
     toast.success('Producto eliminado')
   }
 
-  const confirmarPedido = () => {
-    sendMessage({ type: 'CONFIRMAR_PEDIDO', payload: {}, })
-    toast.success('¡Pedido enviado a cocina!', { icon: <ChefHat className="w-5 h-5" /> })
+  // --- LÓGICA DE CONFIRMACIÓN GRUPAL ---
+  
+  // Iniciar el proceso de confirmación grupal
+  const iniciarConfirmacionPedido = () => {
+    if (!clienteNombre || !clienteId) return
+    
+    // Si solo hay un cliente, confirmar directamente (compatibilidad)
+    if (clientes.length <= 1) {
+      sendMessage({ type: 'CONFIRMAR_PEDIDO', payload: {} })
+      toast.success('¡Pedido enviado a cocina!', { icon: <ChefHat className="w-5 h-5" /> })
+      cerrarCarrito()
+      return
+    }
+    
+    // Iniciar confirmación grupal
+    sendMessage({ 
+      type: 'INICIAR_CONFIRMACION', 
+      payload: { clienteId, clienteNombre } 
+    })
     cerrarCarrito()
   }
+
+  // Confirmar mi parte en la confirmación grupal
+  const confirmarMiParte = () => {
+    if (!clienteId) return
+    sendMessage({ 
+      type: 'USUARIO_CONFIRMO', 
+      payload: { clienteId } 
+    })
+  }
+
+  // Cancelar la confirmación grupal
+  const cancelarConfirmacion = () => {
+    if (!clienteId || !clienteNombre) return
+    sendMessage({ 
+      type: 'USUARIO_CANCELO', 
+      payload: { clienteId, clienteNombre } 
+    })
+  }
+
+  // Efecto para abrir/cerrar el modal de confirmación grupal
+  useEffect(() => {
+    if (confirmacionGrupal?.activa) {
+      setConfirmacionGrupalOpen(true)
+    } else {
+      setConfirmacionGrupalOpen(false)
+    }
+  }, [confirmacionGrupal?.activa])
+
+  // Efecto para mostrar toast cuando se cancela la confirmación
+  useEffect(() => {
+    if (confirmacionCancelada) {
+      toast.error(`${confirmacionCancelada.canceladoPor} canceló la confirmación`, {
+        duration: 3000,
+      })
+      clearConfirmacionCancelada()
+    }
+  }, [confirmacionCancelada, clearConfirmacionCancelada])
+
+  // Verificar si el usuario actual ya confirmó
+  const yaConfirme = confirmacionGrupal?.confirmaciones.find(c => c.clienteId === clienteId)?.confirmado ?? false
+  const totalConfirmados = confirmacionGrupal?.confirmaciones.filter(c => c.confirmado).length ?? 0
+  const totalClientes = confirmacionGrupal?.confirmaciones.length ?? 0
 
   // --- LÓGICA REDISEÑADA PARA LLAMAR AL MOZO ---
   
@@ -333,16 +394,15 @@ const Menu = () => {
                 <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider px-1">
                   {selectedCategory}
                 </h3>
-                <div className="flex gap-4 overflow-x-auto pb-3 ml-2 px-5 scrollbar-hide snap-x snap-mandatory">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 px-1">
                   {productosFiltrados.map((producto) => (
                     <ProductoCard 
                       key={producto.id} 
                       producto={producto} 
-                      onClick={() => abrirDetalleProducto(producto)} 
+                      onClick={() => abrirDetalleProducto(producto)}
+                      fullWidth
                     />
                   ))}
-                  {/* Spacer for last item padding */}
-                  <div className="min-w-1 shrink-0" />
                 </div>
               </div>
             ) : (
@@ -477,7 +537,7 @@ const Menu = () => {
                     <span className="text-muted-foreground text-sm">Total a pagar</span>
                     <span className="text-2xl font-black tracking-tight">${totalPedido}</span>
                  </div>
-                 <Button className="w-full h-14 text-base font-bold rounded-2xl shadow-lg shadow-primary/20" size="lg" onClick={confirmarPedido}>
+                 <Button className="w-full h-14 text-base font-bold rounded-2xl shadow-lg shadow-primary/20" size="lg" onClick={iniciarConfirmacionPedido}>
                    Confirmar Pedido
                    <ArrowLeft className="w-5 h-5 ml-2 rotate-180" />
                  </Button>
@@ -548,6 +608,104 @@ const Menu = () => {
         </DialogContent>
       </Dialog>
 
+      {/* --- MODAL DE CONFIRMACIÓN GRUPAL --- */}
+      <Dialog open={confirmacionGrupalOpen} onOpenChange={() => {}}>
+        <DialogContent className="max-w-sm rounded-3xl p-6" onPointerDownOutside={(e) => e.preventDefault()}>
+          <DialogHeader className="text-center sm:text-center">
+            <div className="mx-auto w-16 h-16 rounded-full bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center mb-4">
+              <Users className="w-8 h-8 text-orange-600 dark:text-orange-400" />
+            </div>
+            <DialogTitle className="text-xl">Confirmación del Pedido</DialogTitle>
+            <DialogDescription className="text-center pt-2">
+              {confirmacionGrupal?.iniciadaPorNombre === clienteNombre 
+                ? 'Esperando que todos confirmen el pedido...'
+                : `${confirmacionGrupal?.iniciadaPorNombre} quiere confirmar el pedido`
+              }
+            </DialogDescription>
+          </DialogHeader>
+
+          {/* Lista de usuarios con estado de confirmación */}
+          <div className="mt-4 space-y-3">
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide text-center">
+              {totalConfirmados}/{totalClientes} confirmados
+            </p>
+            
+            <div className="flex flex-wrap justify-center gap-4 py-4">
+              {confirmacionGrupal?.confirmaciones.map((conf) => {
+                const esYo = conf.clienteId === clienteId
+                return (
+                  <div key={conf.clienteId} className="flex flex-col items-center gap-1.5">
+                    <div className={`relative w-14 h-14 rounded-xl border-2 shadow-sm flex items-center justify-center font-bold text-sm transition-all duration-300 ${
+                      conf.confirmado 
+                        ? 'bg-orange-500 border-orange-600 text-white ring-2 ring-orange-300 dark:ring-orange-700' 
+                        : 'bg-zinc-200 dark:bg-zinc-700 border-zinc-300 dark:border-zinc-600 text-zinc-500 dark:text-zinc-400'
+                    }`}>
+                      {conf.nombre.slice(0, 2).toUpperCase()}
+                      {conf.confirmado && (
+                        <div className="absolute -bottom-1 -right-1 w-5 h-5 bg-green-500 rounded-full flex items-center justify-center">
+                          <Check className="w-3 h-3 text-white" />
+                        </div>
+                      )}
+                      {!conf.confirmado && (
+                        <div className="absolute -bottom-1 -right-1 w-5 h-5 bg-zinc-400 dark:bg-zinc-500 rounded-full flex items-center justify-center">
+                          <Loader2 className="w-3 h-3 text-white animate-spin" />
+                        </div>
+                      )}
+                    </div>
+                    <span className={`text-xs font-medium truncate max-w-[60px] text-center ${
+                      esYo ? 'text-foreground' : 'text-muted-foreground'
+                    }`}>
+                      {esYo ? 'Tú' : conf.nombre}
+                    </span>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+
+          <DialogFooter className="flex-col gap-2 sm:gap-2 mt-4">
+            {!yaConfirme ? (
+              <>
+                <Button 
+                  size="lg" 
+                  onClick={confirmarMiParte}
+                  className="w-full rounded-2xl font-semibold bg-orange-500 hover:bg-orange-600"
+                >
+                  <Check className="w-5 h-5 mr-2" />
+                  Confirmar mi pedido
+                </Button>
+                <Button 
+                  variant="ghost" 
+                  size="lg"
+                  onClick={cancelarConfirmacion}
+                  className="w-full rounded-2xl text-destructive hover:text-destructive hover:bg-destructive/10"
+                >
+                  <X className="w-5 h-5 mr-2" />
+                  Cancelar
+                </Button>
+              </>
+            ) : (
+              <>
+                <div className="w-full py-3 px-4 rounded-2xl bg-orange-100 dark:bg-orange-900/30 text-center">
+                  <p className="text-sm font-medium text-orange-700 dark:text-orange-300">
+                    ✓ Ya confirmaste. Esperando a los demás...
+                  </p>
+                </div>
+                <Button 
+                  variant="ghost" 
+                  size="lg"
+                  onClick={cancelarConfirmacion}
+                  className="w-full rounded-2xl text-destructive hover:text-destructive hover:bg-destructive/10"
+                >
+                  <X className="w-5 h-5 mr-2" />
+                  Cancelar para todos
+                </Button>
+              </>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
     </div>
   )
 }
@@ -560,9 +718,9 @@ const EmptyState = () => (
   </div>
 )
 
-const ProductoCard = ({ producto, onClick }: { producto: any, onClick: () => void }) => (
+const ProductoCard = ({ producto, onClick, fullWidth }: { producto: any, onClick: () => void, fullWidth?: boolean }) => (
   <div 
-    className="group relative w-44 h-52 shrink-0 rounded-3xl overflow-hidden cursor-pointer snap-start shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-[1.02] active:scale-[0.98]"
+    className={`group relative ${fullWidth ? 'w-full' : 'w-44 shrink-0'} h-52 rounded-3xl overflow-hidden cursor-pointer ${!fullWidth ? 'snap-start' : ''} shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-[1.02] active:scale-[0.98]`}
     onClick={onClick}
   >
     {/* Background Image */}

@@ -22,11 +22,30 @@ interface WebSocketState {
   estado: 'pending' | 'preparing' | 'delivered' | 'closed'
 }
 
+// Estado de confirmación de cada cliente
+export interface ConfirmacionCliente {
+  clienteId: string
+  nombre: string
+  confirmado: boolean
+}
+
+// Estado del proceso de confirmación grupal
+export interface ConfirmacionGrupal {
+  activa: boolean
+  iniciadaPor: string
+  iniciadaPorNombre: string
+  confirmaciones: ConfirmacionCliente[]
+  timestamp: string
+}
+
 interface UseClienteWebSocketReturn {
   state: WebSocketState | null
   isConnected: boolean
   error: string | null
   sendMessage: (message: any) => void
+  confirmacionGrupal: ConfirmacionGrupal | null
+  confirmacionCancelada: { canceladoPor: string } | null
+  clearConfirmacionCancelada: () => void
 }
 
 const WS_URL = import.meta.env.VITE_WS_URL || 'wss://api.piru.app'
@@ -40,6 +59,8 @@ export const useClienteWebSocket = (): UseClienteWebSocketReturn => {
   const [state, setState] = useState<WebSocketState | null>(null)
   const [isConnected, setIsConnected] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [confirmacionGrupal, setConfirmacionGrupal] = useState<ConfirmacionGrupal | null>(null)
+  const [confirmacionCancelada, setConfirmacionCancelada] = useState<{ canceladoPor: string } | null>(null)
   const wsRef = useRef<WebSocket | null>(null)
   const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const hasConnectedRef = useRef(false)
@@ -54,6 +75,11 @@ export const useClienteWebSocket = (): UseClienteWebSocketReturn => {
     clienteIdRef.current = clienteId
     clienteNombreRef.current = clienteNombre
   }, [clienteId, clienteNombre])
+
+  // Función para limpiar el estado de cancelación
+  const clearConfirmacionCancelada = useCallback(() => {
+    setConfirmacionCancelada(null)
+  }, [])
 
   const sendMessage = useCallback((message: any) => {
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
@@ -234,6 +260,9 @@ export const useClienteWebSocket = (): UseClienteWebSocketReturn => {
                   total: data.payload.pedido?.total || '0.00',
                   estado: 'preparing',
                 })
+                // Limpiar estado de confirmación grupal
+                setConfirmacionGrupal(null)
+                setConfirmacionCancelada(null)
                 // El estado se actualiza y los componentes reaccionan automáticamente
                 // No usar window.location.href para evitar perder el estado
                 break
@@ -261,6 +290,24 @@ export const useClienteWebSocket = (): UseClienteWebSocketReturn => {
 
               case 'MOZO_NOTIFICADO':
                 // Este mensaje se maneja en la página PedidoConfirmado
+                break
+
+              // Mensajes de confirmación grupal
+              case 'CONFIRMACION_INICIADA':
+                console.log('Confirmación grupal iniciada:', data.payload)
+                setConfirmacionGrupal(data.payload.confirmacionGrupal)
+                setConfirmacionCancelada(null)
+                break
+
+              case 'CONFIRMACION_ACTUALIZADA':
+                console.log('Confirmación grupal actualizada:', data.payload)
+                setConfirmacionGrupal(data.payload.confirmacionGrupal)
+                break
+
+              case 'CONFIRMACION_CANCELADA':
+                console.log('Confirmación grupal cancelada:', data.payload)
+                setConfirmacionGrupal(null)
+                setConfirmacionCancelada({ canceladoPor: data.payload.canceladoPor })
                 break
 
               case 'ERROR':
@@ -323,6 +370,6 @@ export const useClienteWebSocket = (): UseClienteWebSocketReturn => {
     }
   }, [qrToken, sessionEnded]) // Depender también de sessionEnded
 
-  return { state, isConnected, error, sendMessage }
+  return { state, isConnected, error, sendMessage, confirmacionGrupal, confirmacionCancelada, clearConfirmacionCancelada }
 }
 

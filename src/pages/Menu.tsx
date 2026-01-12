@@ -1,5 +1,4 @@
 import { useState, useEffect, useCallback } from 'react'
-import { useNavigate } from 'react-router'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet'
@@ -17,8 +16,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { useRouteGuard } from '@/hooks/useRouteGuard'
 
 const Menu = () => {
-  const navigate = useNavigate()
-  const { mesa, productos, clientes, clienteNombre, qrToken, isHydrated, sessionEnded } = useMesaStore()
+  const { mesa, productos, clientes, clienteNombre } = useMesaStore()
   const { state: wsState, isConnected, sendMessage } = useClienteWebSocket()
   
   const [carritoAbierto, setCarritoAbierto] = useState(false)
@@ -75,24 +73,8 @@ const Menu = () => {
     return () => window.removeEventListener('popstate', handlePopState)
   }, [carritoAbierto, drawerOpen])
 
-  useEffect(() => {
-    if (!isHydrated) return
-    if (sessionEnded) return
-    
-    if (!clienteNombre || !qrToken) {
-      toast.error('Debes ingresar tu nombre primero')
-      navigate(`/mesa/${qrToken || 'invalid'}`)
-      return
-    }
-    
-    if (wsState?.estado) {
-      if (wsState.estado === 'preparing') {
-        navigate('/pedido-confirmado')
-      } else if (wsState.estado === 'closed') {
-        navigate('/pedido-cerrado')
-      }
-    }
-  }, [clienteNombre, qrToken, wsState?.estado, navigate, isHydrated, sessionEnded])
+  // El useRouteGuard ya maneja todas las redirecciones según el estado del pedido
+  // No necesitamos este useEffect duplicado
 
   // Lógica de productos y categorías (se mantiene igual)
   const categorias = ['All', ...Array.from(new Set(productos.map(p => p.categoria).filter(Boolean)))]

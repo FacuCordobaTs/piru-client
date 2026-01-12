@@ -24,13 +24,13 @@ export const useRouteGuard = (
   const location = useLocation()
   const { clienteNombre, qrToken, isHydrated, sessionEnded } = useMesaStore()
   const { state: wsState } = useClienteWebSocket()
-  const hasRedirected = useRef(false)
+  const lastRedirectedState = useRef<string | null>(null)
   const redirectTo = options?.redirectTo
   const disabled = options?.disabled
 
+  // Resetear el flag cuando cambia la ruta (cada componente maneja su propia lógica)
   useEffect(() => {
-    // Resetear el flag cuando cambia la ruta
-    hasRedirected.current = false
+    lastRedirectedState.current = null
   }, [location.pathname])
 
   useEffect(() => {
@@ -45,8 +45,9 @@ export const useRouteGuard = (
 
     // Si no hay datos del cliente, redirigir a escanear QR
     if (!clienteNombre || !qrToken) {
-      if (!hasRedirected.current) {
-        hasRedirected.current = true
+      const redirectKey = `no-cliente-${location.pathname}`
+      if (lastRedirectedState.current !== redirectKey) {
+        lastRedirectedState.current = redirectKey
         navigate(`/mesa/${qrToken || 'invalid'}`, { replace: true })
       }
       return
@@ -59,20 +60,26 @@ export const useRouteGuard = (
     const isStateAllowed = allowedStates.includes(currentState as 'pending' | 'preparing' | 'closed' | null)
 
     // Si el estado no está permitido, redirigir a la pantalla correcta
-    if (!isStateAllowed && !hasRedirected.current) {
-      hasRedirected.current = true
+    // Usar una clave única basada en la ruta y el estado para evitar loops
+    if (!isStateAllowed) {
+      const redirectKey = `${location.pathname}-${currentState}`
       
-      if (redirectTo) {
-        navigate(redirectTo, { replace: true })
-      } else {
-        // Redirigir según el estado del pedido
-        if (currentState === 'preparing' || currentState === 'delivered') {
-          navigate('/pedido-confirmado', { replace: true })
-        } else if (currentState === 'closed') {
-          navigate('/pedido-cerrado', { replace: true })
+      // Solo redirigir si no hemos redirigido ya para esta combinación de ruta+estado
+      if (lastRedirectedState.current !== redirectKey) {
+        lastRedirectedState.current = redirectKey
+        
+        if (redirectTo) {
+          navigate(redirectTo, { replace: true })
         } else {
-          // Estado 'pending' o null - ir al menú
-          navigate('/menu', { replace: true })
+          // Redirigir según el estado del pedido
+          if (currentState === 'preparing' || currentState === 'delivered') {
+            navigate('/pedido-confirmado', { replace: true })
+          } else if (currentState === 'closed') {
+            navigate('/pedido-cerrado', { replace: true })
+          } else {
+            // Estado 'pending' o null - ir al menú
+            navigate('/menu', { replace: true })
+          }
         }
       }
     }

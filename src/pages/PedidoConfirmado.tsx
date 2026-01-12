@@ -11,6 +11,7 @@ import {
   ArrowLeft, Package, UtensilsCrossed, Loader2 
 } from 'lucide-react'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { usePreventBackNavigation } from '@/hooks/usePreventBackNavigation'
 
 const PedidoConfirmado = () => {
   const navigate = useNavigate()
@@ -20,6 +21,12 @@ const PedidoConfirmado = () => {
   const [verPedidoAbierto, setVerPedidoAbierto] = useState(false)
   const [llamarMozoAbierto, setLlamarMozoAbierto] = useState(false)
   const [pedirCuentaAbierto, setPedirCuentaAbierto] = useState(false)
+
+  // Hook para prevenir navegación hacia atrás (solo si no hay modales abiertos)
+  const { ExitDialog } = usePreventBackNavigation(
+    true,
+    () => !verPedidoAbierto && !llamarMozoAbierto && !pedirCuentaAbierto
+  )
 
   useEffect(() => {
     // Esperar a que el store se hidrate
@@ -354,6 +361,9 @@ const PedidoConfirmado = () => {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Dialog para prevenir navegación hacia atrás */}
+      <ExitDialog />
     </div>
   )
 }

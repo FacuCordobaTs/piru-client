@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
 import { Badge } from '@/components/ui/badge'
 import { CheckCircle, Download, Home } from 'lucide-react'
+import { usePreventBackNavigation } from '@/hooks/usePreventBackNavigation'
 
 // Datos de ejemplo
 const pedidoCompletoEjemplo = [
@@ -24,6 +25,9 @@ const Factura = () => {
     hour: '2-digit',
     minute: '2-digit'
   })
+
+  // Hook para prevenir navegación hacia atrás
+  const { ExitDialog } = usePreventBackNavigation(true)
 
   const total = pedidoCompletoEjemplo.reduce((sum, item) => sum + item.subtotal, 0)
   const subtotal = total
@@ -155,6 +159,9 @@ const Factura = () => {
           </Button>
         </div>
       </div>
+
+      {/* Dialog para prevenir navegación hacia atrás */}
+      <ExitDialog />
     </div>
   )
 }

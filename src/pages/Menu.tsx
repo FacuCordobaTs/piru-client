@@ -14,6 +14,7 @@ import {
 import { ProductDetailDrawer } from '@/components/ProductDetailDrawer'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { usePreventBackNavigation } from '@/hooks/usePreventBackNavigation'
 
 const Menu = () => {
   const navigate = useNavigate()
@@ -29,7 +30,11 @@ const Menu = () => {
   const [confirmarMozoOpen, setConfirmarMozoOpen] = useState(false) // Paso 1: Confirmación
   const [mozoNotificadoOpen, setMozoNotificadoOpen] = useState(false) // Paso 2: Éxito
 
-  // ... (Toda la lógica de drawers y popstate se mantiene igual) ...
+  // Hook para prevenir navegación hacia atrás (solo si no hay drawers abiertos)
+  const { ExitDialog } = usePreventBackNavigation(
+    true,
+    () => !carritoAbierto && !drawerOpen // Solo prevenir si no hay drawers abiertos
+  )
   const abrirCarrito = useCallback(() => {
     window.history.pushState({ drawer: 'carrito' }, '')
     setCarritoAbierto(true)
@@ -548,6 +553,9 @@ const Menu = () => {
           </Button>
         </DialogContent>
       </Dialog>
+
+      {/* Dialog para prevenir navegación hacia atrás */}
+      <ExitDialog />
 
     </div>
   )

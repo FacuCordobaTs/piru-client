@@ -6,6 +6,7 @@ import { useMesaStore } from '@/store/mesaStore'
 import { useClienteWebSocket } from '@/hooks/useClienteWebSocket'
 import { toast } from 'sonner'
 import { Receipt, DollarSign, CreditCard, Banknote, Sparkles, Loader2 } from 'lucide-react'
+import { usePreventBackNavigation } from '@/hooks/usePreventBackNavigation'
 
 const API_URL = import.meta.env.VITE_API_URL || 'https://api.piru.app/api'
 
@@ -21,6 +22,9 @@ const PedidoCerrado = () => {
   
   // Verificar si MercadoPago está disponible
   const mpDisponible = restaurante?.mpConnected === true
+
+  // Hook para prevenir navegación hacia atrás (solo si no está pagado)
+  const { ExitDialog } = usePreventBackNavigation(!pagado && !sessionEnded)
 
   useEffect(() => {
     // Si ya se pagó o la sesión terminó, no hacer nada
@@ -236,6 +240,9 @@ const PedidoCerrado = () => {
     )
   }
 
+  // El ExitDialog solo se muestra cuando no está pagado, así que lo agregamos aquí
+  // pero el hook ya está configurado para no activarse cuando pagado es true
+
   return (
     <div className="min-h-screen bg-linear-to-b from-neutral-100 to-neutral-200 dark:from-neutral-950 dark:to-neutral-900 py-8 pb-32">
       <div className="max-w-md mx-auto space-y-6">
@@ -297,6 +304,9 @@ const PedidoCerrado = () => {
           </Button>
         </div>
       </div>
+
+      {/* Dialog para prevenir navegación hacia atrás */}
+      <ExitDialog />
     </div>
   )
 }

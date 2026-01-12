@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef } from 'react'
-import { useNavigate, useLocation } from 'react-router'
+import {  useLocation } from 'react-router'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
-import { LogOut, X } from 'lucide-react'
+import { LogOut } from 'lucide-react'
 
 /**
  * Hook que previene la navegación hacia atrás en páginas críticas.
@@ -17,7 +17,6 @@ export const usePreventBackNavigation = (
   enabled: boolean = true,
   shouldPrevent: () => boolean = () => true
 ) => {
-  const navigate = useNavigate()
   const location = useLocation()
   const [showExitDialog, setShowExitDialog] = useState(false)
   const [shouldClose, setShouldClose] = useState(false)

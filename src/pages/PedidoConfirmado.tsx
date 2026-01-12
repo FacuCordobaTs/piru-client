@@ -11,7 +11,7 @@ import {
   ArrowLeft, Package, UtensilsCrossed, Loader2 
 } from 'lucide-react'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { usePreventBackNavigation } from '@/hooks/usePreventBackNavigation'
+import { useRouteGuard } from '@/hooks/useRouteGuard'
 
 const PedidoConfirmado = () => {
   const navigate = useNavigate()
@@ -22,32 +22,10 @@ const PedidoConfirmado = () => {
   const [llamarMozoAbierto, setLlamarMozoAbierto] = useState(false)
   const [pedirCuentaAbierto, setPedirCuentaAbierto] = useState(false)
 
-  // Hook para prevenir navegación hacia atrás (solo si no hay modales abiertos)
-  const { ExitDialog } = usePreventBackNavigation(
-    true,
-    () => !verPedidoAbierto && !llamarMozoAbierto && !pedirCuentaAbierto
-  )
+  // Proteger la ruta: solo permitir estados 'preparing' o 'pending'
+  useRouteGuard(['preparing', 'pending'])
 
-  useEffect(() => {
-    // Esperar a que el store se hidrate
-    if (!isHydrated) return
-    
-    // Si la sesión terminó, no redirigir
-    if (sessionEnded) return
-    
-    // Si no hay datos del cliente, redirigir a escanear QR
-    if (!clienteNombre || !qrToken) {
-      navigate(`/mesa/${qrToken || 'invalid'}`)
-      return
-    }
-
-    // Si el pedido no está en estado preparing, redirigir
-    if (wsState?.estado && wsState.estado !== 'preparing' && wsState.estado !== 'pending') {
-      if (wsState.estado === 'closed') {
-        navigate('/pedido-cerrado')
-      }
-    }
-  }, [clienteNombre, qrToken, wsState?.estado, navigate, isHydrated, sessionEnded])
+  // El useRouteGuard ya maneja las redirecciones, este useEffect ya no es necesario
 
   const todosLosItems = wsState?.items || []
   const totalPedido = wsState?.total || '0.00'
@@ -361,9 +339,6 @@ const PedidoConfirmado = () => {
           </div>
         </DialogContent>
       </Dialog>
-
-      {/* Dialog para prevenir navegación hacia atrás */}
-      <ExitDialog />
     </div>
   )
 }

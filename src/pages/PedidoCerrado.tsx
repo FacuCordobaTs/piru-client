@@ -6,7 +6,7 @@ import { useMesaStore } from '@/store/mesaStore'
 import { useClienteWebSocket } from '@/hooks/useClienteWebSocket'
 import { toast } from 'sonner'
 import { Receipt, DollarSign, CreditCard, Banknote, Sparkles, Loader2 } from 'lucide-react'
-import { usePreventBackNavigation } from '@/hooks/usePreventBackNavigation'
+import { useRouteGuard } from '@/hooks/useRouteGuard'
 
 const API_URL = import.meta.env.VITE_API_URL || 'https://api.piru.app/api'
 
@@ -23,31 +23,11 @@ const PedidoCerrado = () => {
   // Verificar si MercadoPago está disponible
   const mpDisponible = restaurante?.mpConnected === true
 
-  // Hook para prevenir navegación hacia atrás (solo si no está pagado)
-  const { ExitDialog } = usePreventBackNavigation(!pagado && !sessionEnded)
+  // Proteger la ruta: solo permitir estado 'closed'
+  // Si ya pagó o la sesión terminó, deshabilitar el guard (está en la pantalla final)
+  useRouteGuard(['closed'], { disabled: pagado || sessionEnded })
 
-  useEffect(() => {
-    // Si ya se pagó o la sesión terminó, no hacer nada
-    if (pagado || sessionEnded) return
-    
-    // Esperar a que el store se hidrate
-    if (!isHydrated) return
-    
-    // Si no hay datos del cliente, redirigir a escanear QR
-    if (!clienteNombre || !qrToken) {
-      navigate(`/mesa/${qrToken || 'invalid'}`)
-      return
-    }
-    
-    // Si no hay datos del pedido cerrado y el estado no es 'closed', redirigir
-    if (!pedidoCerrado && wsState?.estado && wsState.estado !== 'closed') {
-      if (wsState.estado === 'preparing') {
-        navigate('/pedido-confirmado')
-      } else if (wsState.estado === 'pending') {
-        navigate('/menu')
-      }
-    }
-  }, [clienteNombre, qrToken, wsState?.estado, pedidoCerrado, navigate, pagado, sessionEnded, isHydrated])
+  // El useRouteGuard ya maneja las redirecciones, este useEffect ya no es necesario
 
   // Usar datos del pedido cerrado del store (persistido) o del wsState como fallback
   const todosLosItems = pedidoCerrado?.items || wsState?.items || []
@@ -240,8 +220,6 @@ const PedidoCerrado = () => {
     )
   }
 
-  // El ExitDialog solo se muestra cuando no está pagado, así que lo agregamos aquí
-  // pero el hook ya está configurado para no activarse cuando pagado es true
 
   return (
     <div className="min-h-screen bg-linear-to-b from-neutral-100 to-neutral-200 dark:from-neutral-950 dark:to-neutral-900 py-8 pb-32">
@@ -304,9 +282,6 @@ const PedidoCerrado = () => {
           </Button>
         </div>
       </div>
-
-      {/* Dialog para prevenir navegación hacia atrás */}
-      <ExitDialog />
     </div>
   )
 }

@@ -1,10 +1,11 @@
-import { useSearchParams } from 'react-router'
+import { useSearchParams, useNavigate } from 'react-router'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
 import { Badge } from '@/components/ui/badge'
 import { CheckCircle, Download, Home } from 'lucide-react'
-import { usePreventBackNavigation } from '@/hooks/usePreventBackNavigation'
+import { useMesaStore } from '@/store/mesaStore'
+import { useEffect } from 'react'
 
 // Datos de ejemplo
 const pedidoCompletoEjemplo = [
@@ -15,7 +16,9 @@ const pedidoCompletoEjemplo = [
 ]
 
 const Factura = () => {
+  const navigate = useNavigate()
   const [searchParams] = useSearchParams()
+  const { sessionEnded, pedidoCerrado, isHydrated } = useMesaStore()
   const metodoPago = searchParams.get('metodo') || 'efectivo'
   const numeroFactura = `FAC-${Date.now().toString().slice(-6)}`
   const fecha = new Date().toLocaleDateString('es-AR', {
@@ -26,8 +29,15 @@ const Factura = () => {
     minute: '2-digit'
   })
 
-  // Hook para prevenir navegación hacia atrás
-  const { ExitDialog } = usePreventBackNavigation(true)
+  // Verificar que el usuario tenga acceso a esta página (solo si ya pagó)
+  useEffect(() => {
+    if (!isHydrated) return
+    
+    // Si no hay sesión terminada ni pedido cerrado, redirigir
+    if (!sessionEnded && !pedidoCerrado) {
+      navigate('/pedido-cerrado', { replace: true })
+    }
+  }, [isHydrated, sessionEnded, pedidoCerrado, navigate])
 
   const total = pedidoCompletoEjemplo.reduce((sum, item) => sum + item.subtotal, 0)
   const subtotal = total
@@ -159,9 +169,6 @@ const Factura = () => {
           </Button>
         </div>
       </div>
-
-      {/* Dialog para prevenir navegación hacia atrás */}
-      <ExitDialog />
     </div>
   )
 }

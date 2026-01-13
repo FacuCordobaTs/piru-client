@@ -54,8 +54,8 @@ const PedidoCerrado = () => {
   const totalPedido = pedidoCerrado?.total || wsState?.total || '0.00'
 
   const handlePagarEfectivo = () => {
-    // Enviar mensaje de pago antes de terminar la sesión
-    // Incluir el total para que el admin vea el monto correcto
+    // Enviar mensaje de pago - el backend hará broadcast a todos los clientes
+    // y el handler de WebSocket redirigirá a /factura
     sendMessage({ 
       type: 'PAGAR_PEDIDO', 
       payload: { 
@@ -64,12 +64,8 @@ const PedidoCerrado = () => {
       } 
     })
     
-    // Marcar como pagado y terminar la sesión
-    setPagado(true)
-    endSession() // Esto evita reconexiones y loops
-    
     toast.success('¡Listo!', {
-      description: 'Acércate a la caja para pagar',
+      description: 'Redirigiendo a la factura...',
     })
   }
 

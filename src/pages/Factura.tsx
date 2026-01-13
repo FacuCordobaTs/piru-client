@@ -5,17 +5,11 @@ import { Separator } from '@/components/ui/separator'
 import { Badge } from '@/components/ui/badge'
 import { CheckCircle, Download, Home } from 'lucide-react'
 import { usePreventBackNavigation } from '@/hooks/usePreventBackNavigation'
-
-// Datos de ejemplo
-const pedidoCompletoEjemplo = [
-  { id: 1, nombre: 'Pizza Margarita', cantidad: 2, precio: 12.50, cliente: 'Juan', subtotal: 25.00 },
-  { id: 2, nombre: 'Coca Cola', cantidad: 1, precio: 2.50, cliente: 'María', subtotal: 2.50 },
-  { id: 3, nombre: 'Hamburguesa Clásica', cantidad: 1, precio: 8.75, cliente: 'Pedro', subtotal: 8.75 },
-  { id: 4, nombre: 'Papas Fritas', cantidad: 2, precio: 4.00, cliente: 'Juan', subtotal: 8.00 },
-]
+import { useMesaStore } from '@/store/mesaStore'
 
 const Factura = () => {
   const [searchParams] = useSearchParams()
+  const { pedidoCerrado, mesa, restaurante } = useMesaStore()
   const metodoPago = searchParams.get('metodo') || 'efectivo'
   const numeroFactura = `FAC-${Date.now().toString().slice(-6)}`
   const fecha = new Date().toLocaleDateString('es-AR', {
@@ -29,10 +23,16 @@ const Factura = () => {
   // Hook para prevenir navegación hacia atrás
   const { ExitDialog } = usePreventBackNavigation(true)
 
-  const total = pedidoCompletoEjemplo.reduce((sum, item) => sum + item.subtotal, 0)
+  // Usar datos del pedido cerrado del store
+  const items = pedidoCerrado?.items || []
+  const totalPedido = pedidoCerrado?.total || '0.00'
+  const total = parseFloat(totalPedido)
   const subtotal = total
   const iva = total * 0.21
   const totalFinal = subtotal + iva
+
+  // Obtener lista única de clientes
+  const clientes = Array.from(new Set(items.map(item => item.clienteNombre || item.nombre)))
 
   const handleDescargar = () => {
     // Aquí se implementaría la descarga de la factura
@@ -73,42 +73,58 @@ const Factura = () => {
           <CardContent className="space-y-4">
             {/* Información del Restaurante */}
             <div className="pb-4 border-b">
-              <h2 className="text-xl font-bold mb-2">Restaurante PIRU</h2>
-              <p className="text-sm text-muted-foreground">
-                Av. Principal 123, Ciudad
-              </p>
-              <p className="text-sm text-muted-foreground">
-                CUIT: 20-12345678-9
-              </p>
+              <h2 className="text-xl font-bold mb-2">{restaurante?.nombre || 'Restaurante'}</h2>
+              {restaurante?.imagenUrl && (
+                <img 
+                  src={restaurante.imagenUrl} 
+                  alt={restaurante.nombre || 'Restaurante'}
+                  className="w-16 h-16 rounded-lg object-cover mb-2"
+                />
+              )}
             </div>
 
             {/* Información de la Mesa */}
             <div className="pb-4 border-b">
-              <p className="text-sm font-medium mb-1">Mesa: 5</p>
-              <p className="text-sm text-muted-foreground">
-                Clientes: {Array.from(new Set(pedidoCompletoEjemplo.map(i => i.cliente))).join(', ')}
-              </p>
+              <p className="text-sm font-medium mb-1">Mesa: {mesa?.nombre || 'N/A'}</p>
+              {clientes.length > 0 && (
+                <p className="text-sm text-muted-foreground">
+                  Clientes: {clientes.join(', ')}
+                </p>
+              )}
             </div>
 
             {/* Items */}
             <div className="space-y-3">
               <h3 className="font-semibold">Detalle del Pedido</h3>
-              {pedidoCompletoEjemplo.map((item) => (
-                <div key={item.id} className="flex items-start justify-between text-sm">
-                  <div className="flex-1">
-                    <p className="font-medium">{item.nombre}</p>
-                    <div className="flex items-center gap-2 mt-1">
-                      <p className="text-muted-foreground">
-                        {item.cantidad}x ${item.precio.toFixed(2)}
-                      </p>
-                      <Badge variant="outline" className="text-xs">
-                        {item.cliente}
-                      </Badge>
+              {items.length > 0 ? (
+                items.map((item) => {
+                  const precio = parseFloat(item.precioUnitario || '0')
+                  const subtotalItem = precio * (item.cantidad || 1)
+                  return (
+                    <div key={item.id} className="flex items-start justify-between text-sm">
+                      <div className="flex-1">
+                        <p className="font-medium">{item.nombreProducto || item.nombre}</p>
+                        <div className="flex items-center gap-2 mt-1">
+                          <p className="text-muted-foreground">
+                            {item.cantidad || 1}x ${precio.toFixed(2)}
+                          </p>
+                          <Badge variant="outline" className="text-xs">
+                            {item.clienteNombre}
+                          </Badge>
+                        </div>
+                        {(item as any).ingredientesExcluidosNombres && (item as any).ingredientesExcluidosNombres.length > 0 && (
+                          <p className="text-xs text-orange-600 dark:text-orange-400 font-medium mt-1">
+                            ⚠️ Sin: {(item as any).ingredientesExcluidosNombres.join(', ')}
+                          </p>
+                        )}
+                      </div>
+                      <p className="font-semibold">${subtotalItem.toFixed(2)}</p>
                     </div>
-                  </div>
-                  <p className="font-semibold">${item.subtotal.toFixed(2)}</p>
-                </div>
-              ))}
+                  )
+                })
+              ) : (
+                <p className="text-sm text-muted-foreground">No hay items en el pedido</p>
+              )}
             </div>
 
             <Separator />

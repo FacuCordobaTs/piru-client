@@ -101,6 +101,9 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder }: Pr
                   <h3 className="text-2xl font-bold text-foreground mb-1 leading-tight">{product.nombre}</h3>
                   <p className="text-sm text-muted-foreground">{product.categoria || 'Sin categoría'}</p>
                 </div>
+                <div>
+                  <p className="text-2xl font-bold text-primary">${(parseFloat(String(product.precio)) * quantity).toFixed(2)}</p>
+                </div>
               </div>
 
               {/* Description: We use line-clamp to ensure the text doesn't push the layout if it's exceptionally long */}
@@ -169,16 +172,13 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder }: Pr
 
               {/* Total Amount & Add Button */}
               <div className="flex items-center justify-between pt-4 border-t border-border">
-                <div>
-                  <p className="text-xs text-muted-foreground mb-1">Total</p>
-                  <p className="text-2xl font-bold text-primary">${(parseFloat(String(product.precio)) * quantity).toFixed(2)}</p>
-                </div>
+
                 <Button
                   size="lg"
                   onClick={handleAdd}
-                  className="rounded-xl px-8 h-12 bg-primary hover:bg-primary/90 font-semibold"
+                  className="rounded-lg px-8 h-14 bg-primary hover:bg-primary/90 font-semibold w-full"
                 >
-                  Agregar
+                  Agregar al pedido
                 </Button>
               </div>
             </div>

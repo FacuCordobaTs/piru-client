@@ -17,12 +17,14 @@ const PagoResultado = ({ tipo }: Props) => {
   
   const pedidoId = searchParams.get('pedido_id')
 
-  // Si el pago fue exitoso, terminar la sesión
+  // Si el pago fue exitoso, terminar la sesión y redirigir a factura
   useEffect(() => {
     if (tipo === 'success') {
       endSession()
+      // Redirigir a factura con método MercadoPago
+      navigate('/factura?metodo=mercadopago', { replace: true })
     }
-  }, [tipo, endSession])
+  }, [tipo, endSession, navigate])
 
   const handleNuevoEscaneo = () => {
     reset()

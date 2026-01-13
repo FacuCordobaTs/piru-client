@@ -53,7 +53,7 @@ const WS_URL = import.meta.env.VITE_WS_URL || 'wss://api.piru.app'
 export const useClienteWebSocket = (): UseClienteWebSocketReturn => {
   const { 
     qrToken, clienteId, clienteNombre, setClientes, setPedidoId, 
-    setPedidoCerrado, pedidoId, sessionEnded 
+    setPedidoCerrado, pedidoId, sessionEnded, endSession
   } = useMesaStore()
   const { clearCarrito } = useCarritoStore()
   const [state, setState] = useState<WebSocketState | null>(null)
@@ -286,6 +286,28 @@ export const useClienteWebSocket = (): UseClienteWebSocketReturn => {
                   total: cerradoTotal,
                   estado: 'closed',
                 })
+                break
+
+              case 'PEDIDO_PAGADO':
+                const pagadoItems = data.payload.items || []
+                const pagadoTotal = data.payload.total || data.payload.pedido?.total || '0.00'
+                const pagadoPedidoId = data.payload.pedido?.id || pedidoId
+                const metodoPago = data.payload.metodo || 'efectivo'
+                
+                // Guardar datos del pedido pagado en el store para poder mostrarlos en la factura
+                if (pagadoItems.length > 0 && pagadoPedidoId) {
+                  setPedidoCerrado({
+                    items: pagadoItems,
+                    total: pagadoTotal,
+                    pedidoId: pagadoPedidoId,
+                  })
+                }
+                
+                // Terminar la sesión para evitar reconexiones
+                endSession()
+                
+                // Redirigir a la pantalla de factura con el método de pago
+                window.location.href = `/factura?metodo=${metodoPago}`
                 break
 
               case 'MOZO_NOTIFICADO':

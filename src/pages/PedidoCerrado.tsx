@@ -14,10 +14,10 @@ const PedidoCerrado = () => {
   const navigate = useNavigate()
   const { 
     mesa, clienteNombre, qrToken, pedidoCerrado, restaurante, pedidoId,
-    endSession, sessionEnded, isHydrated 
+    sessionEnded, isHydrated 
   } = useMesaStore()
   const { state: wsState, sendMessage } = useClienteWebSocket()
-  const [pagado, setPagado] = useState(false)
+  const  pagado = false;
   const [isLoadingMP, setIsLoadingMP] = useState(false)
   
   // Verificar si MercadoPago está disponible

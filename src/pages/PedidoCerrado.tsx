@@ -136,29 +136,68 @@ const PedidoCerrado = () => {
         <p className="text-sm text-neutral-500 mt-1">Mesa {mesa?.nombre}</p>
       </div>
 
-      {/* Lista de productos */}
+      {/* Lista de productos agrupados por usuario */}
       <div className="px-6 py-4">
-        <div className="space-y-3">
-          {todosLosItems.map((item) => {
-            const precio = parseFloat(item.precioUnitario || '0')
-            const subtotal = precio * item.cantidad
+        <div className="space-y-4">
+          {(() => {
+            // Agrupar items por cliente
+            const itemsPorCliente = todosLosItems.reduce((acc, item) => {
+              const cliente = item.clienteNombre || 'Sin nombre'
+              if (!acc[cliente]) acc[cliente] = []
+              acc[cliente].push(item)
+              return acc
+            }, {} as Record<string, typeof todosLosItems>)
 
-            return (
-              <div key={item.id} className="flex justify-between items-start gap-4">
-                <div className="flex-1 min-w-0">
-                  <p className="font-medium text-sm text-neutral-900 leading-tight">
-                    {item.nombreProducto || item.nombre}
+            return Object.entries(itemsPorCliente).map(([cliente, items], idx) => {
+              const subtotalCliente = items.reduce((sum, item) => {
+                return sum + (parseFloat(item.precioUnitario || '0') * item.cantidad)
+              }, 0)
+
+              return (
+                <div key={cliente} className="space-y-2">
+                  {/* Nombre del cliente */}
+                  <p className="text-xs font-semibold text-neutral-500 uppercase tracking-wide">
+                    {cliente}
                   </p>
-                  <p className="text-xs text-neutral-500 mt-0.5">
-                    {item.cantidad} × ${precio.toFixed(2)} · {item.clienteNombre}
-                  </p>
+                  
+                  {/* Productos del cliente */}
+                  {items.map((item) => {
+                    const precio = parseFloat(item.precioUnitario || '0')
+                    const subtotal = precio * item.cantidad
+
+                    return (
+                      <div key={item.id} className="flex justify-between items-start gap-4">
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium text-sm text-neutral-900 leading-tight">
+                            {item.nombreProducto || item.nombre}
+                          </p>
+                          <p className="text-xs text-neutral-500 mt-0.5">
+                            {item.cantidad} × ${precio.toFixed(2)}
+                          </p>
+                        </div>
+                        <p className="font-semibold text-sm text-neutral-900 tabular-nums">
+                          ${subtotal.toFixed(2)}
+                        </p>
+                      </div>
+                    )
+                  })}
+                  
+                  {/* Subtotal del cliente */}
+                  <div className="flex justify-between items-center pt-1 border-t border-neutral-100">
+                    <span className="text-xs text-neutral-500">Subtotal {cliente}</span>
+                    <span className="text-sm font-semibold text-neutral-700 tabular-nums">
+                      ${subtotalCliente.toFixed(2)}
+                    </span>
+                  </div>
+                  
+                  {/* Separador entre clientes (excepto el último) */}
+                  {idx < Object.keys(itemsPorCliente).length - 1 && (
+                    <div className="pt-2" />
+                  )}
                 </div>
-                <p className="font-semibold text-sm text-neutral-900 tabular-nums">
-                  ${subtotal.toFixed(2)}
-                </p>
-              </div>
-            )
-          })}
+              )
+            })
+          })()}
         </div>
       </div>
 

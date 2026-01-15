@@ -53,7 +53,7 @@ const WS_URL = import.meta.env.VITE_WS_URL || 'wss://api.piru.app'
 export const useClienteWebSocket = (): UseClienteWebSocketReturn => {
   const { 
     qrToken, clienteId, clienteNombre, setClientes, setPedidoId, 
-    setPedidoCerrado, pedidoId, sessionEnded, endSession
+    setPedidoCerrado, setSubtotalesPagados, pedidoId, sessionEnded, endSession
   } = useMesaStore()
   const { clearCarrito } = useCarritoStore()
   const [state, setState] = useState<WebSocketState | null>(null)
@@ -312,6 +312,13 @@ export const useClienteWebSocket = (): UseClienteWebSocketReturn => {
 
               case 'MOZO_NOTIFICADO':
                 // Este mensaje se maneja en la página PedidoConfirmado
+                break
+
+              case 'SUBTOTALES_ACTUALIZADOS':
+                // Actualizar estado de subtotales pagados (split payment)
+                console.log('Subtotales actualizados:', data.payload)
+                const todosSubtotales = data.payload.todosSubtotales || []
+                setSubtotalesPagados(todosSubtotales)
                 break
 
               // Mensajes de confirmación grupal

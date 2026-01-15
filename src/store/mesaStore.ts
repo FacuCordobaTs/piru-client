@@ -63,6 +63,14 @@ interface PedidoCerradoData {
   pedidoId: number
 }
 
+// Estado de pago de cada subtotal (split payment)
+export interface SubtotalPagado {
+  clienteNombre: string
+  monto: string
+  estado: 'pending' | 'paid' | 'failed'
+  metodo: 'efectivo' | 'mercadopago' | null
+}
+
 interface MesaState {
   mesa: Mesa | null
   restaurante: Restaurante | null
@@ -77,6 +85,8 @@ interface MesaState {
   error: string | null
   // Datos del pedido cerrado para mostrar en factura
   pedidoCerrado: PedidoCerradoData | null
+  // Estado de subtotales pagados (split payment)
+  subtotalesPagados: SubtotalPagado[]
   // Indica si la sesión ha terminado (pagado) - no debe reconectar ni navegar
   sessionEnded: boolean
   // Flag para saber si el store ya se hidrató desde localStorage
@@ -93,6 +103,7 @@ interface MesaState {
   setError: (error: string | null) => void
   setPedidoCerrado: (data: PedidoCerradoData) => void
   clearPedidoCerrado: () => void
+  setSubtotalesPagados: (subtotales: SubtotalPagado[]) => void
   endSession: () => void
   setHydrated: () => void
   reset: () => void
@@ -113,6 +124,7 @@ export const useMesaStore = create<MesaState>()(
       isLoading: false,
       error: null,
       pedidoCerrado: null,
+      subtotalesPagados: [],
       sessionEnded: false,
       isHydrated: false,
 
@@ -128,6 +140,7 @@ export const useMesaStore = create<MesaState>()(
       setError: (error) => set({ error }),
       setPedidoCerrado: (data) => set({ pedidoCerrado: data }),
       clearPedidoCerrado: () => set({ pedidoCerrado: null }),
+      setSubtotalesPagados: (subtotales) => set({ subtotalesPagados: subtotales }),
       endSession: () => set({ sessionEnded: true }),
       setHydrated: () => set({ isHydrated: true }),
       reset: () => set({
@@ -142,6 +155,7 @@ export const useMesaStore = create<MesaState>()(
         isLoading: false,
         error: null,
         pedidoCerrado: null,
+        subtotalesPagados: [],
         sessionEnded: false,
       }),
     }),
@@ -158,6 +172,7 @@ export const useMesaStore = create<MesaState>()(
         pedido: state.pedido,
         productos: state.productos,
         pedidoCerrado: state.pedidoCerrado,
+        subtotalesPagados: state.subtotalesPagados,
         sessionEnded: state.sessionEnded,
       }),
       onRehydrateStorage: () => (state) => {

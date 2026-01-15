@@ -5,7 +5,31 @@ import { Input } from '@/components/ui/input'
 import { useMesaStore } from '@/store/mesaStore'
 import { mesaApi, ApiError } from '@/lib/api'
 import { toast } from 'sonner'
-import { Loader2, Utensils, ChevronRight } from 'lucide-react'
+import { Loader2, Utensils, ChevronRight, Menu, ShoppingBag, Bell, Users } from 'lucide-react'
+
+// Features para el carrusel
+const features = [
+  {
+    icon: Menu,
+    title: 'Explora el menú',
+    description: 'Mira todos los productos disponibles con fotos y precios',
+  },
+  {
+    icon: ShoppingBag,
+    title: 'Pedí desde tu mesa',
+    description: 'Agregá productos al pedido sin esperar al mozo',
+  },
+  {
+    icon: Bell,
+    title: 'Recibilo en tu mesa',
+    description: 'Tu pedido llega directo a donde estás sentado',
+  },
+  {
+    icon: Users,
+    title: 'Dividí la cuenta',
+    description: 'Cada uno paga lo suyo, sin complicaciones',
+  },
+]
 
 const Nombre = () => {
   const navigate = useNavigate()
@@ -13,11 +37,20 @@ const Nombre = () => {
   const [nombre, setNombre] = useState('')
   const [isLoading, setIsLoading] = useState(true)
   const [shouldAskName, setShouldAskName] = useState(false)
+  const [currentFeature, setCurrentFeature] = useState(0)
   const { 
     setMesa, setProductos, setQrToken, setClienteInfo, setPedidoId, setPedido, setRestaurante,
     pedido, clienteNombre, qrToken: storedQrToken, isHydrated, sessionEnded, 
     reset, clearPedidoCerrado, restaurante, mesa
   } = useMesaStore()
+
+  // Carrusel automático
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setCurrentFeature((prev) => (prev + 1) % features.length)
+    }, 3500)
+    return () => clearInterval(interval)
+  }, [])
 
   // Efecto para verificar si el usuario ya tiene datos guardados
   useEffect(() => {
@@ -165,37 +198,72 @@ const Nombre = () => {
 
   return (
     <div className="min-h-screen bg-linear-to-b from-neutral-50 to-neutral-100 dark:from-neutral-950 dark:to-neutral-900 flex flex-col">
-      {/* Header con logo del restaurante */}
-      <div className="flex-1 flex flex-col items-center justify-center px-6 py-12">
-        {/* Logo del restaurante */}
-        <div className="mb-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
+      {/* Header con logo pequeño del restaurante */}
+      <div className="flex-1 flex flex-col items-center justify-center px-6 py-8">
+        {/* Logo pequeño del restaurante + mesa */}
+        <div className="mb-6 animate-in fade-in slide-in-from-bottom-4 duration-700 flex items-center gap-3">
           {restaurante?.imagenUrl ? (
-            <div className="relative">
-              <div className="w-28 h-28 rounded-3xl overflow-hidden shadow-2xl ring-4 ring-white dark:ring-neutral-800">
-                <img 
-                  src={restaurante.imagenUrl} 
-                  alt={restaurante.nombre || 'Restaurante'}
-                  className="w-full h-full object-cover"
-                />
-              </div>
-              <div className="absolute -bottom-2 -right-2 w-8 h-8 rounded-full bg-emerald-500 flex items-center justify-center shadow-lg">
-                <Utensils className="h-4 w-4 text-white" />
-              </div>
+            <div className="w-12 h-12 rounded-xl overflow-hidden shadow-lg ring-2 ring-white dark:ring-neutral-800">
+              <img 
+                src={restaurante.imagenUrl} 
+                alt={restaurante.nombre || 'Restaurante'}
+                className="w-full h-full object-cover"
+              />
             </div>
           ) : (
-            <div className="w-28 h-28 rounded-3xl bg-neutral-900 dark:bg-white flex items-center justify-center shadow-2xl">
-              <Utensils className="h-12 w-12 text-white dark:text-neutral-900" />
+            <div className="w-12 h-12 rounded-xl bg-neutral-900 dark:bg-white flex items-center justify-center shadow-lg">
+              <Utensils className="h-5 w-5 text-white dark:text-neutral-900" />
             </div>
           )}
+          <div className="h-8 w-px bg-neutral-200 dark:bg-neutral-700" />
+          <span className="text-sm font-medium text-neutral-600 dark:text-neutral-400">
+            {mesa?.nombre || 'Tu mesa'}
+          </span>
         </div>
 
-        {/* Nombre del restaurante */}
-        <div className="text-center mb-10 animate-in fade-in slide-in-from-bottom-4 duration-700 delay-100">
-          <h1 className="text-2xl font-bold text-neutral-900 dark:text-white mb-2">
-            {restaurante?.nombre || 'Bienvenido'}
-          </h1>
-          <div className="flex items-center justify-center gap-2 text-neutral-500 dark:text-neutral-400">
-            <span className="text-sm">{mesa?.nombre || 'Tu mesa'}</span>
+        {/* Carrusel de features */}
+        <div className="w-full max-w-sm mb-8 animate-in fade-in slide-in-from-bottom-4 duration-700 delay-100">
+          <div className="relative h-32 overflow-hidden">
+            {features.map((feature, index) => {
+              const Icon = feature.icon
+              const isActive = index === currentFeature
+              
+              return (
+                <div
+                  key={index}
+                  className={`absolute inset-0 flex flex-col items-center justify-center text-center px-4 transition-all duration-500 ease-out ${
+                    isActive 
+                      ? 'opacity-100 translate-y-0' 
+                      : 'opacity-0 translate-y-4 pointer-events-none'
+                  }`}
+                >
+                  <div className="w-14 h-14 rounded-2xl bg-neutral-900 dark:bg-white flex items-center justify-center mb-3 shadow-lg">
+                    <Icon className="h-7 w-7 text-white dark:text-neutral-900" />
+                  </div>
+                  <h2 className="text-lg font-bold text-neutral-900 dark:text-white mb-1">
+                    {feature.title}
+                  </h2>
+                  <p className="text-sm text-neutral-500 dark:text-neutral-400">
+                    {feature.description}
+                  </p>
+                </div>
+              )
+            })}
+          </div>
+          
+          {/* Indicadores del carrusel */}
+          <div className="flex justify-center gap-2 mt-4">
+            {features.map((_, index) => (
+              <button
+                key={index}
+                onClick={() => setCurrentFeature(index)}
+                className={`h-1.5 rounded-full transition-all duration-300 ${
+                  index === currentFeature 
+                    ? 'w-6 bg-neutral-900 dark:bg-white' 
+                    : 'w-1.5 bg-neutral-300 dark:bg-neutral-600'
+                }`}
+              />
+            ))}
           </div>
         </div>
 
@@ -205,7 +273,7 @@ const Nombre = () => {
             {/* Instrucción clara */}
             <div className="text-center mb-6">
               <p className="text-neutral-600 dark:text-neutral-400 text-sm leading-relaxed">
-                Ingresa tu nombre para unirte al pedido compartido de la mesa
+                Ingresá tu nombre para unirte al pedido
               </p>
             </div>
 
@@ -230,17 +298,10 @@ const Nombre = () => {
                 className="w-full h-14 text-base font-semibold rounded-2xl bg-neutral-900 hover:bg-neutral-800 dark:bg-white dark:hover:bg-neutral-100 dark:text-neutral-900 transition-all duration-200 shadow-lg hover:shadow-xl hover:scale-[1.02] active:scale-[0.98]"
                 disabled={!nombre.trim()}
               >
-                <span>Ver el menú</span>
+                <span>Comenzar</span>
                 <ChevronRight className="ml-2 h-5 w-5" />
               </Button>
             </form>
-          </div>
-
-          {/* Footer con info adicional */}
-          <div className="mt-6 text-center animate-in fade-in duration-1000 delay-500">
-            <p className="text-xs text-neutral-400 dark:text-neutral-500">
-              Podrás agregar productos al pedido y ver lo que piden tus amigos
-            </p>
           </div>
         </div>
       </div>

@@ -2,12 +2,14 @@ import { useEffect, useState, useCallback } from 'react'
 import { useNavigate } from 'react-router'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
-import { Checkbox } from '@/components/ui/checkbox'
 import { useMesaStore } from '@/store/mesaStore'
 import type { SubtotalPagado } from '@/store/mesaStore'
 import { useClienteWebSocket } from '@/hooks/useClienteWebSocket'
 import { toast } from 'sonner'
-import { Receipt, DollarSign, CreditCard, Sparkles, Loader2, CheckCircle2, Users } from 'lucide-react'
+import { 
+  Receipt, DollarSign, CreditCard, Sparkles, Loader2, CheckCircle2, 
+  Users, Wallet, Split, Check, UserCheck
+} from 'lucide-react'
 import { usePreventBackNavigation } from '@/hooks/usePreventBackNavigation'
 
 const API_URL = import.meta.env.VITE_API_URL || 'https://api.piru.app/api'
@@ -87,6 +89,8 @@ const PedidoCerrado = () => {
   const totalPagado = subtotales.filter(s => s.pagado).reduce((sum, s) => sum + s.subtotal, 0)
   const totalPendiente = parseFloat(totalPedido) - totalPagado
   const todoPagado = totalPendiente <= 0.01 // Pequeño margen para evitar errores de redondeo
+  const clientesPendientes = subtotales.filter(s => !s.pagado)
+  const clientesPagados = subtotales.filter(s => s.pagado)
 
   // Hook para prevenir navegación hacia atrás (solo si no está todo pagado)
   const { ExitDialog } = usePreventBackNavigation(!todoPagado && !sessionEnded)
@@ -162,8 +166,15 @@ const PedidoCerrado = () => {
 
   // Seleccionar todos los clientes pendientes
   const handleSelectAllPendientes = () => {
-    const clientesPendientes = subtotales.filter(s => !s.pagado).map(s => s.clienteNombre)
-    setSelectedClientes(clientesPendientes)
+    const pendientes = subtotales.filter(s => !s.pagado).map(s => s.clienteNombre)
+    setSelectedClientes(pendientes)
+  }
+
+  // Seleccionar solo al cliente actual
+  const handleSelectMiParte = () => {
+    if (clienteNombre && !subtotales.find(s => s.clienteNombre === clienteNombre)?.pagado) {
+      setSelectedClientes([clienteNombre])
+    }
   }
 
   // Calcular total seleccionado
@@ -173,7 +184,7 @@ const PedidoCerrado = () => {
 
   const handlePagarEfectivo = async () => {
     if (selectedClientes.length === 0) {
-      toast.error('Selecciona al menos un cliente para pagar')
+      toast.error('Selecciona al menos una persona para pagar')
       return
     }
 
@@ -200,10 +211,9 @@ const PedidoCerrado = () => {
 
       if (data.success) {
         toast.success('¡Pago registrado!', {
-          description: `${selectedClientes.join(', ')} - Acércate a la caja para abonar`
+          description: `Acércate a la caja para abonar $${totalSeleccionado.toFixed(2)}`
         })
         setSelectedClientes([])
-        // Recargar estado de subtotales
         await fetchSubtotales()
       } else {
         toast.error('Error al registrar pago', { description: data.error })
@@ -218,7 +228,7 @@ const PedidoCerrado = () => {
 
   const handlePagarMercadoPago = async () => {
     if (selectedClientes.length === 0) {
-      toast.error('Selecciona al menos un cliente para pagar')
+      toast.error('Selecciona al menos una persona para pagar')
       return
     }
 
@@ -245,7 +255,6 @@ const PedidoCerrado = () => {
       const data = await response.json()
 
       if (data.success && data.url_pago) {
-        // Redirigir a MercadoPago
         window.location.href = data.url_pago
       } else {
         toast.error('Error al procesar pago', {
@@ -262,7 +271,10 @@ const PedidoCerrado = () => {
     }
   }
 
-  // Componente de recibo/factura con selección de subtotales
+  // Verificar si el cliente actual ya pagó
+  const miPartePagada = subtotales.find(s => s.clienteNombre === clienteNombre)?.pagado || false
+  const miParte = subtotales.find(s => s.clienteNombre === clienteNombre)
+
   const ReceiptCard = ({ showPaymentSelection = false }: { showPaymentSelection?: boolean }) => (
     <div className="bg-white text-neutral-900 rounded-2xl shadow-xl overflow-hidden mx-4">
       {/* Header del recibo */}
@@ -302,14 +314,6 @@ const PedidoCerrado = () => {
               {/* Header del cliente con checkbox */}
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  {showPaymentSelection && !clienteData.pagado && (
-                    <Checkbox
-                      id={`cliente-${clienteData.clienteNombre}`}
-                      checked={selectedClientes.includes(clienteData.clienteNombre)}
-                      onCheckedChange={() => handleToggleCliente(clienteData.clienteNombre)}
-                      className="data-[state=checked]:bg-sky-500 data-[state=checked]:border-sky-500"
-                    />
-                  )}
                   <label 
                     htmlFor={`cliente-${clienteData.clienteNombre}`}
                     className={`text-xs font-semibold uppercase tracking-wide flex items-center gap-2 ${
@@ -421,26 +425,54 @@ const PedidoCerrado = () => {
   // Pantalla cuando todo está pagado
   if (todoPagado || sessionEnded) {
     return (
-      <div className="min-h-screen bg-linear-to-b from-neutral-100 to-neutral-200 dark:from-neutral-950 dark:to-neutral-900 py-8">
-        <div className="max-w-md mx-auto space-y-6">
+      <div className="min-h-screen bg-background py-8">
+        <div className="max-w-md mx-auto space-y-6 px-4">
           {/* Mensaje de agradecimiento */}
-          <div className="text-center px-6 space-y-3">
-            <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-emerald-100 dark:bg-emerald-900/30 mb-2">
-              <Sparkles className="w-8 h-8 text-emerald-600 dark:text-emerald-400" />
+          <div className="text-center space-y-4 py-8">
+            <div className="relative inline-flex">
+              <div className="relative inline-flex items-center justify-center w-20 h-20 rounded-full bg-green-100 dark:bg-green-900/30 shadow-lg">
+                <Sparkles className="w-10 h-10 text-green-600 dark:text-green-400" />
+              </div>
             </div>
-            <h1 className="text-2xl font-bold text-neutral-900 dark:text-white">
+            <h1 className="text-3xl font-extrabold tracking-tight bg-linear-to-r from-green-700 to-green-500 bg-clip-text text-transparent dark:from-green-400 dark:to-green-200">
               ¡Gracias por tu visita!
             </h1>
-            <p className="text-sm text-neutral-600 dark:text-neutral-400">
+            <p className="text-muted-foreground">
               Esperamos que hayas disfrutado. ¡Vuelve pronto!
             </p>
           </div>
 
-          {/* Recibo sin selección */}
-          <ReceiptCard showPaymentSelection={false} />
+          {/* Resumen final */}
+          <div className="bg-card rounded-3xl shadow-xl overflow-hidden border border-border">
+            <div className="bg-green-600 dark:bg-green-700 px-6 py-4 text-white">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <Receipt className="w-6 h-6" />
+                  <span className="font-semibold">Cuenta cerrada</span>
+                </div>
+                <span className="font-bold text-lg">${totalPedido}</span>
+              </div>
+            </div>
+            <div className="p-6 space-y-3">
+              {subtotales.map((cliente) => (
+                <div key={cliente.clienteNombre} className="flex items-center justify-between py-2">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
+                      <CheckCircle2 className="w-5 h-5 text-green-600 dark:text-green-400" />
+                    </div>
+                    <span className="font-medium text-foreground">
+                      {cliente.clienteNombre}
+                    </span>
+                  </div>
+                  <span className="font-semibold text-green-600 dark:text-green-400">
+                    ${cliente.subtotal.toFixed(2)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
 
-          {/* Mensaje final */}
-          <p className="text-center text-xs text-neutral-400 dark:text-neutral-600 px-6">
+          <p className="text-center text-sm text-muted-foreground">
             Puedes cerrar esta pestaña
           </p>
         </div>
@@ -449,89 +481,358 @@ const PedidoCerrado = () => {
   }
 
   return (
-    <div className="min-h-screen bg-linear-to-b from-neutral-100 to-neutral-200 dark:from-neutral-950 dark:to-neutral-900 py-8 pb-32">
-      <div className="max-w-md mx-auto space-y-6">
-        
-        {/* Header */}
-        <div className="text-center px-6 space-y-2">
-          <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-neutral-900 dark:bg-white mb-2">
-            <Receipt className="w-7 h-7 text-white dark:text-neutral-900" />
+    <div className="min-h-screen bg-background pb-32">
+      {/* Header sticky */}
+      <div className="sticky top-0 z-20 bg-background/80 backdrop-blur-md border-b border-border/50">
+        <div className="max-w-md mx-auto px-4 py-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              {restaurante?.imagenUrl ? (
+                <img 
+                  src={restaurante.imagenUrl} 
+                  alt={restaurante.nombre || 'Restaurante'}
+                  className="w-10 h-10 rounded-xl object-cover border border-border shadow-sm"
+                />
+              ) : (
+                <div className="w-10 h-10 rounded-xl bg-secondary flex items-center justify-center">
+                  <Receipt className="w-5 h-5 text-muted-foreground" />
+                </div>
+              )}
+              <div>
+                <h2 className="font-semibold text-sm text-foreground">{restaurante?.nombre || 'Restaurante'}</h2>
+                <p className="text-xs text-muted-foreground">Mesa {mesa?.nombre}</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-secondary/50">
+              <Split className="w-4 h-4 text-primary" />
+              <span className="text-xs font-medium text-muted-foreground">Dividir cuenta</span>
+            </div>
           </div>
-          <h1 className="text-2xl font-bold text-neutral-900 dark:text-white">Tu cuenta</h1>
-          <p className="text-sm text-neutral-500 dark:text-neutral-400">
-            Selecciona quién paga y elige el método
-          </p>
+        </div>
+      </div>
+
+      {/* Sección de bienvenida */}
+      <div className="max-w-md mx-auto px-5 pt-6 space-y-4">
+        <div className="space-y-1">
+          <p className="text-sm text-muted-foreground font-medium">Tu cuenta,</p>
+          <h1 className="text-3xl font-extrabold tracking-tight bg-linear-to-r from-orange-800 to-orange-400 bg-clip-text text-transparent dark:from-orange-400 dark:to-orange-200">
+            {clienteNombre}
+          </h1>
         </div>
 
-        {/* Loading */}
-        {loadingSubtotales && (
-          <div className="flex items-center justify-center py-4">
-            <Loader2 className="w-6 h-6 animate-spin text-neutral-400" />
+        {/* Barra de progreso de pagos */}
+        {subtotales.length > 1 && (
+          <div className="bg-secondary/50 rounded-2xl p-4 border border-border/50">
+            <div className="flex items-center justify-between text-sm mb-2">
+              <span className="text-muted-foreground">Progreso de pagos</span>
+              <span className="font-semibold text-foreground">
+                {clientesPagados.length}/{subtotales.length} pagados
+              </span>
+            </div>
+            <div className="h-2.5 bg-secondary rounded-full overflow-hidden">
+              <div 
+                className="h-full bg-green-500 rounded-full transition-all duration-500"
+                style={{ width: `${(totalPagado / parseFloat(totalPedido)) * 100}%` }}
+              />
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Loading */}
+      {loadingSubtotales && (
+        <div className="flex items-center justify-center py-8">
+          <Loader2 className="w-8 h-8 animate-spin text-primary" />
+        </div>
+      )}
+      
+      <div className="max-w-md mx-auto px-5 py-6 space-y-6 pb-48">
+        
+        {/* Acciones rápidas */}
+        {clientesPendientes.length > 0 && (
+          <div className="grid grid-cols-2 gap-3">
+            {/* Botón "Pagar mi parte" - destacado si el cliente actual no ha pagado */}
+            {miParte && !miPartePagada && (
+              <button
+                onClick={handleSelectMiParte}
+                className={`relative overflow-hidden rounded-2xl p-4 text-left transition-all active:scale-95 ${
+                  selectedClientes.length === 1 && selectedClientes[0] === clienteNombre
+                    ? 'bg-primary text-primary-foreground shadow-lg shadow-primary/20'
+                    : 'bg-card   border-primary/20 hover:border-primary/50'
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
+                    selectedClientes.length === 1 && selectedClientes[0] === clienteNombre
+                      ? 'bg-white/20'
+                      : 'bg-primary/10'
+                  }`}>
+                    <UserCheck className={`w-5 h-5 ${
+                      selectedClientes.length === 1 && selectedClientes[0] === clienteNombre
+                        ? 'text-primary-foreground'
+                        : 'text-primary'
+                    }`} />
+                  </div>
+                  <div>
+                    <p className={`font-semibold text-sm ${
+                      selectedClientes.length === 1 && selectedClientes[0] === clienteNombre
+                        ? 'text-primary-foreground'
+                        : 'text-foreground'
+                    }`}>
+                      Pagar mi parte
+                    </p>
+                    <p className={`text-lg font-bold ${
+                      selectedClientes.length === 1 && selectedClientes[0] === clienteNombre
+                        ? 'text-primary-foreground'
+                        : 'text-primary'
+                    }`}>
+                      ${miParte.subtotal.toFixed(2)}
+                    </p>
+                  </div>
+                </div>
+              </button>
+            )}
+
+            {/* Botón "Pagar todo" */}
+            {clientesPendientes.length > 1 && (
+              <button
+                onClick={handleSelectAllPendientes}
+                className={`relative overflow-hidden rounded-2xl p-4 text-left transition-all active:scale-95 ${
+                  selectedClientes.length === clientesPendientes.length && selectedClientes.length > 0
+                    ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/20 scale-[1.02]'
+                    : 'bg-card border-orange-200 dark:border-orange-800/50 hover:border-orange-400'
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
+                    selectedClientes.length === clientesPendientes.length && selectedClientes.length > 0
+                      ? 'bg-white/20'
+                      : 'bg-orange-100 dark:bg-orange-900/30'
+                  }`}>
+                    <Users className={`w-5 h-5 ${
+                      selectedClientes.length === clientesPendientes.length && selectedClientes.length > 0
+                        ? 'text-white'
+                        : 'text-orange-600 dark:text-orange-400'
+                    }`} />
+                  </div>
+                  <div>
+                    <p className={`font-semibold text-sm ${
+                      selectedClientes.length === clientesPendientes.length && selectedClientes.length > 0
+                        ? 'text-white'
+                        : 'text-foreground'
+                    }`}>
+                      Pagar todo
+                    </p>
+                    <p className={`text-lg font-bold ${
+                      selectedClientes.length === clientesPendientes.length && selectedClientes.length > 0
+                        ? 'text-white'
+                        : 'text-orange-600 dark:text-orange-400'
+                    }`}>
+                      ${totalPendiente.toFixed(2)}
+                    </p>
+                  </div>
+                </div>
+              </button>
+            )}
           </div>
         )}
 
-        {/* Recibo con selección */}
-        <ReceiptCard showPaymentSelection={true} />
-
-        {/* Métodos de Pago */}
-        <div className="px-4 space-y-3">
-          <p className="text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase tracking-wider px-2">
-            Método de pago {selectedClientes.length > 0 && `(${selectedClientes.length} seleccionados)`}
-          </p>
-          
-          <Button
-            onClick={handlePagarEfectivo}
-            disabled={selectedClientes.length === 0 || isLoadingEfectivo}
-            className="w-full h-14 text-base font-semibold rounded-2xl bg-neutral-900 hover:bg-neutral-800 dark:bg-white dark:hover:bg-neutral-100 dark:text-neutral-900 shadow-lg disabled:opacity-50"
-          >
-            {isLoadingEfectivo ? (
-              <>
-                <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-                Registrando...
-              </>
-            ) : (
-              <>
-                <DollarSign className="w-5 h-5 mr-2" />
-                Pagar en Efectivo
-                {selectedClientes.length > 0 && ` ($${totalSeleccionado.toFixed(2)})`}
-              </>
+        {/* Sección de selección de personas */}
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="font-semibold text-foreground flex items-center gap-2">
+              <Wallet className="w-5 h-5 text-primary" />
+              Seleccionar personas
+            </h3>
+            {selectedClientes.length > 0 && (
+              <button 
+                onClick={() => setSelectedClientes([])}
+                className="text-sm text-primary hover:underline"
+              >
+                Limpiar
+              </button>
             )}
-          </Button>
+          </div>
 
-          <Button
-            onClick={handlePagarMercadoPago}
-            variant="outline"
-            className={`w-full h-14 text-base font-semibold rounded-2xl border-2 ${
-              mpDisponible && selectedClientes.length > 0
-                ? 'border-sky-500 text-sky-600 hover:bg-sky-50 dark:hover:bg-sky-950' 
-                : ''
-            }`}
-            disabled={!mpDisponible || isLoadingMP || selectedClientes.length === 0}
-          >
-            {isLoadingMP ? (
-              <>
-                <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-                Preparando pago...
-              </>
-            ) : (
-              <>
-                <CreditCard className="w-5 h-5 mr-2" />
-                MercadoPago
-                {selectedClientes.length > 0 && ` ($${totalSeleccionado.toFixed(2)})`}
-                {!mpDisponible && (
-                  <span className="ml-2 text-xs bg-neutral-100 dark:bg-neutral-800 px-2 py-0.5 rounded-full text-neutral-500">
-                    No disponible
-                  </span>
+          {/* Lista de clientes pendientes */}
+          <div className="space-y-3">
+            {clientesPendientes.map((cliente) => {
+              const isSelected = selectedClientes.includes(cliente.clienteNombre)
+              const isCurrentUser = cliente.clienteNombre === clienteNombre
+
+              return (
+                <button
+                  key={cliente.clienteNombre}
+                  onClick={() => handleToggleCliente(cliente.clienteNombre)}
+                  className={`w-full rounded-2xl p-4 text-left transition-all active:scale-[0.98] ${
+                    isSelected
+                      ? 'bg-primary text-primary-foreground shadow-lg shadow-primary/20'
+                      : 'bg-card border border-border hover:border-primary/50'
+                  }`}
+                >
+                  <div className="flex items-center gap-4">
+                    {/* Checkbox visual */}
+                    <div className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all ${
+                      isSelected
+                        ? 'bg-white border-white'
+                        : 'border-border'
+                    }`}>
+                      {isSelected && <Check className="w-4 h-4 text-primary" />}
+                    </div>
+                    
+                    {/* Info del cliente */}
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className={`font-semibold ${isSelected ? 'text-primary-foreground' : 'text-foreground'}`}>
+                          {cliente.clienteNombre}
+                        </span>
+                        {isCurrentUser && (
+                          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                            isSelected
+                              ? 'bg-white/20 text-primary-foreground'
+                              : 'bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300'
+                          }`}>
+                            Tú
+                          </span>
+                        )}
+                      </div>
+                      <p className={`text-sm ${isSelected ? 'text-primary-foreground/80' : 'text-muted-foreground'}`}>
+                        {cliente.items.length} producto{cliente.items.length !== 1 ? 's' : ''}
+                      </p>
+                    </div>
+
+                    {/* Monto */}
+                    <span className={`text-xl font-bold tabular-nums ${
+                      isSelected ? 'text-primary-foreground' : 'text-foreground'
+                    }`}>
+                      ${cliente.subtotal.toFixed(2)}
+                    </span>
+                  </div>
+                </button>
+              )
+            })}
+          </div>
+
+          {/* Clientes que ya pagaron */}
+          {clientesPagados.length > 0 && (
+            <div className="space-y-3 pt-2">
+              <p className="text-sm font-medium text-green-600 dark:text-green-400 flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4" />
+                Ya pagaron
+              </p>
+              {clientesPagados.map((cliente) => (
+                <div
+                  key={cliente.clienteNombre}
+                  className="bg-green-50 dark:bg-green-950/30 rounded-2xl p-4 border border-green-200 dark:border-green-800"
+                >
+                  <div className="flex items-center gap-4">
+                    <div className="w-6 h-6 rounded-lg bg-green-500 flex items-center justify-center">
+                      <Check className="w-4 h-4 text-white" />
+                    </div>
+                    <div className="flex-1">
+                      <span className="font-semibold text-green-700 dark:text-green-300">
+                        {cliente.clienteNombre}
+                      </span>
+                      <p className="text-xs text-green-600/70 dark:text-green-400/70">
+                        {cliente.metodo === 'mercadopago' ? 'MercadoPago' : 'Efectivo'}
+                      </p>
+                    </div>
+                    <span className="font-bold text-green-600 dark:text-green-400 line-through opacity-60">
+                      ${cliente.subtotal.toFixed(2)}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        
+      <ReceiptCard />
+      </div>
+
+      {/* Panel de pago fijo en la parte inferior */}
+      <div className="fixed bottom-0 left-0 right-0 bg-background border-t border-border shadow-[0_-5px_20px_rgba(0,0,0,0.05)] z-20">
+        <div className="max-w-md mx-auto px-5 py-4 space-y-3">
+          {/* Resumen de selección */}
+          {selectedClientes.length > 0 ? (
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-muted-foreground">
+                  {selectedClientes.length === 1 
+                    ? selectedClientes[0]
+                    : `${selectedClientes.length} personas`
+                  }
+                </p>
+                <p className="text-2xl font-black tracking-tight text-foreground">
+                  ${totalSeleccionado.toFixed(2)}
+                </p>
+              </div>
+              <div className="flex items-center">
+                {selectedClientes.slice(0, 4).map((nombre, i) => (
+                  <div 
+                    key={nombre}
+                    className="w-9 h-9 rounded-xl border-2 border-background shadow-sm bg-primary text-primary-foreground flex items-center justify-center text-xs font-bold"
+                    style={{ marginLeft: i > 0 ? '-8px' : '0' }}
+                  >
+                    {nombre.slice(0, 2).toUpperCase()}
+                  </div>
+                ))}
+                {selectedClientes.length > 4 && (
+                  <div 
+                    className="w-9 h-9 rounded-xl border-2 border-background shadow-sm bg-secondary text-foreground flex items-center justify-center text-xs font-bold"
+                    style={{ marginLeft: '-8px' }}
+                  >
+                    +{selectedClientes.length - 4}
+                  </div>
                 )}
-              </>
-            )}
-          </Button>
-
-          {selectedClientes.length === 0 && (
-            <p className="text-xs text-center text-neutral-400 px-4">
-              Selecciona al menos un cliente para habilitar los métodos de pago
+              </div>
+            </div>
+          ) : (
+            <p className="text-center text-muted-foreground py-2">
+              Selecciona quién va a pagar
             </p>
           )}
+
+          {/* Botones de pago */}
+          <div className="grid grid-cols-2 gap-3">
+            <Button
+              onClick={handlePagarEfectivo}
+              disabled={selectedClientes.length === 0 || isLoadingEfectivo}
+              className="h-14 text-base font-bold rounded-2xl shadow-lg shadow-primary/20"
+              size="lg"
+            >
+              {isLoadingEfectivo ? (
+                <Loader2 className="w-5 h-5 animate-spin" />
+              ) : (
+                <>
+                  <DollarSign className="w-5 h-5 mr-2" />
+                  Efectivo
+                </>
+              )}
+            </Button>
+
+            <Button
+              onClick={handlePagarMercadoPago}
+              disabled={!mpDisponible || isLoadingMP || selectedClientes.length === 0}
+              variant="outline"
+              className={`h-14 text-base font-bold rounded-2xl border-2 ${
+                mpDisponible && selectedClientes.length > 0
+                  ? 'border-sky-500 text-sky-600 hover:bg-sky-50 dark:hover:bg-sky-950' 
+                  : ''
+              }`}
+              size="lg"
+            >
+              {isLoadingMP ? (
+                <Loader2 className="w-5 h-5 animate-spin" />
+              ) : (
+                <>
+                  <CreditCard className="w-5 h-5 mr-2" />
+                  {mpDisponible ? 'MercadoPago' : 'No disponible'}
+                </>
+              )}
+            </Button>
+          </div>
         </div>
       </div>
 

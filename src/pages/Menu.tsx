@@ -335,6 +335,13 @@ const Menu = () => {
           </div>
         </section>
 
+        {/* --- MENSAJE EXPLICANDO DE QUE DEBEN SELECCIONAR LOS PRODUCTOS Y CONFIRMAR EL PEDIDO  --- */}
+        <section className="space-y-3 py-4 px-4 bg-secondary/50 rounded-lg">
+          <p className="text-sm font-medium">
+            Selecciona los productos y confirma el pedido para que el mozo pueda atender tu mesa.
+          </p>
+        </section>
+        
         {/* --- CATEGORÍAS --- */}
         {categorias.length > 1 && (
           <section className="space-y-3 pt-2">
@@ -739,7 +746,7 @@ const ProductoCard = ({ producto, onClick, fullWidth }: { producto: any, onClick
     </div>
     
     {/* Gradient overlay for better text readability */}
-    <div className="absolute inset-0 bg-linear-to-t from-black/60 via-transparent to-transparent" />
+    <div className="absolute inset-0 bg-linear-to-t from-black/90 via-transparent to-transparent" />
     
     {/* Glassmorphism overlay for name and price */}
     <div className="absolute bottom-0 left-0 right-0 p-3.5">

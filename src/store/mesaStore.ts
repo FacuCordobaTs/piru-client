@@ -149,6 +149,7 @@ export const useMesaStore = create<MesaState>()(
         productos: [],
         clientes: [],
         pedidoId: null,
+        pedido: null, // IMPORTANTE: también limpiar el pedido
         clienteId: null,
         clienteNombre: null,
         qrToken: null,

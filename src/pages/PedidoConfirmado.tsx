@@ -41,11 +41,9 @@ const PedidoConfirmado = () => {
       return
     }
 
-    // Si el pedido no está en estado preparing, redirigir
-    if (wsState?.estado && wsState.estado !== 'preparing' && wsState.estado !== 'pending') {
-      if (wsState.estado === 'closed') {
-        navigate('/pedido-cerrado')
-      }
+    // Si el pedido está cerrado, redirigir a la página de pedido cerrado
+    if (wsState?.estado === 'closed') {
+      navigate('/pedido-cerrado')
     }
   }, [clienteNombre, qrToken, wsState?.estado, navigate, isHydrated, sessionEnded])
 

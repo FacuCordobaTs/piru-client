@@ -187,27 +187,23 @@ export const useClienteWebSocket = (): UseClienteWebSocketReturn => {
                 const nuevoEstado = data.payload.estado || 'pending'
                 const nuevosItems = data.payload.items || []
                 const nuevoTotal = data.payload.total || '0.00'
+                const nuevoPedidoId = data.payload.pedidoId
                 
-                setState((prevState) => {
-                  // Si ya tenemos datos en 'preparing' o 'closed' y los nuevos están vacíos,
-                  // es probable que sea una reconexión a un pedido nuevo - mantener los datos anteriores
-                  // solo si el estado anterior era más avanzado
-                  if (prevState && 
-                      (prevState.estado === 'preparing' || prevState.estado === 'closed') &&
-                      nuevosItems.length === 0 && 
-                      prevState.items.length > 0) {
-                    console.log('Manteniendo datos anteriores del estado', prevState.estado)
-                    return prevState
-                  }
-                  
-                  return {
-                    items: nuevosItems,
-                    total: nuevoTotal,
-                    estado: nuevoEstado,
-                  }
+                // Siempre confiar en los datos del servidor - es la fuente de verdad
+                // Si el servidor envía un pedido vacío, es porque es un nuevo pedido
+                console.log('Estado inicial recibido:', {
+                  pedidoId: nuevoPedidoId,
+                  estado: nuevoEstado,
+                  items: nuevosItems.length
+                })
+                
+                setState({
+                  items: nuevosItems,
+                  total: nuevoTotal,
+                  estado: nuevoEstado,
                 })
                 setClientes(data.payload.clientes || [])
-                setPedidoId(data.payload.pedidoId)
+                setPedidoId(nuevoPedidoId)
                 break
 
               case 'CLIENTE_UNIDO':

@@ -145,6 +145,30 @@ const PedidoCerrado = () => {
       return
     }
     
+    // Verificar si el pedidoCerrado corresponde al pedido actual
+    // Si el pedidoId del store es diferente al pedidoCerrado.pedidoId, los datos son obsoletos
+    // Esto puede pasar si el usuario escanea el QR de nuevo después de que se creó un nuevo pedido
+    const pedidoCerradoEsActual = pedidoCerrado && pedidoCerrado.pedidoId === pedidoId
+    
+    // Si tenemos datos del pedido cerrado pero son de un pedido diferente al actual,
+    // el usuario está en la página incorrecta - redirigir según el estado del pedido actual
+    if (pedidoCerrado && !pedidoCerradoEsActual && wsState?.estado) {
+      console.log('Datos de pedidoCerrado obsoletos, redirigiendo...', {
+        pedidoCerradoId: pedidoCerrado.pedidoId,
+        pedidoIdActual: pedidoId,
+        estadoActual: wsState.estado
+      })
+      if (wsState.estado === 'preparing') {
+        navigate('/pedido-confirmado')
+      } else if (wsState.estado === 'pending') {
+        navigate('/menu')
+      } else if (wsState.estado === 'closed') {
+        // El pedido actual también está cerrado, quedarse aquí
+        return
+      }
+      return
+    }
+    
     // Si no hay datos del pedido cerrado y el estado no es 'closed', redirigir
     if (!pedidoCerrado && wsState?.estado && wsState.estado !== 'closed') {
       if (wsState.estado === 'preparing') {
@@ -153,7 +177,7 @@ const PedidoCerrado = () => {
         navigate('/menu')
       }
     }
-  }, [clienteNombre, qrToken, wsState?.estado, pedidoCerrado, navigate, todoPagado, sessionEnded, isHydrated])
+  }, [clienteNombre, qrToken, wsState?.estado, pedidoCerrado, pedidoId, navigate, todoPagado, sessionEnded, isHydrated])
 
   // Manejar selección de cliente
   const handleToggleCliente = (cliente: string) => {
@@ -815,10 +839,9 @@ const PedidoCerrado = () => {
             <Button
               onClick={handlePagarMercadoPago}
               disabled={!mpDisponible || isLoadingMP || selectedClientes.length === 0}
-              variant="outline"
               className={`h-14 text-base font-bold rounded-2xl border-2 ${
                 mpDisponible && selectedClientes.length > 0
-                  ? 'border-sky-500 text-sky-600 hover:bg-sky-50 dark:hover:bg-sky-950' 
+                  ? 'bg-sky-500 text-white' 
                   : ''
               }`}
               size="lg"

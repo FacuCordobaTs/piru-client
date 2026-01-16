@@ -32,8 +32,11 @@ const PedidoConfirmado = () => {
     // Esperar a que el store se hidrate
     if (!isHydrated) return
     
-    // Si la sesión terminó, no redirigir
-    if (sessionEnded) return
+    // Si la sesión terminó, redirigir a escanear QR para cargar datos frescos
+    if (sessionEnded) {
+      navigate(`/mesa/${qrToken || 'invalid'}`)
+      return
+    }
     
     // Si no hay datos del cliente, redirigir a escanear QR
     if (!clienteNombre || !qrToken) {
@@ -41,9 +44,15 @@ const PedidoConfirmado = () => {
       return
     }
 
-    // Si el pedido está cerrado, redirigir a la página de pedido cerrado
-    if (wsState?.estado === 'closed') {
-      navigate('/pedido-cerrado')
+    // Redirigir según el estado actual del pedido
+    if (wsState?.estado) {
+      if (wsState.estado === 'closed') {
+        navigate('/pedido-cerrado')
+      } else if (wsState.estado === 'pending') {
+        // Si el pedido volvió a pending (posiblemente un nuevo pedido), ir al menú
+        navigate('/menu')
+      }
+      // Si es 'preparing' o 'delivered', quedarse aquí
     }
   }, [clienteNombre, qrToken, wsState?.estado, navigate, isHydrated, sessionEnded])
 

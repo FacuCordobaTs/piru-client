@@ -88,7 +88,10 @@ const PedidoCerrado = () => {
   const subtotales = subtotalesPorCliente()
   const totalPagado = subtotales.filter(s => s.pagado).reduce((sum, s) => sum + s.subtotal, 0)
   const totalPendiente = parseFloat(totalPedido) - totalPagado
-  const todoPagado = totalPendiente <= 0.01 // Pequeño margen para evitar errores de redondeo
+  // todoPagado es true SOLO si hay items Y el total pendiente es 0
+  // Si no hay items, NO está "todo pagado", simplemente no hay nada que pagar
+  const hayItems = todosLosItems.length > 0
+  const todoPagado = hayItems && totalPendiente <= 0.01 // Pequeño margen para evitar errores de redondeo
   const clientesPendientes = subtotales.filter(s => !s.pagado)
   const clientesPagados = subtotales.filter(s => s.pagado)
 
@@ -133,40 +136,51 @@ const PedidoCerrado = () => {
   }, [subtotalesPagados])
 
   useEffect(() => {
-    // Si ya se pagó todo o la sesión terminó, no hacer nada
-    if (todoPagado || sessionEnded) return
-    
     // Esperar a que el store se hidrate
     if (!isHydrated) return
     
-    // Si no hay datos del cliente, redirigir a escanear QR
+    // Si no hay datos del cliente, redirigir a escanear QR para que cargue datos frescos
     if (!clienteNombre || !qrToken) {
       navigate(`/mesa/${qrToken || 'invalid'}`)
       return
     }
     
+    // Si ya se pagó todo (hay items y total pendiente es 0), no redirigir
+    if (todoPagado) return
+    
+    // Si la sesión terminó legítimamente (hay items y se marcó como terminada), no redirigir
+    if (sessionEnded && hayItems) return
+    
+    // IMPORTANTE: Si llegamos aquí sin items y sin pedidoCerrado válido,
+    // probablemente el usuario llegó a esta página por error o con datos obsoletos
+    // Redirigir a la página de nombre para que cargue datos frescos del servidor
+    if (!hayItems && !pedidoCerrado) {
+      console.log('No hay items ni pedidoCerrado, redirigiendo a escanear QR para cargar datos frescos')
+      navigate(`/mesa/${qrToken}`)
+      return
+    }
+    
     // Verificar si el pedidoCerrado corresponde al pedido actual
-    // Si el pedidoId del store es diferente al pedidoCerrado.pedidoId, los datos son obsoletos
-    // Esto puede pasar si el usuario escanea el QR de nuevo después de que se creó un nuevo pedido
     const pedidoCerradoEsActual = pedidoCerrado && pedidoCerrado.pedidoId === pedidoId
     
     // Si tenemos datos del pedido cerrado pero son de un pedido diferente al actual,
     // el usuario está en la página incorrecta - redirigir según el estado del pedido actual
-    if (pedidoCerrado && !pedidoCerradoEsActual && wsState?.estado) {
+    if (pedidoCerrado && !pedidoCerradoEsActual) {
       console.log('Datos de pedidoCerrado obsoletos, redirigiendo...', {
         pedidoCerradoId: pedidoCerrado.pedidoId,
         pedidoIdActual: pedidoId,
-        estadoActual: wsState.estado
+        estadoActual: wsState?.estado
       })
-      if (wsState.estado === 'preparing') {
+      // Si el pedido actual está en pending o preparing, redirigir
+      if (wsState?.estado === 'preparing') {
         navigate('/pedido-confirmado')
-      } else if (wsState.estado === 'pending') {
-        navigate('/menu')
-      } else if (wsState.estado === 'closed') {
-        // El pedido actual también está cerrado, quedarse aquí
+        return
+      } else if (wsState?.estado === 'pending' || !wsState?.estado) {
+        // Si es pending O no tenemos estado aún, ir a cargar datos frescos
+        navigate(`/mesa/${qrToken}`)
         return
       }
-      return
+      // Si wsState.estado es 'closed', quedarse aquí
     }
     
     // Si no hay datos del pedido cerrado y el estado no es 'closed', redirigir
@@ -174,10 +188,10 @@ const PedidoCerrado = () => {
       if (wsState.estado === 'preparing') {
         navigate('/pedido-confirmado')
       } else if (wsState.estado === 'pending') {
-        navigate('/menu')
+        navigate(`/mesa/${qrToken}`)
       }
     }
-  }, [clienteNombre, qrToken, wsState?.estado, pedidoCerrado, pedidoId, navigate, todoPagado, sessionEnded, isHydrated])
+  }, [clienteNombre, qrToken, wsState?.estado, pedidoCerrado, pedidoId, navigate, todoPagado, sessionEnded, isHydrated, hayItems])
 
   // Manejar selección de cliente
   const handleToggleCliente = (cliente: string) => {

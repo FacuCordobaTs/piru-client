@@ -53,7 +53,7 @@ const WS_URL = import.meta.env.VITE_WS_URL || 'wss://api.piru.app'
 export const useClienteWebSocket = (): UseClienteWebSocketReturn => {
   const { 
     qrToken, clienteId, clienteNombre, setClientes, setPedidoId, 
-    setPedidoCerrado, setSubtotalesPagados, pedidoId, sessionEnded, endSession
+    setPedidoCerrado, clearPedidoCerrado, setSubtotalesPagados, pedidoId, sessionEnded, endSession
   } = useMesaStore()
   const { clearCarrito } = useCarritoStore()
   const [state, setState] = useState<WebSocketState | null>(null)
@@ -281,6 +281,31 @@ export const useClienteWebSocket = (): UseClienteWebSocketReturn => {
                   items: cerradoItems,
                   total: cerradoTotal,
                   estado: 'closed',
+                })
+                break
+
+              case 'MESA_RESETEADA':
+                // El admin reseteó la mesa - se creó un nuevo pedido vacío
+                console.log('Mesa reseteada por admin:', data.payload)
+                const nuevoPedidoIdReset = data.payload.nuevoPedidoId
+                
+                // Limpiar carrito local
+                clearCarrito()
+                
+                // Limpiar datos del pedido cerrado anterior (ya no es relevante)
+                clearPedidoCerrado()
+                
+                // Actualizar el pedidoId al nuevo pedido
+                if (nuevoPedidoIdReset) {
+                  setPedidoId(nuevoPedidoIdReset)
+                }
+                
+                // Establecer estado como pending con items vacíos
+                // El usuario será redirigido automáticamente por la lógica de redirección en las páginas
+                setState({
+                  items: [],
+                  total: '0.00',
+                  estado: 'pending',
                 })
                 break
 

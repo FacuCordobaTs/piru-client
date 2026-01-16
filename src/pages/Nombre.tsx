@@ -38,6 +38,7 @@ const Nombre = () => {
   const [isLoading, setIsLoading] = useState(true)
   const [shouldAskName, setShouldAskName] = useState(false)
   const [currentFeature, setCurrentFeature] = useState(0)
+  const [dataLoaded, setDataLoaded] = useState(false) // Flag para saber si ya se cargaron datos del servidor
   const { 
     setMesa, setProductos, setQrToken, setClienteInfo, setPedidoId, setPedido, setRestaurante,
     pedido, clienteNombre, qrToken: storedQrToken, isHydrated, sessionEnded, 
@@ -59,14 +60,18 @@ const Nombre = () => {
     
     // Si es un nuevo QR diferente al guardado, o la sesión terminó, limpiar datos
     if (urlQrToken && (urlQrToken !== storedQrToken || sessionEnded)) {
-      console.log('Nuevo QR o sesión terminada, limpiando datos anteriores')
+      console.log('Nuevo QR o sesión terminada, limpiando datos anteriores', { urlQrToken, storedQrToken, sessionEnded })
       reset()
       clearPedidoCerrado()
+      setDataLoaded(false) // Marcar que necesitamos recargar datos
+      setShouldAskName(true)
+      return // Importante: retornar para no seguir con la redirección
     }
     
     // Si ya tiene nombre para este mismo QR y la sesión no terminó, redirigir automáticamente
-    if (urlQrToken === storedQrToken && clienteNombre && !sessionEnded) {
-      console.log('Usuario ya registrado, redirigiendo según estado del pedido')
+    // PERO solo si ya tenemos datos del servidor cargados (dataLoaded)
+    if (urlQrToken === storedQrToken && clienteNombre && !sessionEnded && dataLoaded) {
+      console.log('Usuario ya registrado, redirigiendo según estado del pedido', { estado: pedido?.estado })
       const estadoPedido = pedido?.estado
       if (estadoPedido === 'preparing') {
         navigate('/pedido-confirmado')
@@ -75,10 +80,11 @@ const Nombre = () => {
       } else {
         navigate('/menu')
       }
-    } else {
+    } else if (!clienteNombre) {
+      // Si no hay nombre, mostrar formulario
       setShouldAskName(true)
     }
-  }, [isHydrated, urlQrToken, storedQrToken, clienteNombre, sessionEnded, pedido?.estado, navigate])
+  }, [isHydrated, urlQrToken, storedQrToken, clienteNombre, sessionEnded, pedido?.estado, navigate, dataLoaded])
 
   // Efecto para cargar datos de la mesa
   useEffect(() => {
@@ -88,6 +94,9 @@ const Nombre = () => {
         navigate('/')
         return
       }
+
+      // Esperar a que el store se hidrate antes de cargar
+      if (!isHydrated) return
 
       setQrToken(urlQrToken)
       setIsLoading(true)
@@ -137,6 +146,7 @@ const Nombre = () => {
           setPedidoId(response.data.pedido.id)
           setPedido(response.data.pedido)
           setRestaurante(response.data.restaurante || null)
+          setDataLoaded(true) // Marcar que los datos del servidor ya se cargaron
         } else {
           toast.error('Error al cargar la mesa')
           navigate('/')
@@ -158,7 +168,7 @@ const Nombre = () => {
     }
 
     cargarMesa()
-  }, [urlQrToken])
+  }, [urlQrToken, isHydrated])
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -167,13 +177,20 @@ const Nombre = () => {
       const clienteId = `cliente-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
       setClienteInfo(clienteId, nombre.trim())
       
-      // Redirigir según el estado del pedido
+      // Redirigir según el estado del pedido del SERVIDOR (no del localStorage viejo)
+      // El pedido ya se actualizó desde el servidor en el useEffect de carga
       const estadoPedido = pedido?.estado
+      console.log('Redirigiendo después de ingresar nombre, estado:', estadoPedido)
+      
       if (estadoPedido === 'preparing') {
         navigate('/pedido-confirmado')
       } else if (estadoPedido === 'closed') {
+        // El servidor devuelve 'closed' solo si el pedido actual está cerrado
+        // Pero el backend crea un nuevo pedido si el anterior está cerrado,
+        // así que esto debería ser raro
         navigate('/pedido-cerrado')
       } else {
+        // pending o cualquier otro estado -> ir al menú
         navigate('/menu')
       }
     }

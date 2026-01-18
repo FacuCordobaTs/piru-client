@@ -182,12 +182,10 @@ const Nombre = () => {
       const estadoPedido = pedido?.estado
       console.log('Redirigiendo después de ingresar nombre, estado:', estadoPedido)
       
-      if (estadoPedido === 'preparing') {
+      if (estadoPedido === 'preparing' || estadoPedido === 'delivered') {
         navigate('/pedido-confirmado')
       } else if (estadoPedido === 'closed') {
-        // El servidor devuelve 'closed' solo si el pedido actual está cerrado
-        // Pero el backend crea un nuevo pedido si el anterior está cerrado,
-        // así que esto debería ser raro
+        // Si el pedido está cerrado, ir directamente a la pantalla de pago
         navigate('/pedido-cerrado')
       } else {
         // pending o cualquier otro estado -> ir al menú

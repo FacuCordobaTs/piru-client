@@ -268,6 +268,10 @@ export const useClienteWebSocket = (): UseClienteWebSocketReturn => {
                 const cerradoTotal = data.payload.pedido?.total || '0.00'
                 const cerradoPedidoId = data.payload.pedido?.id || pedidoId
                 
+                // Limpiar subtotales pagados de sesiones anteriores cuando se cierra un nuevo pedido
+                // Esto evita que se muestren como pagados cuando en realidad no lo están
+                setSubtotalesPagados([])
+                
                 // Guardar datos del pedido cerrado en el store para poder mostrarlos en la factura
                 if (cerradoItems.length > 0 && cerradoPedidoId) {
                   setPedidoCerrado({

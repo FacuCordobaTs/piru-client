@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
@@ -46,6 +46,7 @@ const PedidoCerrado = () => {
   const [selectedClientes, setSelectedClientes] = useState<string[]>([])
   const [subtotalesEstado, setSubtotalesEstado] = useState<SubtotalPagado[]>([])
   const [loadingSubtotales, setLoadingSubtotales] = useState(false)
+  const lastPedidoIdRef = useRef<number | null>(null)
   
   // Verificar si MercadoPago está disponible
   const mpDisponible = restaurante?.mpConnected === true
@@ -87,11 +88,13 @@ const PedidoCerrado = () => {
   // Calcular totales
   const subtotales = subtotalesPorCliente()
   const totalPagado = subtotales.filter(s => s.pagado).reduce((sum, s) => sum + s.subtotal, 0)
-  const totalPendiente = parseFloat(totalPedido) - totalPagado
-  // todoPagado es true SOLO si hay items Y el total pendiente es 0
+  const totalPedidoNum = parseFloat(totalPedido)
+  const totalPendiente = totalPedidoNum - totalPagado
+  // todoPagado es true SOLO si hay items Y el total del pedido es mayor que 0 Y el total pendiente es 0
   // Si no hay items, NO está "todo pagado", simplemente no hay nada que pagar
+  // También verificamos que totalPedido > 0 para evitar falsos positivos cuando los datos aún no se han cargado
   const hayItems = todosLosItems.length > 0
-  const todoPagado = hayItems && totalPendiente <= 0.01 // Pequeño margen para evitar errores de redondeo
+  const todoPagado = hayItems && totalPedidoNum > 0.01 && totalPendiente <= 0.01 // Pequeño margen para evitar errores de redondeo
   const clientesPendientes = subtotales.filter(s => !s.pagado)
   const clientesPagados = subtotales.filter(s => s.pagado)
 
@@ -123,17 +126,34 @@ const PedidoCerrado = () => {
     }
   }, [pedidoCerrado?.pedidoId, pedidoId])
 
+  // Limpiar subtotalesEstado cuando cambia el pedidoId (nuevo pedido cerrado)
+  useEffect(() => {
+    const currentPedidoId = pedidoCerrado?.pedidoId || pedidoId
+    if (currentPedidoId && currentPedidoId !== lastPedidoIdRef.current) {
+      // Es un nuevo pedido, limpiar subtotalesEstado
+      setSubtotalesEstado([])
+      lastPedidoIdRef.current = currentPedidoId
+    }
+  }, [pedidoCerrado?.pedidoId, pedidoId])
+
   // Cargar subtotales al montar
   useEffect(() => {
     fetchSubtotales()
   }, [fetchSubtotales])
 
   // Actualizar estado cuando lleguen actualizaciones por WebSocket
+  // Solo actualizar si hay subtotales pagados Y corresponden al pedido actual
   useEffect(() => {
-    if (subtotalesPagados.length > 0) {
+    const idPedido = pedidoCerrado?.pedidoId || pedidoId
+    if (subtotalesPagados.length > 0 && idPedido) {
+      // Verificar que los subtotales correspondan al pedido actual
+      // Por ahora, simplemente actualizar si hay subtotales (el servidor los filtra)
       setSubtotalesEstado(subtotalesPagados)
+    } else if (subtotalesPagados.length === 0) {
+      // Si no hay subtotales pagados, limpiar el estado local también
+      setSubtotalesEstado([])
     }
-  }, [subtotalesPagados])
+  }, [subtotalesPagados, pedidoCerrado?.pedidoId, pedidoId])
 
   useEffect(() => {
     // Esperar a que el store se hidrate
@@ -151,70 +171,45 @@ const PedidoCerrado = () => {
     // Si la sesión terminó legítimamente (hay items y se marcó como terminada), no redirigir
     if (sessionEnded && hayItems) return
     
-    // CRÍTICO: Si el estado del pedido es 'closed', quedarse en esta página
-    // incluso si pedidoCerrado aún no está disponible (puede haber delay en WebSocket)
-    // o si hayItems es false temporalmente. El usuario debe poder pagar aquí.
+    // CRÍTICO: Si el estado del pedido es 'closed', SIEMPRE quedarse en esta página
+    // No importa si pedidoCerrado aún no llegó o si hayItems es false temporalmente
+    // El usuario DEBE poder pagar aquí
     if (wsState?.estado === 'closed') {
-      // Si el estado es 'closed', no redirigir - el usuario debe poder pagar
-      // Solo verificar si hay datos obsoletos de un pedido anterior
-      if (pedidoCerrado && pedidoCerrado.pedidoId !== pedidoId) {
-        // Si hay datos de un pedido anterior, limpiarlos y esperar a que lleguen los nuevos
-        // No redirigir, solo esperar
-        return
-      }
-      // Si el estado es 'closed', quedarse aquí sin importar si hay items o pedidoCerrado
+      return // No hacer ninguna redirección si el estado es 'closed'
+    }
+    
+    // Si llegamos aquí, el estado NO es 'closed'
+    // Verificar si debemos redirigir basados en el estado actual
+    
+    // Si el estado es 'preparing' o 'delivered', redirigir a pedido confirmado
+    if (wsState?.estado === 'preparing' || wsState?.estado === 'delivered') {
+      navigate('/pedido-confirmado')
       return
     }
     
-    // IMPORTANTE: Si llegamos aquí sin items y sin pedidoCerrado válido,
-    // Y el estado NO es 'closed', probablemente el usuario llegó a esta página por error
-    // Redirigir a la página de nombre para que cargue datos frescos del servidor
-    if (!hayItems && !pedidoCerrado) {
-      console.log('No hay items ni pedidoCerrado, y el estado no es closed, redirigiendo...')
-      // Redirigir según el estado actual
-      if (wsState?.estado === 'preparing') {
-        navigate('/pedido-confirmado')
-      } else if (wsState?.estado === 'pending' || !wsState?.estado) {
-        navigate(`/mesa/${qrToken}`)
-      }
+    // Si el estado es 'pending' y no hay pedidoCerrado válido, redirigir al menú
+    if (wsState?.estado === 'pending' && !pedidoCerrado) {
+      navigate(`/mesa/${qrToken}`)
       return
     }
     
-    // Verificar si el pedidoCerrado corresponde al pedido actual
-    const pedidoCerradoEsActual = pedidoCerrado && pedidoCerrado.pedidoId === pedidoId
-    
-    // Si tenemos datos del pedido cerrado pero son de un pedido diferente al actual,
-    // el usuario está en la página incorrecta - redirigir según el estado del pedido actual
-    if (pedidoCerrado && !pedidoCerradoEsActual) {
-      console.log('Datos de pedidoCerrado obsoletos, redirigiendo...', {
-        pedidoCerradoId: pedidoCerrado.pedidoId,
-        pedidoIdActual: pedidoId,
-        estadoActual: wsState?.estado
-      })
-      // Si el pedido actual está en pending o preparing, redirigir
-      if (wsState?.estado === 'preparing') {
-        navigate('/pedido-confirmado')
-        return
-      } else if (wsState?.estado === 'pending' || !wsState?.estado) {
-        // Si es pending O no tenemos estado aún, ir a cargar datos frescos
-        navigate(`/mesa/${qrToken}`)
-        return
-      }
-      // Si wsState.estado es 'closed', quedarse aquí (aunque los datos sean de otro pedido,
-      // esperar a que lleguen los datos correctos)
+    // Si no hay estado de websocket y tampoco hay pedidoCerrado, redirigir al menú
+    if (!wsState?.estado && !pedidoCerrado) {
+      navigate(`/mesa/${qrToken}`)
+      return
     }
     
-    // Si no hay datos del pedido cerrado y el estado no es 'closed', redirigir
-    if (!pedidoCerrado && wsState?.estado) {
-      const estadoActual = wsState.estado
-      if (estadoActual === 'preparing' || estadoActual === 'delivered') {
-        navigate('/pedido-confirmado')
-      } else if (estadoActual === 'pending') {
-        navigate(`/mesa/${qrToken}`)
-      }
-      // Si el estado es 'closed', quedarse aquí (aunque no haya pedidoCerrado aún)
-    }
-  }, [clienteNombre, qrToken, wsState?.estado, pedidoCerrado, pedidoId, navigate, todoPagado, sessionEnded, isHydrated, hayItems])
+  }, [
+    clienteNombre, 
+    qrToken, 
+    wsState?.estado, 
+    pedidoCerrado, 
+    navigate, 
+    todoPagado, 
+    sessionEnded, 
+    isHydrated, 
+    hayItems
+  ])
 
   // Manejar selección de cliente
   const handleToggleCliente = (cliente: string) => {
@@ -486,7 +481,8 @@ const PedidoCerrado = () => {
   // Pantalla cuando todo está pagado
   // Solo mostrar si realmente hay items Y todo está pagado (no solo sessionEnded)
   // sessionEnded puede estar true por otras razones, así que verificamos todoPagado primero
-  if (todoPagado || (sessionEnded && hayItems && totalPendiente <= 0.01)) {
+  // También verificamos que totalPedido > 0 para evitar mostrar la pantalla final cuando los datos aún no se han cargado
+  if (todoPagado || (sessionEnded && hayItems && totalPedidoNum > 0.01 && totalPendiente <= 0.01)) {
     return (
       <div className="min-h-screen bg-background py-8">
         <div className="max-w-md mx-auto space-y-6 px-4">

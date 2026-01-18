@@ -151,12 +151,32 @@ const PedidoCerrado = () => {
     // Si la sesión terminó legítimamente (hay items y se marcó como terminada), no redirigir
     if (sessionEnded && hayItems) return
     
+    // CRÍTICO: Si el estado del pedido es 'closed', quedarse en esta página
+    // incluso si pedidoCerrado aún no está disponible (puede haber delay en WebSocket)
+    // o si hayItems es false temporalmente. El usuario debe poder pagar aquí.
+    if (wsState?.estado === 'closed') {
+      // Si el estado es 'closed', no redirigir - el usuario debe poder pagar
+      // Solo verificar si hay datos obsoletos de un pedido anterior
+      if (pedidoCerrado && pedidoCerrado.pedidoId !== pedidoId) {
+        // Si hay datos de un pedido anterior, limpiarlos y esperar a que lleguen los nuevos
+        // No redirigir, solo esperar
+        return
+      }
+      // Si el estado es 'closed', quedarse aquí sin importar si hay items o pedidoCerrado
+      return
+    }
+    
     // IMPORTANTE: Si llegamos aquí sin items y sin pedidoCerrado válido,
-    // probablemente el usuario llegó a esta página por error o con datos obsoletos
+    // Y el estado NO es 'closed', probablemente el usuario llegó a esta página por error
     // Redirigir a la página de nombre para que cargue datos frescos del servidor
     if (!hayItems && !pedidoCerrado) {
-      console.log('No hay items ni pedidoCerrado, redirigiendo a escanear QR para cargar datos frescos')
-      navigate(`/mesa/${qrToken}`)
+      console.log('No hay items ni pedidoCerrado, y el estado no es closed, redirigiendo...')
+      // Redirigir según el estado actual
+      if (wsState?.estado === 'preparing') {
+        navigate('/pedido-confirmado')
+      } else if (wsState?.estado === 'pending' || !wsState?.estado) {
+        navigate(`/mesa/${qrToken}`)
+      }
       return
     }
     
@@ -180,16 +200,19 @@ const PedidoCerrado = () => {
         navigate(`/mesa/${qrToken}`)
         return
       }
-      // Si wsState.estado es 'closed', quedarse aquí
+      // Si wsState.estado es 'closed', quedarse aquí (aunque los datos sean de otro pedido,
+      // esperar a que lleguen los datos correctos)
     }
     
     // Si no hay datos del pedido cerrado y el estado no es 'closed', redirigir
-    if (!pedidoCerrado && wsState?.estado && wsState.estado !== 'closed') {
-      if (wsState.estado === 'preparing') {
+    if (!pedidoCerrado && wsState?.estado) {
+      const estadoActual = wsState.estado
+      if (estadoActual === 'preparing' || estadoActual === 'delivered') {
         navigate('/pedido-confirmado')
-      } else if (wsState.estado === 'pending') {
+      } else if (estadoActual === 'pending') {
         navigate(`/mesa/${qrToken}`)
       }
+      // Si el estado es 'closed', quedarse aquí (aunque no haya pedidoCerrado aún)
     }
   }, [clienteNombre, qrToken, wsState?.estado, pedidoCerrado, pedidoId, navigate, todoPagado, sessionEnded, isHydrated, hayItems])
 
@@ -461,7 +484,9 @@ const PedidoCerrado = () => {
   )
 
   // Pantalla cuando todo está pagado
-  if (todoPagado || sessionEnded) {
+  // Solo mostrar si realmente hay items Y todo está pagado (no solo sessionEnded)
+  // sessionEnded puede estar true por otras razones, así que verificamos todoPagado primero
+  if (todoPagado || (sessionEnded && hayItems && totalPendiente <= 0.01)) {
     return (
       <div className="min-h-screen bg-background py-8">
         <div className="max-w-md mx-auto space-y-6 px-4">

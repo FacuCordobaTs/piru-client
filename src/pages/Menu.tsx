@@ -7,7 +7,7 @@ import { useMesaStore } from '@/store/mesaStore'
 import { useClienteWebSocket } from '@/hooks/useClienteWebSocket'
 import { toast } from 'sonner'
 import { 
-  Plus, Minus, Trash2, ArrowLeft, 
+  Trash2, ArrowLeft, 
   Wifi, WifiOff, Package, ChefHat, UtensilsCrossed, Receipt, 
   BellRing, HandPlatter, Check, X, Users, Loader2
 } from 'lucide-react'
@@ -138,18 +138,6 @@ const Menu = () => {
       ? `${producto.nombre} (sin ${ingredientesExcluidos.length} ingrediente${ingredientesExcluidos.length !== 1 ? 's' : ''})`
       : producto.nombre
     toast.success('Agregado a la orden', { description: mensaje, duration: 1500 })
-  }
-
-  const handleAumentarCantidad = (itemPedidoId: number) => {
-    const item = todosLosItems.find(i => i.id === itemPedidoId)
-    if (!item) return
-    sendMessage({ type: 'ACTUALIZAR_CANTIDAD', payload: { itemId: itemPedidoId, cantidad: item.cantidad + 1 }, })
-  }
-
-  const handleDisminuirCantidad = (itemPedidoId: number) => {
-    const item = todosLosItems.find(i => i.id === itemPedidoId)
-    if (!item || item.cantidad <= 1) return
-    sendMessage({ type: 'ACTUALIZAR_CANTIDAD', payload: { itemId: itemPedidoId, cantidad: item.cantidad - 1 }, })
   }
 
   const handleEliminarItem = (itemPedidoId: number) => {
@@ -512,19 +500,11 @@ const Menu = () => {
 
                         {esMio ? (
                           <div className="flex items-center justify-end gap-3 mt-2">
-                             {item.cantidad === 1 ? (
+                             
                                <button onClick={() => handleEliminarItem(item.id)} className="w-8 h-8 flex items-center justify-center rounded-full bg-destructive/10 text-destructive hover:bg-destructive hover:text-white transition-colors">
                                  <Trash2 className="w-4 h-4" />
                                </button>
-                             ) : (
-                               <button onClick={() => handleDisminuirCantidad(item.id)} className="w-8 h-8 flex items-center justify-center rounded-full bg-secondary hover:bg-secondary/80 text-foreground transition-colors">
-                                 <Minus className="w-3.5 h-3.5" />
-                               </button>
-                             )}
-                             <span className="w-4 text-center text-sm font-semibold tabular-nums">{item.cantidad}</span>
-                             <button onClick={() => handleAumentarCantidad(item.id)} className="w-8 h-8 flex items-center justify-center rounded-full bg-primary text-primary-foreground hover:bg-primary/90 transition-colors">
-                               <Plus className="w-3.5 h-3.5" />
-                             </button>
+                             
                           </div>
                         ) : (
                            <div className="flex justify-end mt-2">

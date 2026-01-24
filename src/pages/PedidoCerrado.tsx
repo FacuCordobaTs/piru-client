@@ -125,7 +125,7 @@ const PedidoCerrado = () => {
         setSubtotalesEstado(data.subtotales.map((s: any) => ({
           clienteNombre: s.clienteNombre,
           monto: s.subtotal,
-          estado: s.pagado ? 'paid' : 'pending',
+          estado: s.estado || (s.pagado ? 'paid' : 'pending'),
           metodo: s.metodo
         })))
       }

@@ -67,7 +67,7 @@ interface PedidoCerradoData {
 export interface SubtotalPagado {
   clienteNombre: string
   monto: string
-  estado: 'pending' | 'paid' | 'failed'
+  estado: 'pending' | 'pending_cash' | 'paid' | 'failed'
   metodo: 'efectivo' | 'mercadopago' | null
 }
 

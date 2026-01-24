@@ -6,8 +6,8 @@ import { useMesaStore } from '@/store/mesaStore'
 import type { SubtotalPagado } from '@/store/mesaStore'
 import { useClienteWebSocket } from '@/hooks/useClienteWebSocket'
 import { toast } from 'sonner'
-import { 
-  Receipt, DollarSign, CreditCard, Loader2, CheckCircle2, 
+import {
+  Receipt, DollarSign, CreditCard, Loader2, CheckCircle2,
   Users, Wallet, Split, Check, UserCheck, CheckCircle, Download, Home
 } from 'lucide-react'
 import { usePreventBackNavigation } from '@/hooks/usePreventBackNavigation'
@@ -23,6 +23,7 @@ interface SubtotalCliente {
   items: typeof todosLosItems
   pagado: boolean
   metodo?: string
+  estado?: 'pending' | 'pending_cash' | 'paid' | 'failed' // Estado para control granular
 }
 
 // Variable para tipar los items (se usará más adelante)
@@ -38,7 +39,7 @@ let todosLosItems: Array<{
 
 const PedidoCerrado = () => {
   const navigate = useNavigate()
-  const { 
+  const {
     mesa, clienteNombre, qrToken, pedidoCerrado, restaurante, pedidoId,
     sessionEnded, isHydrated, subtotalesPagados
   } = useMesaStore()
@@ -49,7 +50,7 @@ const PedidoCerrado = () => {
   const [subtotalesEstado, setSubtotalesEstado] = useState<SubtotalPagado[]>([])
   const [loadingSubtotales, setLoadingSubtotales] = useState(false)
   const lastPedidoIdRef = useRef<number | null>(null)
-  
+
   // Verificar si MercadoPago está disponible
   const mpDisponible = restaurante?.mpConnected === true
 
@@ -74,7 +75,8 @@ const PedidoCerrado = () => {
       // Verificar si este cliente ya pagó (desde WebSocket o desde estado local)
       const estadoSubtotal = subtotalesEstado.find(s => s.clienteNombre === cliente)
       const subtotalWS = subtotalesPagados.find(s => s.clienteNombre === cliente)
-      const pagado = estadoSubtotal?.estado === 'paid' || subtotalWS?.estado === 'paid'
+      const estado = estadoSubtotal?.estado || subtotalWS?.estado || 'pending'
+      const pagado = estado === 'paid'
       const metodo = estadoSubtotal?.metodo || subtotalWS?.metodo
 
       return {
@@ -82,13 +84,15 @@ const PedidoCerrado = () => {
         subtotal,
         items,
         pagado,
-        metodo: metodo || undefined
+        metodo: metodo || undefined,
+        estado
       }
     })
   }, [todosLosItems, subtotalesEstado, subtotalesPagados])
 
   // Calcular totales
   const subtotales = subtotalesPorCliente()
+  // Contar como pagado: MercadoPago paid + Efectivo paid (confirmado por cajero)
   const totalPagado = subtotales.filter(s => s.pagado).reduce((sum, s) => sum + s.subtotal, 0)
   const totalPedidoNum = parseFloat(totalPedido)
   const totalPendiente = totalPedidoNum - totalPagado
@@ -97,8 +101,12 @@ const PedidoCerrado = () => {
   // También verificamos que totalPedido > 0 para evitar falsos positivos cuando los datos aún no se han cargado
   const hayItems = todosLosItems.length > 0
   const todoPagado = hayItems && totalPedidoNum > 0.01 && totalPendiente <= 0.01 // Pequeño margen para evitar errores de redondeo
-  const clientesPendientes = subtotales.filter(s => !s.pagado)
+  // Pendientes: los que no han seleccionado ningún método de pago (estado = pending o undefined)
+  const clientesPendientes = subtotales.filter(s => !s.pagado && s.estado !== 'pending_cash')
+  // Pagados: los que ya tienen confirmación de pago (estado = paid, cualquier método)
   const clientesPagados = subtotales.filter(s => s.pagado)
+  // Esperando confirmación: clientes que seleccionaron efectivo pero el cajero aún no confirmó
+  const clientesEsperandoConfirmacion = subtotales.filter(s => s.estado === 'pending_cash')
 
   // Hook para prevenir navegación hacia atrás (solo si no está todo pagado)
   const { ExitDialog } = usePreventBackNavigation(!todoPagado && !sessionEnded)
@@ -160,63 +168,63 @@ const PedidoCerrado = () => {
   useEffect(() => {
     // Esperar a que el store se hidrate
     if (!isHydrated) return
-    
+
     // Si no hay datos del cliente, redirigir a escanear QR para que cargue datos frescos
     if (!clienteNombre || !qrToken) {
       navigate(`/mesa/${qrToken || 'invalid'}`)
       return
     }
-    
+
     // Si ya se pagó todo (hay items y total pendiente es 0), no redirigir
     if (todoPagado) return
-    
+
     // Si la sesión terminó legítimamente (hay items y se marcó como terminada), no redirigir
     if (sessionEnded && hayItems) return
-    
+
     // CRÍTICO: Si el estado del pedido es 'closed', SIEMPRE quedarse en esta página
     // No importa si pedidoCerrado aún no llegó o si hayItems es false temporalmente
     // El usuario DEBE poder pagar aquí
     if (wsState?.estado === 'closed') {
       return // No hacer ninguna redirección si el estado es 'closed'
     }
-    
+
     // Si llegamos aquí, el estado NO es 'closed'
     // Verificar si debemos redirigir basados en el estado actual
-    
+
     // Si el estado es 'preparing' o 'delivered', redirigir a pedido confirmado
     if (wsState?.estado === 'preparing' || wsState?.estado === 'delivered') {
       navigate('/pedido-confirmado')
       return
     }
-    
+
     // Si el estado es 'pending' y no hay pedidoCerrado válido, redirigir al menú
     if (wsState?.estado === 'pending' && !pedidoCerrado) {
       navigate(`/mesa/${qrToken}`)
       return
     }
-    
+
     // Si no hay estado de websocket y tampoco hay pedidoCerrado, redirigir al menú
     if (!wsState?.estado && !pedidoCerrado) {
       navigate(`/mesa/${qrToken}`)
       return
     }
-    
+
   }, [
-    clienteNombre, 
-    qrToken, 
-    wsState?.estado, 
-    pedidoCerrado, 
-    navigate, 
-    todoPagado, 
-    sessionEnded, 
-    isHydrated, 
+    clienteNombre,
+    qrToken,
+    wsState?.estado,
+    pedidoCerrado,
+    navigate,
+    todoPagado,
+    sessionEnded,
+    isHydrated,
     hayItems
   ])
 
   // Manejar selección de cliente
   const handleToggleCliente = (cliente: string) => {
-    setSelectedClientes(prev => 
-      prev.includes(cliente) 
+    setSelectedClientes(prev =>
+      prev.includes(cliente)
         ? prev.filter(c => c !== cliente)
         : [...prev, cliente]
     )
@@ -268,7 +276,7 @@ const PedidoCerrado = () => {
       const data = await response.json()
 
       if (data.success) {
-        toast.success('¡Pago registrado!', {
+        toast.info('Debe pagar en efectivo', {
           description: `Acércate a la caja para abonar $${totalSeleccionado.toFixed(2)}`
         })
         setSelectedClientes([])
@@ -291,14 +299,14 @@ const PedidoCerrado = () => {
     }
 
     const idPedido = pedidoCerrado?.pedidoId || pedidoId
-    
+
     if (!idPedido) {
       toast.error('Error', { description: 'No se pudo obtener la información del pedido' })
       return
     }
 
     setIsLoadingMP(true)
-    
+
     try {
       const response = await fetch(`${API_URL}/mp/crear-preferencia`, {
         method: 'POST',
@@ -338,8 +346,8 @@ const PedidoCerrado = () => {
       {/* Header del recibo */}
       <div className="bg-neutral-50 px-6 py-5 text-center border-b border-dashed border-neutral-200">
         {restaurante?.imagenUrl ? (
-          <img 
-            src={restaurante.imagenUrl} 
+          <img
+            src={restaurante.imagenUrl}
             alt={restaurante.nombre || 'Restaurante'}
             className="w-14 h-14 rounded-xl object-cover mx-auto mb-3"
           />
@@ -365,32 +373,52 @@ const PedidoCerrado = () => {
             Seleccionar todos los pendientes
           </button>
         )}
-        
+
         <div className="space-y-4">
           {subtotales.map((clienteData, idx) => (
             <div key={clienteData.clienteNombre} className="space-y-2">
               {/* Header del cliente con checkbox */}
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <label 
+                  <label
                     htmlFor={`cliente-${clienteData.clienteNombre}`}
-                    className={`text-xs font-semibold uppercase tracking-wide flex items-center gap-2 ${
-                      clienteData.pagado ? 'text-emerald-600' : 'text-neutral-500'
-                    } ${showPaymentSelection && !clienteData.pagado ? 'cursor-pointer' : ''}`}
+                    className={`text-xs font-semibold uppercase tracking-wide flex items-center gap-2 ${clienteData.pagado && clienteData.metodo === 'mercadopago'
+                      ? 'text-emerald-600'
+                      : clienteData.pagado && clienteData.metodo === 'efectivo'
+                        ? 'text-emerald-600'
+                        : clienteData.estado === 'pending_cash'
+                          ? 'text-amber-600'
+                          : 'text-neutral-500'
+                      } ${showPaymentSelection && !clienteData.pagado && clienteData.estado !== 'pending_cash' ? 'cursor-pointer' : ''}`}
                   >
                     {clienteData.clienteNombre}
-                    {clienteData.pagado && (
-                      <span className="inline-flex items-center gap-1 text-[10px] bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full font-medium normal-case">
+                    {/* Pagado con MercadoPago */}
+                    {clienteData.pagado && clienteData.metodo === 'mercadopago' && (
+                      <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full font-medium normal-case bg-emerald-100 text-emerald-700">
                         <CheckCircle2 className="w-3 h-3" />
-                        Pagado {clienteData.metodo === 'mercadopago' ? '(MP)' : '(Efectivo)'}
+                        Pagado (MP)
+                      </span>
+                    )}
+                    {/* Pagado en efectivo (confirmado por cajero) */}
+                    {clienteData.pagado && clienteData.metodo === 'efectivo' && (
+                      <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full font-medium normal-case bg-emerald-100 text-emerald-700">
+                        <CheckCircle2 className="w-3 h-3" />
+                        Pagado (Efectivo)
+                      </span>
+                    )}
+                    {/* Esperando confirmación del cajero (pending_cash) */}
+                    {clienteData.estado === 'pending_cash' && (
+                      <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full font-medium normal-case bg-amber-100 text-amber-700">
+                        <Wallet className="w-3 h-3" />
+                        Esperando confirmación del cajero
                       </span>
                     )}
                   </label>
                 </div>
               </div>
-              
+
               {/* Productos del cliente */}
-              <div className={clienteData.pagado ? 'opacity-50' : ''}>
+              <div className={clienteData.pagado && clienteData.metodo === 'mercadopago' ? 'opacity-50' : ''}>
                 {clienteData.items.map((item) => {
                   const precio = parseFloat(item.precioUnitario || '0')
                   const subtotalItem = precio * item.cantidad
@@ -412,19 +440,21 @@ const PedidoCerrado = () => {
                   )
                 })}
               </div>
-              
+
               {/* Subtotal del cliente */}
-              <div className={`flex justify-between items-center pt-1 border-t border-neutral-100 ml-6 ${
-                clienteData.pagado ? 'opacity-50' : ''
-              }`}>
-                <span className="text-xs text-neutral-500">Subtotal {clienteData.clienteNombre}</span>
-                <span className={`text-sm font-semibold tabular-nums ${
-                  clienteData.pagado ? 'text-emerald-600 line-through' : 'text-neutral-700'
+              <div className={`flex justify-between items-center pt-1 border-t border-neutral-100 ml-6 ${clienteData.pagado && clienteData.metodo === 'mercadopago' ? 'opacity-50' : ''
                 }`}>
+                <span className="text-xs text-neutral-500">Subtotal {clienteData.clienteNombre}</span>
+                <span className={`text-sm font-semibold tabular-nums ${clienteData.pagado && clienteData.metodo === 'mercadopago'
+                  ? 'text-emerald-600 line-through'
+                  : clienteData.pagado && clienteData.metodo !== 'mercadopago'
+                    ? 'text-amber-600'
+                    : 'text-neutral-700'
+                  }`}>
                   ${clienteData.subtotal.toFixed(2)}
                 </span>
               </div>
-              
+
               {/* Separador entre clientes */}
               {idx < subtotales.length - 1 && <div className="pt-2" />}
             </div>
@@ -486,7 +516,7 @@ const PedidoCerrado = () => {
   // También verificamos que totalPedido > 0 para evitar mostrar la pantalla final cuando los datos aún no se han cargado
 
 
-  const [searchParams] = useSearchParams()  
+  const [searchParams] = useSearchParams()
   const metodoPago = searchParams.get('metodo') || 'efectivo'
   const numeroFactura = `FAC-${Date.now().toString().slice(-6)}`
   const fecha = new Date().toLocaleDateString('es-AR', {
@@ -508,16 +538,16 @@ const PedidoCerrado = () => {
 
   const handleDescargar = async () => {
     if (!reciboRef.current) return
-    
+
     setIsDownloading(true)
-    
+
     try {
       const dataUrl = await toPng(reciboRef.current, {
         quality: 1,
         pixelRatio: 2, // Mayor calidad
         backgroundColor: '#f5f5f5',
       })
-      
+
       // Descargar imagen
       const link = document.createElement('a')
       link.download = `factura-${numeroFactura}.png`
@@ -541,306 +571,306 @@ const PedidoCerrado = () => {
   if (todoPagado || (sessionEnded && hayItems && totalPedidoNum > 0.01 && totalPendiente <= 0.01)) {
     return (
       <div className="min-h-screen bg-linear-to-b from-neutral-100 to-neutral-200 dark:from-neutral-950 dark:to-neutral-900 py-8 pb-32">
-      <div className="max-w-md mx-auto space-y-6 px-4">
-        
-        {/* Header de Éxito */}
-        <div className="text-center px-6 space-y-3">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-emerald-100 dark:bg-emerald-900/30 mb-2">
-            <CheckCircle className="w-8 h-8 text-emerald-600 dark:text-emerald-400" />
-          </div>
-          <h1 className="text-2xl font-bold text-neutral-900 dark:text-white">
-            ¡Pago Realizado!
-          </h1>
-          <p className="text-sm text-neutral-600 dark:text-neutral-400">
-            Tu pago se ha procesado correctamente
-          </p>
-        </div>
+        <div className="max-w-md mx-auto space-y-6 px-4">
 
-        {/* Recibo/Factura estilo ticket - con estilos inline para captura de imagen */}
-        <div 
-          ref={reciboRef} 
-          style={{
-            backgroundColor: '#ffffff',
-            color: '#171717',
-            borderRadius: '16px',
-            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1)',
-            overflow: 'hidden',
-            fontFamily: 'system-ui, -apple-system, sans-serif',
-          }}
-        >
-          {/* Header del recibo */}
-          <div style={{
-            backgroundColor: '#fafafa',
-            padding: '20px 24px',
-            textAlign: 'center',
-            borderBottom: '1px dashed #e5e5e5',
-          }}>
-            <h2 style={{ fontWeight: '700', fontSize: '18px', color: '#171717', margin: 0 }}>
-              {restaurante?.nombre || 'Restaurante'}
-            </h2>
-            <p style={{ fontSize: '14px', color: '#737373', marginTop: '4px' }}>Mesa {mesa?.nombre}</p>
-            <div style={{ marginTop: '8px', fontSize: '12px', color: '#a3a3a3' }}>
-              <p style={{ margin: 0 }}>Factura N° {numeroFactura}</p>
-              <p style={{ margin: 0 }}>{fecha}</p>
+          {/* Header de Éxito */}
+          <div className="text-center px-6 space-y-3">
+            <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-emerald-100 dark:bg-emerald-900/30 mb-2">
+              <CheckCircle className="w-8 h-8 text-emerald-600 dark:text-emerald-400" />
             </div>
+            <h1 className="text-2xl font-bold text-neutral-900 dark:text-white">
+              ¡Pago Realizado!
+            </h1>
+            <p className="text-sm text-neutral-600 dark:text-neutral-400">
+              Tu pago se ha procesado correctamente
+            </p>
           </div>
 
-          {/* Lista de productos agrupados por usuario */}
-          <div style={{ padding: '16px 24px' }}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              {Object.entries(itemsPorCliente).length > 0 ? (
-                Object.entries(itemsPorCliente).map(([cliente, clienteItems], idx) => {
-                  const subtotalCliente = clienteItems.reduce((sum, item) => {
-                    return sum + (parseFloat(item.precioUnitario || '0') * (item.cantidad || 1))
-                  }, 0)
+          {/* Recibo/Factura estilo ticket - con estilos inline para captura de imagen */}
+          <div
+            ref={reciboRef}
+            style={{
+              backgroundColor: '#ffffff',
+              color: '#171717',
+              borderRadius: '16px',
+              boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1)',
+              overflow: 'hidden',
+              fontFamily: 'system-ui, -apple-system, sans-serif',
+            }}
+          >
+            {/* Header del recibo */}
+            <div style={{
+              backgroundColor: '#fafafa',
+              padding: '20px 24px',
+              textAlign: 'center',
+              borderBottom: '1px dashed #e5e5e5',
+            }}>
+              <h2 style={{ fontWeight: '700', fontSize: '18px', color: '#171717', margin: 0 }}>
+                {restaurante?.nombre || 'Restaurante'}
+              </h2>
+              <p style={{ fontSize: '14px', color: '#737373', marginTop: '4px' }}>Mesa {mesa?.nombre}</p>
+              <div style={{ marginTop: '8px', fontSize: '12px', color: '#a3a3a3' }}>
+                <p style={{ margin: 0 }}>Factura N° {numeroFactura}</p>
+                <p style={{ margin: 0 }}>{fecha}</p>
+              </div>
+            </div>
 
-                  return (
-                    <div key={cliente} style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                      {/* Nombre del cliente */}
-                      <p style={{
-                        fontSize: '12px',
-                        fontWeight: '600',
-                        color: '#737373',
-                        textTransform: 'uppercase',
-                        letterSpacing: '0.05em',
-                        margin: 0,
-                      }}>
-                        {cliente}
-                      </p>
-                      
-                      {/* Productos del cliente */}
-                      {clienteItems.map((item) => {
-                        const precio = parseFloat(item.precioUnitario || '0')
-                        const subtotal = precio * (item.cantidad || 1)
+            {/* Lista de productos agrupados por usuario */}
+            <div style={{ padding: '16px 24px' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                {Object.entries(itemsPorCliente).length > 0 ? (
+                  Object.entries(itemsPorCliente).map(([cliente, clienteItems], idx) => {
+                    const subtotalCliente = clienteItems.reduce((sum, item) => {
+                      return sum + (parseFloat(item.precioUnitario || '0') * (item.cantidad || 1))
+                    }, 0)
 
-                        return (
-                          <div key={item.id} style={{
-                            display: 'flex',
-                            justifyContent: 'space-between',
-                            alignItems: 'flex-start',
-                            gap: '16px',
-                          }}>
-                            <div style={{ flex: 1, minWidth: 0 }}>
-                              <p style={{
-                                fontWeight: '500',
-                                fontSize: '14px',
-                                color: '#171717',
-                                lineHeight: '1.25',
-                                margin: 0,
-                              }}>
-                                {item.nombreProducto || item.nombre}
-                              </p>
-                              <p style={{
-                                fontSize: '12px',
-                                color: '#737373',
-                                marginTop: '2px',
-                                margin: '2px 0 0 0',
-                              }}>
-                                {item.cantidad || 1} × ${precio.toFixed(2)}
-                              </p>
-                              {(item as any).ingredientesExcluidosNombres && (item as any).ingredientesExcluidosNombres.length > 0 && (
+                    return (
+                      <div key={cliente} style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                        {/* Nombre del cliente */}
+                        <p style={{
+                          fontSize: '12px',
+                          fontWeight: '600',
+                          color: '#737373',
+                          textTransform: 'uppercase',
+                          letterSpacing: '0.05em',
+                          margin: 0,
+                        }}>
+                          {cliente}
+                        </p>
+
+                        {/* Productos del cliente */}
+                        {clienteItems.map((item) => {
+                          const precio = parseFloat(item.precioUnitario || '0')
+                          const subtotal = precio * (item.cantidad || 1)
+
+                          return (
+                            <div key={item.id} style={{
+                              display: 'flex',
+                              justifyContent: 'space-between',
+                              alignItems: 'flex-start',
+                              gap: '16px',
+                            }}>
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <p style={{
+                                  fontWeight: '500',
+                                  fontSize: '14px',
+                                  color: '#171717',
+                                  lineHeight: '1.25',
+                                  margin: 0,
+                                }}>
+                                  {item.nombreProducto || item.nombre}
+                                </p>
                                 <p style={{
                                   fontSize: '12px',
-                                  color: '#ea580c',
-                                  fontWeight: '500',
+                                  color: '#737373',
                                   marginTop: '2px',
                                   margin: '2px 0 0 0',
                                 }}>
-                                  ⚠️ Sin: {(item as any).ingredientesExcluidosNombres.join(', ')}
+                                  {item.cantidad || 1} × ${precio.toFixed(2)}
                                 </p>
-                              )}
+                                {(item as any).ingredientesExcluidosNombres && (item as any).ingredientesExcluidosNombres.length > 0 && (
+                                  <p style={{
+                                    fontSize: '12px',
+                                    color: '#ea580c',
+                                    fontWeight: '500',
+                                    marginTop: '2px',
+                                    margin: '2px 0 0 0',
+                                  }}>
+                                    ⚠️ Sin: {(item as any).ingredientesExcluidosNombres.join(', ')}
+                                  </p>
+                                )}
+                              </div>
+                              <p style={{
+                                fontWeight: '600',
+                                fontSize: '14px',
+                                color: '#171717',
+                                fontVariantNumeric: 'tabular-nums',
+                                margin: 0,
+                              }}>
+                                ${subtotal.toFixed(2)}
+                              </p>
                             </div>
-                            <p style={{
-                              fontWeight: '600',
-                              fontSize: '14px',
-                              color: '#171717',
-                              fontVariantNumeric: 'tabular-nums',
-                              margin: 0,
-                            }}>
-                              ${subtotal.toFixed(2)}
-                            </p>
-                          </div>
-                        )
-                      })}
-                      
-                      {/* Subtotal del cliente */}
-                      <div style={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                        paddingTop: '4px',
-                        borderTop: '1px solid #f5f5f5',
-                      }}>
-                        <span style={{ fontSize: '12px', color: '#737373' }}>Subtotal {cliente}</span>
-                        <span style={{
-                          fontSize: '14px',
-                          fontWeight: '600',
-                          color: '#404040',
-                          fontVariantNumeric: 'tabular-nums',
+                          )
+                        })}
+
+                        {/* Subtotal del cliente */}
+                        <div style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          paddingTop: '4px',
+                          borderTop: '1px solid #f5f5f5',
                         }}>
-                          ${subtotalCliente.toFixed(2)}
-                        </span>
+                          <span style={{ fontSize: '12px', color: '#737373' }}>Subtotal {cliente}</span>
+                          <span style={{
+                            fontSize: '14px',
+                            fontWeight: '600',
+                            color: '#404040',
+                            fontVariantNumeric: 'tabular-nums',
+                          }}>
+                            ${subtotalCliente.toFixed(2)}
+                          </span>
+                        </div>
+
+                        {/* Separador entre clientes */}
+                        {idx < Object.keys(itemsPorCliente).length - 1 && (
+                          <div style={{ paddingTop: '8px' }} />
+                        )}
                       </div>
-                      
-                      {/* Separador entre clientes */}
-                      {idx < Object.keys(itemsPorCliente).length - 1 && (
-                        <div style={{ paddingTop: '8px' }} />
-                      )}
-                    </div>
-                  )
-                })
-              ) : (
-                <p style={{ fontSize: '14px', color: '#737373', textAlign: 'center', padding: '16px 0' }}>
-                  No hay items en el pedido
+                    )
+                  })
+                ) : (
+                  <p style={{ fontSize: '14px', color: '#737373', textAlign: 'center', padding: '16px 0' }}>
+                    No hay items en el pedido
+                  </p>
+                )}
+              </div>
+            </div>
+
+            {/* Separador estilo ticket */}
+            <div style={{ position: 'relative', padding: '0 24px' }}>
+              <div style={{
+                position: 'absolute',
+                left: 0,
+                top: '50%',
+                width: '16px',
+                height: '16px',
+                backgroundColor: '#f5f5f5',
+                borderRadius: '50%',
+                transform: 'translate(-50%, -50%)',
+              }} />
+              <div style={{
+                position: 'absolute',
+                right: 0,
+                top: '50%',
+                width: '16px',
+                height: '16px',
+                backgroundColor: '#f5f5f5',
+                borderRadius: '50%',
+                transform: 'translate(50%, -50%)',
+              }} />
+              <div style={{ borderTop: '1px dashed #e5e5e5' }} />
+            </div>
+
+            {/* Total */}
+            <div style={{ padding: '16px 24px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontSize: '16px', fontWeight: '700', color: '#171717' }}>TOTAL</span>
+                <span style={{ fontSize: '24px', fontWeight: '900', color: '#171717' }}>${total.toFixed(2)}</span>
+              </div>
+            </div>
+
+            {/* Separador estilo ticket */}
+            <div style={{ position: 'relative', padding: '0 24px' }}>
+              <div style={{
+                position: 'absolute',
+                left: 0,
+                top: '50%',
+                width: '16px',
+                height: '16px',
+                backgroundColor: '#f5f5f5',
+                borderRadius: '50%',
+                transform: 'translate(-50%, -50%)',
+              }} />
+              <div style={{
+                position: 'absolute',
+                right: 0,
+                top: '50%',
+                width: '16px',
+                height: '16px',
+                backgroundColor: '#f5f5f5',
+                borderRadius: '50%',
+                transform: 'translate(50%, -50%)',
+              }} />
+              <div style={{ borderTop: '1px dashed #e5e5e5' }} />
+            </div>
+
+            {/* Info de método de pago */}
+            <div style={{
+              padding: '16px 24px',
+              textAlign: 'center',
+              backgroundColor: metodoPago === 'mercadopago' ? '#f0f9ff' : '#fffbeb',
+            }}>
+              <div style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                width: '40px',
+                height: '40px',
+                borderRadius: '50%',
+                marginBottom: '8px',
+                backgroundColor: metodoPago === 'mercadopago' ? '#e0f2fe' : '#fef3c7',
+                fontSize: '20px',
+              }}>
+                {metodoPago === 'mercadopago' ? '💳' : '💵'}
+              </div>
+              <p style={{
+                fontSize: '14px',
+                fontWeight: '600',
+                color: metodoPago === 'mercadopago' ? '#0c4a6e' : '#78350f',
+                margin: 0,
+              }}>
+                {metodoPago === 'mercadopago' ? 'Pagado con MercadoPago' : 'Debe pagar en efectivo'}
+              </p>
+              {metodoPago === 'efectivo' && (
+                <p style={{ fontSize: '12px', color: '#b45309', marginTop: '4px', margin: '4px 0 0 0' }}>
+                  Acércate a la caja para abonar
                 </p>
               )}
             </div>
-          </div>
 
-          {/* Separador estilo ticket */}
-          <div style={{ position: 'relative', padding: '0 24px' }}>
+            {/* Footer del recibo */}
             <div style={{
-              position: 'absolute',
-              left: 0,
-              top: '50%',
-              width: '16px',
-              height: '16px',
-              backgroundColor: '#f5f5f5',
-              borderRadius: '50%',
-              transform: 'translate(-50%, -50%)',
-            }} />
-            <div style={{
-              position: 'absolute',
-              right: 0,
-              top: '50%',
-              width: '16px',
-              height: '16px',
-              backgroundColor: '#f5f5f5',
-              borderRadius: '50%',
-              transform: 'translate(50%, -50%)',
-            }} />
-            <div style={{ borderTop: '1px dashed #e5e5e5' }} />
-          </div>
-
-          {/* Total */}
-          <div style={{ padding: '16px 24px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ fontSize: '16px', fontWeight: '700', color: '#171717' }}>TOTAL</span>
-              <span style={{ fontSize: '24px', fontWeight: '900', color: '#171717' }}>${total.toFixed(2)}</span>
-            </div>
-          </div>
-
-          {/* Separador estilo ticket */}
-          <div style={{ position: 'relative', padding: '0 24px' }}>
-            <div style={{
-              position: 'absolute',
-              left: 0,
-              top: '50%',
-              width: '16px',
-              height: '16px',
-              backgroundColor: '#f5f5f5',
-              borderRadius: '50%',
-              transform: 'translate(-50%, -50%)',
-            }} />
-            <div style={{
-              position: 'absolute',
-              right: 0,
-              top: '50%',
-              width: '16px',
-              height: '16px',
-              backgroundColor: '#f5f5f5',
-              borderRadius: '50%',
-              transform: 'translate(50%, -50%)',
-            }} />
-            <div style={{ borderTop: '1px dashed #e5e5e5' }} />
-          </div>
-          
-          {/* Info de método de pago */}
-          <div style={{
-            padding: '16px 24px',
-            textAlign: 'center',
-            backgroundColor: metodoPago === 'mercadopago' ? '#f0f9ff' : '#fffbeb',
-          }}>
-            <div style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              width: '40px',
-              height: '40px',
-              borderRadius: '50%',
-              marginBottom: '8px',
-              backgroundColor: metodoPago === 'mercadopago' ? '#e0f2fe' : '#fef3c7',
-              fontSize: '20px',
+              backgroundColor: '#fafafa',
+              padding: '16px 24px',
+              textAlign: 'center',
+              borderTop: '1px dashed #e5e5e5',
             }}>
-              {metodoPago === 'mercadopago' ? '💳' : '💵'}
-            </div>
-            <p style={{
-              fontSize: '14px',
-              fontWeight: '600',
-              color: metodoPago === 'mercadopago' ? '#0c4a6e' : '#78350f',
-              margin: 0,
-            }}>
-              {metodoPago === 'mercadopago' ? 'Pagado con MercadoPago' : 'Pago en efectivo'}
-            </p>
-            {metodoPago === 'efectivo' && (
-              <p style={{ fontSize: '12px', color: '#b45309', marginTop: '4px', margin: '4px 0 0 0' }}>
-                Acércate a la caja para abonar
+              <p style={{
+                fontSize: '10px',
+                color: '#a3a3a3',
+                textTransform: 'uppercase',
+                letterSpacing: '0.1em',
+                margin: 0,
+              }}>
+                Powered by Piru
               </p>
-            )}
+            </div>
           </div>
 
-          {/* Footer del recibo */}
-          <div style={{
-            backgroundColor: '#fafafa',
-            padding: '16px 24px',
-            textAlign: 'center',
-            borderTop: '1px dashed #e5e5e5',
-          }}>
-            <p style={{
-              fontSize: '10px',
-              color: '#a3a3a3',
-              textTransform: 'uppercase',
-              letterSpacing: '0.1em',
-              margin: 0,
-            }}>
-              Powered by Piru
-            </p>
+          {/* Acciones */}
+          <div className="px-4 space-y-3">
+            <Button
+              variant="outline"
+              className="w-full h-12 rounded-xl bg-white dark:bg-neutral-800 border-neutral-200 dark:border-neutral-700"
+              onClick={handleDescargar}
+              disabled={isDownloading}
+            >
+              {isDownloading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Generando imagen...
+                </>
+              ) : (
+                <>
+                  <Download className="mr-2 h-4 w-4" />
+                  Descargar Factura
+                </>
+              )}
+            </Button>
+            <Button
+              className="w-full h-12 rounded-xl bg-neutral-900 hover:bg-neutral-800 dark:bg-white dark:hover:bg-neutral-100 dark:text-neutral-900"
+              onClick={() => window.location.href = '/'}
+            >
+              <Home className="mr-2 h-4 w-4" />
+              Volver al Inicio
+            </Button>
           </div>
         </div>
 
-        {/* Acciones */}
-        <div className="px-4 space-y-3">
-          <Button
-            variant="outline"
-            className="w-full h-12 rounded-xl bg-white dark:bg-neutral-800 border-neutral-200 dark:border-neutral-700"
-            onClick={handleDescargar}
-            disabled={isDownloading}
-          >
-            {isDownloading ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Generando imagen...
-              </>
-            ) : (
-              <>
-                <Download className="mr-2 h-4 w-4" />
-                Descargar Factura
-              </>
-            )}
-          </Button>
-          <Button
-            className="w-full h-12 rounded-xl bg-neutral-900 hover:bg-neutral-800 dark:bg-white dark:hover:bg-neutral-100 dark:text-neutral-900"
-            onClick={() => window.location.href = '/'}
-          >
-            <Home className="mr-2 h-4 w-4" />
-            Volver al Inicio
-          </Button>
-        </div>
+        {/* Dialog para prevenir navegación hacia atrás */}
+        <ExitDialog />
       </div>
-
-      {/* Dialog para prevenir navegación hacia atrás */}
-      <ExitDialog />
-    </div>
     )
   }
 
@@ -852,8 +882,8 @@ const PedidoCerrado = () => {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               {restaurante?.imagenUrl ? (
-                <img 
-                  src={restaurante.imagenUrl} 
+                <img
+                  src={restaurante.imagenUrl}
                   alt={restaurante.nombre || 'Restaurante'}
                   className="w-10 h-10 rounded-xl object-cover border border-border shadow-sm"
                 />
@@ -894,7 +924,7 @@ const PedidoCerrado = () => {
               </span>
             </div>
             <div className="h-2.5 bg-secondary rounded-full overflow-hidden">
-              <div 
+              <div
                 className="h-full bg-green-500 rounded-full transition-all duration-500"
                 style={{ width: `${(totalPagado / parseFloat(totalPedido)) * 100}%` }}
               />
@@ -909,9 +939,9 @@ const PedidoCerrado = () => {
           <Loader2 className="w-8 h-8 animate-spin text-primary" />
         </div>
       )}
-      
+
       <div className="max-w-md mx-auto px-5 py-6 space-y-6 pb-48">
-        
+
         {/* Acciones rápidas */}
         {clientesPendientes.length > 0 && (
           <div className="grid grid-cols-2 gap-3">
@@ -919,37 +949,32 @@ const PedidoCerrado = () => {
             {miParte && !miPartePagada && (
               <button
                 onClick={handleSelectMiParte}
-                className={`relative overflow-hidden rounded-2xl p-4 text-left transition-all active:scale-95 ${
-                  selectedClientes.length === 1 && selectedClientes[0] === clienteNombre
-                    ? 'bg-primary text-primary-foreground shadow-lg shadow-primary/20'
-                    : 'bg-card   border-primary/20 hover:border-primary/50'
-                }`}
+                className={`relative overflow-hidden rounded-2xl p-4 text-left transition-all active:scale-95 ${selectedClientes.length === 1 && selectedClientes[0] === clienteNombre
+                  ? 'bg-primary text-primary-foreground shadow-lg shadow-primary/20'
+                  : 'bg-card   border-primary/20 hover:border-primary/50'
+                  }`}
               >
                 <div className="flex items-center gap-3">
-                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
-                    selectedClientes.length === 1 && selectedClientes[0] === clienteNombre
-                      ? 'bg-white/20'
-                      : 'bg-primary/10'
-                  }`}>
-                    <UserCheck className={`w-5 h-5 ${
-                      selectedClientes.length === 1 && selectedClientes[0] === clienteNombre
-                        ? 'text-primary-foreground'
-                        : 'text-primary'
-                    }`} />
+                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${selectedClientes.length === 1 && selectedClientes[0] === clienteNombre
+                    ? 'bg-white/20'
+                    : 'bg-primary/10'
+                    }`}>
+                    <UserCheck className={`w-5 h-5 ${selectedClientes.length === 1 && selectedClientes[0] === clienteNombre
+                      ? 'text-primary-foreground'
+                      : 'text-primary'
+                      }`} />
                   </div>
                   <div>
-                    <p className={`font-semibold text-sm ${
-                      selectedClientes.length === 1 && selectedClientes[0] === clienteNombre
-                        ? 'text-primary-foreground'
-                        : 'text-foreground'
-                    }`}>
+                    <p className={`font-semibold text-sm ${selectedClientes.length === 1 && selectedClientes[0] === clienteNombre
+                      ? 'text-primary-foreground'
+                      : 'text-foreground'
+                      }`}>
                       Pagar mi parte
                     </p>
-                    <p className={`text-lg font-bold ${
-                      selectedClientes.length === 1 && selectedClientes[0] === clienteNombre
-                        ? 'text-primary-foreground'
-                        : 'text-primary'
-                    }`}>
+                    <p className={`text-lg font-bold ${selectedClientes.length === 1 && selectedClientes[0] === clienteNombre
+                      ? 'text-primary-foreground'
+                      : 'text-primary'
+                      }`}>
                       ${miParte.subtotal.toFixed(2)}
                     </p>
                   </div>
@@ -961,37 +986,32 @@ const PedidoCerrado = () => {
             {clientesPendientes.length > 1 && (
               <button
                 onClick={handleSelectAllPendientes}
-                className={`relative overflow-hidden rounded-2xl p-4 text-left transition-all active:scale-95 ${
-                  selectedClientes.length === clientesPendientes.length && selectedClientes.length > 0
-                    ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/20 scale-[1.02]'
-                    : 'bg-card border-orange-200 dark:border-orange-800/50 hover:border-orange-400'
-                }`}
+                className={`relative overflow-hidden rounded-2xl p-4 text-left transition-all active:scale-95 ${selectedClientes.length === clientesPendientes.length && selectedClientes.length > 0
+                  ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/20 scale-[1.02]'
+                  : 'bg-card border-orange-200 dark:border-orange-800/50 hover:border-orange-400'
+                  }`}
               >
                 <div className="flex items-center gap-3">
-                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
-                    selectedClientes.length === clientesPendientes.length && selectedClientes.length > 0
-                      ? 'bg-white/20'
-                      : 'bg-orange-100 dark:bg-orange-900/30'
-                  }`}>
-                    <Users className={`w-5 h-5 ${
-                      selectedClientes.length === clientesPendientes.length && selectedClientes.length > 0
-                        ? 'text-white'
-                        : 'text-orange-600 dark:text-orange-400'
-                    }`} />
+                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${selectedClientes.length === clientesPendientes.length && selectedClientes.length > 0
+                    ? 'bg-white/20'
+                    : 'bg-orange-100 dark:bg-orange-900/30'
+                    }`}>
+                    <Users className={`w-5 h-5 ${selectedClientes.length === clientesPendientes.length && selectedClientes.length > 0
+                      ? 'text-white'
+                      : 'text-orange-600 dark:text-orange-400'
+                      }`} />
                   </div>
                   <div>
-                    <p className={`font-semibold text-sm ${
-                      selectedClientes.length === clientesPendientes.length && selectedClientes.length > 0
-                        ? 'text-white'
-                        : 'text-foreground'
-                    }`}>
+                    <p className={`font-semibold text-sm ${selectedClientes.length === clientesPendientes.length && selectedClientes.length > 0
+                      ? 'text-white'
+                      : 'text-foreground'
+                      }`}>
                       Pagar todo
                     </p>
-                    <p className={`text-lg font-bold ${
-                      selectedClientes.length === clientesPendientes.length && selectedClientes.length > 0
-                        ? 'text-white'
-                        : 'text-orange-600 dark:text-orange-400'
-                    }`}>
+                    <p className={`text-lg font-bold ${selectedClientes.length === clientesPendientes.length && selectedClientes.length > 0
+                      ? 'text-white'
+                      : 'text-orange-600 dark:text-orange-400'
+                      }`}>
                       ${totalPendiente.toFixed(2)}
                     </p>
                   </div>
@@ -1009,7 +1029,7 @@ const PedidoCerrado = () => {
               Seleccionar personas
             </h3>
             {selectedClientes.length > 0 && (
-              <button 
+              <button
                 onClick={() => setSelectedClientes([])}
                 className="text-sm text-primary hover:underline"
               >
@@ -1028,22 +1048,20 @@ const PedidoCerrado = () => {
                 <button
                   key={cliente.clienteNombre}
                   onClick={() => handleToggleCliente(cliente.clienteNombre)}
-                  className={`w-full rounded-2xl p-4 text-left transition-all active:scale-[0.98] ${
-                    isSelected
-                      ? 'bg-primary text-primary-foreground shadow-lg shadow-primary/20'
-                      : 'bg-card border border-border hover:border-primary/50'
-                  }`}
+                  className={`w-full rounded-2xl p-4 text-left transition-all active:scale-[0.98] ${isSelected
+                    ? 'bg-primary text-primary-foreground shadow-lg shadow-primary/20'
+                    : 'bg-card border border-border hover:border-primary/50'
+                    }`}
                 >
                   <div className="flex items-center gap-4">
                     {/* Checkbox visual */}
-                    <div className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all ${
-                      isSelected
-                        ? 'bg-white border-white'
-                        : 'border-border'
-                    }`}>
+                    <div className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all ${isSelected
+                      ? 'bg-white border-white'
+                      : 'border-border'
+                      }`}>
                       {isSelected && <Check className="w-4 h-4 text-primary" />}
                     </div>
-                    
+
                     {/* Info del cliente */}
                     <div className="flex-1">
                       <div className="flex items-center gap-2">
@@ -1051,11 +1069,10 @@ const PedidoCerrado = () => {
                           {cliente.clienteNombre}
                         </span>
                         {isCurrentUser && (
-                          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-                            isSelected
-                              ? 'bg-white/20 text-primary-foreground'
-                              : 'bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300'
-                          }`}>
+                          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${isSelected
+                            ? 'bg-white/20 text-primary-foreground'
+                            : 'bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300'
+                            }`}>
                             Tú
                           </span>
                         )}
@@ -1066,9 +1083,8 @@ const PedidoCerrado = () => {
                     </div>
 
                     {/* Monto */}
-                    <span className={`text-xl font-bold tabular-nums ${
-                      isSelected ? 'text-primary-foreground' : 'text-foreground'
-                    }`}>
+                    <span className={`text-xl font-bold tabular-nums ${isSelected ? 'text-primary-foreground' : 'text-foreground'
+                      }`}>
                       ${cliente.subtotal.toFixed(2)}
                     </span>
                   </div>
@@ -1077,7 +1093,7 @@ const PedidoCerrado = () => {
             })}
           </div>
 
-          {/* Clientes que ya pagaron */}
+          {/* Clientes que ya pagaron (solo MercadoPago) */}
           {clientesPagados.length > 0 && (
             <div className="space-y-3 pt-2">
               <p className="text-sm font-medium text-green-600 dark:text-green-400 flex items-center gap-2">
@@ -1098,7 +1114,7 @@ const PedidoCerrado = () => {
                         {cliente.clienteNombre}
                       </span>
                       <p className="text-xs text-green-600/70 dark:text-green-400/70">
-                        {cliente.metodo === 'mercadopago' ? 'MercadoPago' : 'Efectivo'}
+                        MercadoPago
                       </p>
                     </div>
                     <span className="font-bold text-green-600 dark:text-green-400 line-through opacity-60">
@@ -1109,10 +1125,43 @@ const PedidoCerrado = () => {
               ))}
             </div>
           )}
+
+          {/* Clientes que deben pagar en efectivo */}
+          {clientesEfectivo.length > 0 && (
+            <div className="space-y-3 pt-2">
+              <p className="text-sm font-medium text-amber-600 dark:text-amber-400 flex items-center gap-2">
+                <Wallet className="w-4 h-4" />
+                Debe pagar en efectivo
+              </p>
+              {clientesEfectivo.map((cliente) => (
+                <div
+                  key={cliente.clienteNombre}
+                  className="bg-amber-50 dark:bg-amber-950/30 rounded-2xl p-4 border border-amber-200 dark:border-amber-800"
+                >
+                  <div className="flex items-center gap-4">
+                    <div className="w-6 h-6 rounded-lg bg-amber-500 flex items-center justify-center">
+                      <Wallet className="w-4 h-4 text-white" />
+                    </div>
+                    <div className="flex-1">
+                      <span className="font-semibold text-amber-700 dark:text-amber-300">
+                        {cliente.clienteNombre}
+                      </span>
+                      <p className="text-xs text-amber-600/70 dark:text-amber-400/70">
+                        Acércate a la caja para pagar
+                      </p>
+                    </div>
+                    <span className="font-bold text-amber-600 dark:text-amber-400">
+                      ${cliente.subtotal.toFixed(2)}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
-        
-      <ReceiptCard />
+
+        <ReceiptCard />
       </div>
 
       {/* Panel de pago fijo en la parte inferior */}
@@ -1123,7 +1172,7 @@ const PedidoCerrado = () => {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground">
-                  {selectedClientes.length === 1 
+                  {selectedClientes.length === 1
                     ? selectedClientes[0]
                     : `${selectedClientes.length} personas`
                   }
@@ -1134,7 +1183,7 @@ const PedidoCerrado = () => {
               </div>
               <div className="flex items-center">
                 {selectedClientes.slice(0, 4).map((nombre, i) => (
-                  <div 
+                  <div
                     key={nombre}
                     className="w-9 h-9 rounded-xl border-2 border-background shadow-sm bg-primary text-primary-foreground flex items-center justify-center text-xs font-bold"
                     style={{ marginLeft: i > 0 ? '-8px' : '0' }}
@@ -1143,7 +1192,7 @@ const PedidoCerrado = () => {
                   </div>
                 ))}
                 {selectedClientes.length > 4 && (
-                  <div 
+                  <div
                     className="w-9 h-9 rounded-xl border-2 border-background shadow-sm bg-secondary text-foreground flex items-center justify-center text-xs font-bold"
                     style={{ marginLeft: '-8px' }}
                   >
@@ -1179,11 +1228,10 @@ const PedidoCerrado = () => {
             <Button
               onClick={handlePagarMercadoPago}
               disabled={!mpDisponible || isLoadingMP || selectedClientes.length === 0}
-              className={`h-14 text-base font-bold rounded-2xl border-2 ${
-                mpDisponible && selectedClientes.length > 0
-                  ? 'bg-sky-500 text-white' 
-                  : ''
-              }`}
+              className={`h-14 text-base font-bold rounded-2xl border-2 ${mpDisponible && selectedClientes.length > 0
+                ? 'bg-sky-500 text-white'
+                : ''
+                }`}
               size="lg"
             >
               {isLoadingMP ? (

@@ -13,6 +13,7 @@ interface Restaurante {
   nombre: string
   imagenUrl: string | null
   mpConnected: boolean | null
+  esCarrito: boolean | null
 }
 
 interface Ingrediente {
@@ -43,6 +44,7 @@ interface Pedido {
   estado: string
   total: string
   createdAt: string
+  nombrePedido?: string | null
 }
 
 interface ItemPedido {
@@ -91,6 +93,8 @@ interface MesaState {
   sessionEnded: boolean
   // Flag para saber si el store ya se hidrató desde localStorage
   isHydrated: boolean
+  // Modo carrito: indica si el pedido está listo para retirar
+  pedidoListo: boolean
   setMesa: (mesa: Mesa) => void
   setRestaurante: (restaurante: Restaurante | null) => void
   setProductos: (productos: Producto[]) => void
@@ -106,6 +110,7 @@ interface MesaState {
   setSubtotalesPagados: (subtotales: SubtotalPagado[]) => void
   endSession: () => void
   setHydrated: () => void
+  setPedidoListo: (listo: boolean) => void
   reset: () => void
 }
 
@@ -127,6 +132,7 @@ export const useMesaStore = create<MesaState>()(
       subtotalesPagados: [],
       sessionEnded: false,
       isHydrated: false,
+      pedidoListo: false,
 
       setMesa: (mesa) => set({ mesa }),
       setRestaurante: (restaurante) => set({ restaurante }),
@@ -143,6 +149,7 @@ export const useMesaStore = create<MesaState>()(
       setSubtotalesPagados: (subtotales) => set({ subtotalesPagados: subtotales }),
       endSession: () => set({ sessionEnded: true }),
       setHydrated: () => set({ isHydrated: true }),
+      setPedidoListo: (listo) => set({ pedidoListo: listo }),
       reset: () => set({
         mesa: null,
         restaurante: null,
@@ -158,6 +165,7 @@ export const useMesaStore = create<MesaState>()(
         pedidoCerrado: null,
         subtotalesPagados: [],
         sessionEnded: false,
+        pedidoListo: false,
       }),
     }),
     {

@@ -6,9 +6,9 @@ import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet'
 import { useMesaStore } from '@/store/mesaStore'
 import { useClienteWebSocket } from '@/hooks/useClienteWebSocket'
 import { toast } from 'sonner'
-import { 
-  Trash2, ArrowLeft, 
-  Wifi, WifiOff, Package, ChefHat, UtensilsCrossed, Receipt, 
+import {
+  Trash2, ArrowLeft,
+  Wifi, WifiOff, Package, ChefHat, UtensilsCrossed, Receipt,
   BellRing, HandPlatter, Check, X, Users, Loader2
 } from 'lucide-react'
 import { ProductDetailDrawer } from '@/components/ProductDetailDrawer'
@@ -17,18 +17,18 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 
 const Menu = () => {
   const navigate = useNavigate()
-  const { mesa, productos, clientes, clienteNombre, clienteId, qrToken, isHydrated, sessionEnded } = useMesaStore()
+  const { mesa, productos, clientes, clienteNombre, clienteId, qrToken, isHydrated, sessionEnded, restaurante, pedido } = useMesaStore()
   const { state: wsState, isConnected, sendMessage, confirmacionGrupal, confirmacionCancelada, clearConfirmacionCancelada } = useClienteWebSocket()
-  
+
   const [carritoAbierto, setCarritoAbierto] = useState(false)
   const [selectedProduct, setSelectedProduct] = useState<typeof productos[0] | null>(null)
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [selectedCategory, setSelectedCategory] = useState<string>('All')
-  
+
   // ESTADOS PARA EL FLUJO DE LLAMAR AL MOZO
   const [confirmarMozoOpen, setConfirmarMozoOpen] = useState(false) // Paso 1: Confirmación
   const [mozoNotificadoOpen, setMozoNotificadoOpen] = useState(false) // Paso 2: Éxito
-  
+
   // ESTADO PARA EL MODAL DE CONFIRMACIÓN GRUPAL
   const [confirmacionGrupalOpen, setConfirmacionGrupalOpen] = useState(false)
 
@@ -78,13 +78,13 @@ const Menu = () => {
   useEffect(() => {
     if (!isHydrated) return
     if (sessionEnded) return
-    
+
     if (!clienteNombre || !qrToken) {
       toast.error('Debes ingresar tu nombre primero')
       navigate(`/mesa/${qrToken || 'invalid'}`)
       return
     }
-    
+
     if (wsState?.estado) {
       if (wsState.estado === 'preparing') {
         navigate('/pedido-confirmado')
@@ -96,7 +96,7 @@ const Menu = () => {
 
   // Lógica de productos y categorías (se mantiene igual)
   const categorias = ['All', ...Array.from(new Set(productos.map(p => p.categoria).filter(Boolean)))]
-  
+
   const productosPorCategoria = productos.reduce((acc, producto) => {
     const categoria = producto.categoria || 'Sin categoría'
     if (!acc[categoria]) {
@@ -106,10 +106,10 @@ const Menu = () => {
     return acc
   }, {} as Record<string, typeof productos>)
 
-  const productosFiltrados = selectedCategory === 'All' 
-    ? productos 
+  const productosFiltrados = selectedCategory === 'All'
+    ? productos
     : productos.filter(p => p.categoria === selectedCategory)
-  
+
   const categoriasOrdenadas = Object.keys(productosPorCategoria).sort((a, b) => {
     if (a === 'Sin categoría') return 1
     if (b === 'Sin categoría') return -1
@@ -134,7 +134,7 @@ const Menu = () => {
         ingredientesExcluidos: ingredientesExcluidos || []
       },
     })
-    const mensaje = ingredientesExcluidos && ingredientesExcluidos.length > 0 
+    const mensaje = ingredientesExcluidos && ingredientesExcluidos.length > 0
       ? `${producto.nombre} (sin ${ingredientesExcluidos.length} ingrediente${ingredientesExcluidos.length !== 1 ? 's' : ''})`
       : producto.nombre
     toast.success('Agregado a la orden', { description: mensaje, duration: 1500 })
@@ -146,11 +146,11 @@ const Menu = () => {
   }
 
   // --- LÓGICA DE CONFIRMACIÓN GRUPAL ---
-  
+
   // Iniciar el proceso de confirmación grupal
   const iniciarConfirmacionPedido = () => {
     if (!clienteNombre || !clienteId) return
-    
+
     // Si solo hay un cliente, confirmar directamente (compatibilidad)
     if (clientes.length <= 1) {
       sendMessage({ type: 'CONFIRMAR_PEDIDO', payload: {} })
@@ -158,11 +158,11 @@ const Menu = () => {
       cerrarCarrito()
       return
     }
-    
+
     // Iniciar confirmación grupal
-    sendMessage({ 
-      type: 'INICIAR_CONFIRMACION', 
-      payload: { clienteId, clienteNombre } 
+    sendMessage({
+      type: 'INICIAR_CONFIRMACION',
+      payload: { clienteId, clienteNombre }
     })
     cerrarCarrito()
   }
@@ -170,18 +170,18 @@ const Menu = () => {
   // Confirmar mi parte en la confirmación grupal
   const confirmarMiParte = () => {
     if (!clienteId) return
-    sendMessage({ 
-      type: 'USUARIO_CONFIRMO', 
-      payload: { clienteId } 
+    sendMessage({
+      type: 'USUARIO_CONFIRMO',
+      payload: { clienteId }
     })
   }
 
   // Cancelar la confirmación grupal
   const cancelarConfirmacion = () => {
     if (!clienteId || !clienteNombre) return
-    sendMessage({ 
-      type: 'USUARIO_CANCELO', 
-      payload: { clienteId, clienteNombre } 
+    sendMessage({
+      type: 'USUARIO_CANCELO',
+      payload: { clienteId, clienteNombre }
     })
   }
 
@@ -210,7 +210,7 @@ const Menu = () => {
   const totalClientes = confirmacionGrupal?.confirmaciones.length ?? 0
 
   // --- LÓGICA REDISEÑADA PARA LLAMAR AL MOZO ---
-  
+
   // 1. Solo abre el diálogo de confirmación
   const iniciarLlamadaMozo = () => {
     setConfirmarMozoOpen(true)
@@ -219,12 +219,12 @@ const Menu = () => {
   // 2. Ejecuta la llamada real
   const confirmarLlamada = () => {
     if (!clienteNombre) return
-    
-    sendMessage({ 
-      type: 'LLAMAR_MOZO', 
-      payload: { clienteNombre } 
+
+    sendMessage({
+      type: 'LLAMAR_MOZO',
+      payload: { clienteNombre }
     })
-    
+
     setConfirmarMozoOpen(false)
     setMozoNotificadoOpen(true) // Muestra el éxito
   }
@@ -234,15 +234,15 @@ const Menu = () => {
 
   return (
     <div className="min-h-screen pb-32 bg-background font-sans selection:bg-primary/20">
-      
+
       {/* --- HEADER --- */}
       <div className="sticky top-0 z-20 bg-background/80 backdrop-blur-md border-b border-border/50 supports-backdrop-filter:bg-background/60">
         <div className="max-w-2xl mx-auto px-4 py-3">
           <div className="flex items-center justify-between">
-            
+
             <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-secondary/50">
-               {isConnected ? <Wifi className="w-3.5 h-3.5 text-green-500" /> : <WifiOff className="w-3.5 h-3.5 text-destructive" />}
-               <span className="text-xs font-medium text-muted-foreground hidden sm:inline-block">{mesa?.nombre}</span>
+              {isConnected ? <Wifi className="w-3.5 h-3.5 text-green-500" /> : <WifiOff className="w-3.5 h-3.5 text-destructive" />}
+              <span className="text-xs font-medium text-muted-foreground hidden sm:inline-block">{mesa?.nombre}</span>
             </div>
 
             <div className="flex items-center gap-2">
@@ -265,7 +265,7 @@ const Menu = () => {
       </div>
 
       <div className="max-w-2xl mx-auto px-5 pt-4 space-y-6">
-        
+
         {/* --- SECCIÓN BIENVENIDA & USUARIOS --- */}
         <section className="space-y-4">
           <div className="flex items-end justify-between px-1">
@@ -276,50 +276,59 @@ const Menu = () => {
               </h1>
             </div>
             <div className="text-right">
-              <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block">Mesa</span>
-              <span className="text-sm font-medium">{mesa?.nombre}</span>
+              {restaurante?.esCarrito && pedido?.nombrePedido ? (
+                <>
+                  <span className="text-xs font-semibold text-orange-600 dark:text-orange-400 uppercase tracking-wider block">Pedido</span>
+                  <span className="text-sm font-medium">de {pedido.nombrePedido}</span>
+                </>
+              ) : (
+                <>
+                  <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block">Mesa</span>
+                  <span className="text-sm font-medium">{mesa?.nombre}</span>
+                </>
+              )}
             </div>
           </div>
 
           {/* Lista de Usuarios */}
           <div>
-              <div className="flex items-center gap-2 mb-2 px-1">
-                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                  En la mesa:
-                </p>
-              </div>
-              
-              <div className="flex -mx-5 pl-5 overflow-x-auto scrollbar-hide py-2 gap-4 snap-x">
-                {/* Usuario actual */}
-                <div className="flex flex-col items-center gap-1.5 min-w-[56px] snap-start">
-                  <div className="relative">
-                    <div className="w-12 h-12 rounded-xl border-2 shadow-sm ring-2 ring-background bg-primary text-primary-foreground font-bold text-sm flex items-center justify-center">
-                      YO
-                    </div>
-                  </div>
-                  <span className="text-xs font-medium truncate max-w-[60px] text-center">Tú</span>
-                </div>
+            <div className="flex items-center gap-2 mb-2 px-1">
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                En la mesa:
+              </p>
+            </div>
 
-                {/* Otros usuarios */}
-                {clientes.filter(c => c.nombre !== clienteNombre).map((cliente) => (
-                  <div key={cliente.id} className="flex flex-col items-center gap-1.5 min-w-[56px] snap-start opacity-80 hover:opacity-100 transition-opacity">
-                    <div className="w-12 h-12 rounded-xl border border-border shadow-xs bg-secondary text-foreground text-xs font-medium flex items-center justify-center">
-                      {cliente.nombre.slice(0, 2).toUpperCase()}
-                    </div>
-                    <span className="text-xs text-muted-foreground truncate max-w-[60px] text-center">
-                      {cliente.nombre}
-                    </span>
+            <div className="flex -mx-5 pl-5 overflow-x-auto scrollbar-hide py-2 gap-4 snap-x">
+              {/* Usuario actual */}
+              <div className="flex flex-col items-center gap-1.5 min-w-[56px] snap-start">
+                <div className="relative">
+                  <div className="w-12 h-12 rounded-xl border-2 shadow-sm ring-2 ring-background bg-primary text-primary-foreground font-bold text-sm flex items-center justify-center">
+                    YO
                   </div>
-                ))}
-                
-                {clientes.length === 1 && (
-                  <div className="flex items-center justify-center pl-2">
-                    <p className="text-xs text-muted-foreground italic">Esperando...</p>
+                </div>
+                <span className="text-xs font-medium truncate max-w-[60px] text-center">Tú</span>
+              </div>
+
+              {/* Otros usuarios */}
+              {clientes.filter(c => c.nombre !== clienteNombre).map((cliente) => (
+                <div key={cliente.id} className="flex flex-col items-center gap-1.5 min-w-[56px] snap-start opacity-80 hover:opacity-100 transition-opacity">
+                  <div className="w-12 h-12 rounded-xl border border-border shadow-xs bg-secondary text-foreground text-xs font-medium flex items-center justify-center">
+                    {cliente.nombre.slice(0, 2).toUpperCase()}
                   </div>
-                )}
-                
-                <div className="min-w-5 shrink-0"></div>
-             </div>
+                  <span className="text-xs text-muted-foreground truncate max-w-[60px] text-center">
+                    {cliente.nombre}
+                  </span>
+                </div>
+              ))}
+
+              {clientes.length === 1 && (
+                <div className="flex items-center justify-center pl-2">
+                  <p className="text-xs text-muted-foreground italic">Esperando...</p>
+                </div>
+              )}
+
+              <div className="min-w-5 shrink-0"></div>
+            </div>
           </div>
         </section>
 
@@ -329,7 +338,7 @@ const Menu = () => {
             Selecciona los productos y confirma el pedido para que el mozo pueda atender tu mesa.
           </p>
         </section>
-        
+
         {/* --- CATEGORÍAS --- */}
         {categorias.length > 1 && (
           <section className="space-y-3 pt-2">
@@ -340,11 +349,10 @@ const Menu = () => {
                   key={category}
                   onClick={() => setSelectedCategory(category || 'All')}
                   variant={selectedCategory === category ? "default" : "secondary"}
-                  className={`rounded-lg px-5 h-10 text-xs font-medium whitespace-nowrap snap-start transition-all ${
-                    selectedCategory === category 
-                      ? "shadow-md" 
+                  className={`rounded-lg px-5 h-10 text-xs font-medium whitespace-nowrap snap-start transition-all ${selectedCategory === category
+                      ? "shadow-md"
                       : "bg-secondary/50 hover:bg-secondary border border-transparent"
-                  }`}
+                    }`}
                 >
                   {category === 'All' ? 'Todas' : category}
                 </Button>
@@ -360,7 +368,7 @@ const Menu = () => {
               categoriasOrdenadas.map((categoriaNombre) => {
                 const productosDeCategoria = productosPorCategoria[categoriaNombre]
                 if (!productosDeCategoria || productosDeCategoria.length === 0) return null
-                
+
                 return (
                   <div key={categoriaNombre} className="space-y-4">
                     <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider px-1">
@@ -368,10 +376,10 @@ const Menu = () => {
                     </h3>
                     <div className="flex gap-4 overflow-x-auto pb-3  ml-2 scrollbar-hide snap-x snap-mandatory">
                       {productosDeCategoria.map((producto) => (
-                        <ProductoCard 
-                          key={producto.id} 
-                          producto={producto} 
-                          onClick={() => abrirDetalleProducto(producto)} 
+                        <ProductoCard
+                          key={producto.id}
+                          producto={producto}
+                          onClick={() => abrirDetalleProducto(producto)}
                         />
                       ))}
                       {/* Spacer for last item padding */}
@@ -391,9 +399,9 @@ const Menu = () => {
                 </h3>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 px-1">
                   {productosFiltrados.map((producto) => (
-                    <ProductoCard 
-                      key={producto.id} 
-                      producto={producto} 
+                    <ProductoCard
+                      key={producto.id}
+                      producto={producto}
                       onClick={() => abrirDetalleProducto(producto)}
                       fullWidth
                     />
@@ -427,9 +435,9 @@ const Menu = () => {
             <Receipt className="w-5 h-5 text-current opacity-90" />
             <span className="font-semibold text-sm tracking-wide">Ver Pedido</span>
           </div>
-          
+
           <div className="h-4 w-px bg-current opacity-20"></div>
-          
+
           <span className="font-bold text-base font-mono">
             ${totalPedido}
           </span>
@@ -462,14 +470,13 @@ const Menu = () => {
               ) : (
                 todosLosItems.map((item) => {
                   const esMio = item.clienteNombre === clienteNombre;
-                  const prodOriginal = productos.find(p => p.id === (item.productoId || item.id)); 
+                  const prodOriginal = productos.find(p => p.id === (item.productoId || item.id));
                   const imagen = item.imagenUrl || prodOriginal?.imagenUrl;
                   const precio = parseFloat(item.precioUnitario || String(item.precio || 0));
 
                   return (
-                    <div key={item.id} className={`relative flex gap-4 p-3 rounded-2xl border transition-all ${
-                      esMio ? 'bg-card border-primary/20 shadow-sm' : 'bg-secondary/30 border-transparent opacity-90 grayscale-[0.3]'
-                    }`}>
+                    <div key={item.id} className={`relative flex gap-4 p-3 rounded-2xl border transition-all ${esMio ? 'bg-card border-primary/20 shadow-sm' : 'bg-secondary/30 border-transparent opacity-90 grayscale-[0.3]'
+                      }`}>
                       <div className="w-20 h-20 shrink-0 rounded-xl overflow-hidden bg-secondary">
                         {imagen ? (
                           <img src={imagen} alt="img" className="w-full h-full object-cover" />
@@ -485,9 +492,9 @@ const Menu = () => {
                           <div className="min-w-0">
                             <p className="font-bold text-sm truncate">{item.nombreProducto || item.nombre}</p>
                             <div className="flex items-center gap-1.5 mt-1">
-                               <Badge variant="secondary" className={`h-5 text-[10px] px-1.5 font-normal rounded-md ${esMio ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-300' : ''}`}>
-                                  {esMio ? 'Tú' : item.clienteNombre}
-                               </Badge>
+                              <Badge variant="secondary" className={`h-5 text-[10px] px-1.5 font-normal rounded-md ${esMio ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-300' : ''}`}>
+                                {esMio ? 'Tú' : item.clienteNombre}
+                              </Badge>
                             </div>
                             {(item as any).ingredientesExcluidosNombres?.length > 0 && (
                               <p className="text-xs text-orange-600 dark:text-orange-400 font-medium mt-1">
@@ -500,16 +507,16 @@ const Menu = () => {
 
                         {esMio ? (
                           <div className="flex items-center justify-end gap-3 mt-2">
-                             
-                               <button onClick={() => handleEliminarItem(item.id)} className="w-8 h-8 flex items-center justify-center rounded-full bg-destructive/10 text-destructive hover:bg-destructive hover:text-white transition-colors">
-                                 <Trash2 className="w-4 h-4" />
-                               </button>
-                             
+
+                            <button onClick={() => handleEliminarItem(item.id)} className="w-8 h-8 flex items-center justify-center rounded-full bg-destructive/10 text-destructive hover:bg-destructive hover:text-white transition-colors">
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+
                           </div>
                         ) : (
-                           <div className="flex justify-end mt-2">
-                             <span className="text-xs text-muted-foreground">x{item.cantidad} unidades</span>
-                           </div>
+                          <div className="flex justify-end mt-2">
+                            <span className="text-xs text-muted-foreground">x{item.cantidad} unidades</span>
+                          </div>
                         )}
                       </div>
                     </div>
@@ -520,14 +527,14 @@ const Menu = () => {
 
             {todosLosItems.length > 0 && (
               <div className="p-5 bg-background border-t border-border shadow-[0_-5px_20px_rgba(0,0,0,0.05)] z-20">
-                 <div className="flex justify-between items-center mb-4">
-                    <span className="text-muted-foreground text-sm">Total a pagar</span>
-                    <span className="text-2xl font-black tracking-tight">${totalPedido}</span>
-                 </div>
-                 <Button className="w-full h-14 text-base font-bold rounded-2xl shadow-lg shadow-primary/20" size="lg" onClick={iniciarConfirmacionPedido}>
-                   Confirmar Pedido
-                   <ArrowLeft className="w-5 h-5 ml-2 rotate-180" />
-                 </Button>
+                <div className="flex justify-between items-center mb-4">
+                  <span className="text-muted-foreground text-sm">Total a pagar</span>
+                  <span className="text-2xl font-black tracking-tight">${totalPedido}</span>
+                </div>
+                <Button className="w-full h-14 text-base font-bold rounded-2xl shadow-lg shadow-primary/20" size="lg" onClick={iniciarConfirmacionPedido}>
+                  Confirmar Pedido
+                  <ArrowLeft className="w-5 h-5 ml-2 rotate-180" />
+                </Button>
               </div>
             )}
           </div>
@@ -554,15 +561,15 @@ const Menu = () => {
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="flex-col gap-2 sm:gap-2 mt-4">
-            <Button 
-              size="lg" 
+            <Button
+              size="lg"
               onClick={confirmarLlamada}
               className="w-full rounded-2xl font-semibold"
             >
               Sí, llamar al mozo
             </Button>
-            <Button 
-              variant="ghost" 
+            <Button
+              variant="ghost"
               size="lg"
               onClick={() => setConfirmarMozoOpen(false)}
               className="w-full rounded-2xl"
@@ -585,8 +592,8 @@ const Menu = () => {
               El mozo ha sido notificado y se acercará a la mesa <strong>{mesa?.nombre}</strong> en breve.
             </DialogDescription>
           </DialogHeader>
-          <Button 
-            onClick={() => setMozoNotificadoOpen(false)} 
+          <Button
+            onClick={() => setMozoNotificadoOpen(false)}
             variant="outline"
             className="w-full h-12 mt-6 rounded-2xl border-green-200 hover:bg-green-50 text-green-700 dark:border-green-800 dark:hover:bg-green-900/20 dark:text-green-300"
           >
@@ -596,7 +603,7 @@ const Menu = () => {
       </Dialog>
 
       {/* --- MODAL DE CONFIRMACIÓN GRUPAL --- */}
-      <Dialog open={confirmacionGrupalOpen} onOpenChange={() => {}}>
+      <Dialog open={confirmacionGrupalOpen} onOpenChange={() => { }}>
         <DialogContent className="max-w-sm rounded-3xl p-6" onPointerDownOutside={(e) => e.preventDefault()}>
           <DialogHeader className="text-center sm:text-center">
             <div className="mx-auto w-16 h-16 rounded-full bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center mb-4">
@@ -604,7 +611,7 @@ const Menu = () => {
             </div>
             <DialogTitle className="text-xl">Confirmación del Pedido</DialogTitle>
             <DialogDescription className="text-center pt-2">
-              {confirmacionGrupal?.iniciadaPorNombre === clienteNombre 
+              {confirmacionGrupal?.iniciadaPorNombre === clienteNombre
                 ? 'Esperando que todos confirmen el pedido...'
                 : `${confirmacionGrupal?.iniciadaPorNombre} quiere confirmar el pedido`
               }
@@ -616,17 +623,16 @@ const Menu = () => {
             <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide text-center">
               {totalConfirmados}/{totalClientes} confirmados
             </p>
-            
+
             <div className="flex flex-wrap justify-center gap-4 py-4">
               {confirmacionGrupal?.confirmaciones.map((conf) => {
                 const esYo = conf.clienteId === clienteId
                 return (
                   <div key={conf.clienteId} className="flex flex-col items-center gap-1.5">
-                    <div className={`relative w-14 h-14 rounded-xl border-2 shadow-sm flex items-center justify-center font-bold text-sm transition-all duration-300 ${
-                      conf.confirmado 
-                        ? 'bg-orange-500 border-orange-600 text-white ring-2 ring-orange-300 dark:ring-orange-700' 
+                    <div className={`relative w-14 h-14 rounded-xl border-2 shadow-sm flex items-center justify-center font-bold text-sm transition-all duration-300 ${conf.confirmado
+                        ? 'bg-orange-500 border-orange-600 text-white ring-2 ring-orange-300 dark:ring-orange-700'
                         : 'bg-zinc-200 dark:bg-zinc-700 border-zinc-300 dark:border-zinc-600 text-zinc-500 dark:text-zinc-400'
-                    }`}>
+                      }`}>
                       {conf.nombre.slice(0, 2).toUpperCase()}
                       {conf.confirmado && (
                         <div className="absolute -bottom-1 -right-1 w-5 h-5 bg-green-500 rounded-full flex items-center justify-center">
@@ -639,9 +645,8 @@ const Menu = () => {
                         </div>
                       )}
                     </div>
-                    <span className={`text-xs font-medium truncate max-w-[60px] text-center ${
-                      esYo ? 'text-foreground' : 'text-muted-foreground'
-                    }`}>
+                    <span className={`text-xs font-medium truncate max-w-[60px] text-center ${esYo ? 'text-foreground' : 'text-muted-foreground'
+                      }`}>
                       {esYo ? 'Tú' : conf.nombre}
                     </span>
                   </div>
@@ -653,16 +658,16 @@ const Menu = () => {
           <DialogFooter className="flex-col gap-2 sm:gap-2 mt-4">
             {!yaConfirme ? (
               <>
-                <Button 
-                  size="lg" 
+                <Button
+                  size="lg"
                   onClick={confirmarMiParte}
                   className="w-full rounded-2xl font-semibold bg-orange-500 hover:bg-orange-600"
                 >
                   <Check className="w-5 h-5 mr-2" />
                   Confirmar mi pedido
                 </Button>
-                <Button 
-                  variant="ghost" 
+                <Button
+                  variant="ghost"
                   size="lg"
                   onClick={cancelarConfirmacion}
                   className="w-full rounded-2xl text-destructive hover:text-destructive hover:bg-destructive/10"
@@ -678,8 +683,8 @@ const Menu = () => {
                     ✓ Ya confirmaste. Esperando a los demás...
                   </p>
                 </div>
-                <Button 
-                  variant="ghost" 
+                <Button
+                  variant="ghost"
                   size="lg"
                   onClick={cancelarConfirmacion}
                   className="w-full rounded-2xl text-destructive hover:text-destructive hover:bg-destructive/10"
@@ -706,17 +711,17 @@ const EmptyState = () => (
 )
 
 const ProductoCard = ({ producto, onClick, fullWidth }: { producto: any, onClick: () => void, fullWidth?: boolean }) => (
-  <div 
+  <div
     className={`group relative ${fullWidth ? 'w-full' : 'w-44 shrink-0'} h-52 rounded-3xl overflow-hidden cursor-pointer ${!fullWidth ? 'snap-start' : ''} shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-[1.02] active:scale-[0.98]`}
     onClick={onClick}
   >
     {/* Background Image */}
     <div className="absolute inset-0 bg-zinc-900">
       {producto.imagenUrl ? (
-        <img 
-          src={producto.imagenUrl} 
-          alt={producto.nombre} 
-          className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700 ease-out" 
+        <img
+          src={producto.imagenUrl}
+          alt={producto.nombre}
+          className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700 ease-out"
         />
       ) : (
         <div className="w-full h-full flex items-center justify-center bg-linear-to-br from-zinc-800 to-zinc-900">
@@ -724,13 +729,13 @@ const ProductoCard = ({ producto, onClick, fullWidth }: { producto: any, onClick
         </div>
       )}
     </div>
-    
+
     {/* Gradient overlay for better text readability */}
     <div className="absolute inset-0 bg-linear-to-t from-black/90 via-transparent to-transparent" />
-    
+
     {/* Glassmorphism overlay for name and price */}
     <div className="absolute bottom-0 left-0 right-0 p-3.5">
-      <div 
+      <div
         className="
           rounded-2xl p-3 
           bg-white/70 dark:bg-white/10

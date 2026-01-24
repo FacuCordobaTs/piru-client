@@ -5,7 +5,8 @@ import { Input } from '@/components/ui/input'
 import { useMesaStore } from '@/store/mesaStore'
 import { mesaApi, ApiError } from '@/lib/api'
 import { toast } from 'sonner'
-import { Loader2, Utensils, ChevronRight, Menu, ShoppingBag, Bell, Users } from 'lucide-react'
+import { Loader2, Utensils, ChevronRight, Menu, ShoppingBag, Bell, Users, ShoppingCart } from 'lucide-react'
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 
 // Features para el carrusel
 const features = [
@@ -39,9 +40,10 @@ const Nombre = () => {
   const [shouldAskName, setShouldAskName] = useState(false)
   const [currentFeature, setCurrentFeature] = useState(0)
   const [dataLoaded, setDataLoaded] = useState(false) // Flag para saber si ya se cargaron datos del servidor
-  const { 
+  const [showCarritoModal, setShowCarritoModal] = useState(false) // Modal para carritos existentes
+  const {
     setMesa, setProductos, setQrToken, setClienteInfo, setPedidoId, setPedido, setRestaurante,
-    pedido, clienteNombre, qrToken: storedQrToken, isHydrated, sessionEnded, 
+    pedido, clienteNombre, qrToken: storedQrToken, isHydrated, sessionEnded,
     reset, clearPedidoCerrado, restaurante, mesa
   } = useMesaStore()
 
@@ -57,7 +59,7 @@ const Nombre = () => {
   useEffect(() => {
     // Esperar a que el store se hidrate
     if (!isHydrated) return
-    
+
     // Si es un nuevo QR diferente al guardado, o la sesión terminó, limpiar datos
     if (urlQrToken && (urlQrToken !== storedQrToken || sessionEnded)) {
       console.log('Nuevo QR o sesión terminada, limpiando datos anteriores', { urlQrToken, storedQrToken, sessionEnded })
@@ -67,7 +69,7 @@ const Nombre = () => {
       setShouldAskName(true)
       return // Importante: retornar para no seguir con la redirección
     }
-    
+
     // Si ya tiene nombre para este mismo QR y la sesión no terminó, redirigir automáticamente
     // PERO solo si ya tenemos datos del servidor cargados (dataLoaded)
     if (urlQrToken === storedQrToken && clienteNombre && !sessionEnded && dataLoaded) {
@@ -128,18 +130,20 @@ const Nombre = () => {
               estado: string
               total: string
               createdAt: string
+              nombrePedido?: string | null
             }
             restaurante: {
               id: number
               nombre: string
               imagenUrl: string | null
               mpConnected: boolean | null
+              esCarrito: boolean | null
             } | null
           }
-        } 
+        }
 
         console.log('response', response)
-        
+
         if (response.success && response.data) {
           setMesa(response.data.mesa)
           setProductos(response.data.productos || [])
@@ -147,6 +151,11 @@ const Nombre = () => {
           setPedido(response.data.pedido)
           setRestaurante(response.data.restaurante || null)
           setDataLoaded(true) // Marcar que los datos del servidor ya se cargaron
+
+          // Si es carrito y ya tiene nombrePedido, mostrar modal de bienvenida
+          if (response.data.restaurante?.esCarrito && response.data.pedido.nombrePedido) {
+            setShowCarritoModal(true)
+          }
         } else {
           toast.error('Error al cargar la mesa')
           navigate('/')
@@ -176,12 +185,12 @@ const Nombre = () => {
       // Generar ID único para el cliente
       const clienteId = `cliente-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
       setClienteInfo(clienteId, nombre.trim())
-      
+
       // Redirigir según el estado del pedido del SERVIDOR (no del localStorage viejo)
       // El pedido ya se actualizó desde el servidor en el useEffect de carga
       const estadoPedido = pedido?.estado
       console.log('Redirigiendo después de ingresar nombre, estado:', estadoPedido)
-      
+
       if (estadoPedido === 'preparing' || estadoPedido === 'delivered') {
         navigate('/pedido-confirmado')
       } else if (estadoPedido === 'closed') {
@@ -219,8 +228,8 @@ const Nombre = () => {
         <div className="mb-6 animate-in fade-in slide-in-from-bottom-4 duration-700 flex items-center gap-3">
           {restaurante?.imagenUrl ? (
             <div className="w-12 h-12 rounded-xl overflow-hidden shadow-lg ring-2 ring-white dark:ring-neutral-800">
-              <img 
-                src={restaurante.imagenUrl} 
+              <img
+                src={restaurante.imagenUrl}
                 alt={restaurante.nombre || 'Restaurante'}
                 className="w-full h-full object-cover"
               />
@@ -242,15 +251,14 @@ const Nombre = () => {
             {features.map((feature, index) => {
               const Icon = feature.icon
               const isActive = index === currentFeature
-              
+
               return (
                 <div
                   key={index}
-                  className={`absolute inset-0 flex flex-col items-center justify-center text-center px-4 transition-all duration-500 ease-out ${
-                    isActive 
-                      ? 'opacity-100 translate-y-0' 
-                      : 'opacity-0 translate-y-4 pointer-events-none'
-                  }`}
+                  className={`absolute inset-0 flex flex-col items-center justify-center text-center px-4 transition-all duration-500 ease-out ${isActive
+                    ? 'opacity-100 translate-y-0'
+                    : 'opacity-0 translate-y-4 pointer-events-none'
+                    }`}
                 >
                   <div className="w-14 h-14 rounded-2xl bg-neutral-900 dark:bg-white flex items-center justify-center mb-3 shadow-lg">
                     <Icon className="h-7 w-7 text-white dark:text-neutral-900" />
@@ -265,18 +273,17 @@ const Nombre = () => {
               )
             })}
           </div>
-          
+
           {/* Indicadores del carrusel */}
           <div className="flex justify-center gap-2 mt-4">
             {features.map((_, index) => (
               <button
                 key={index}
                 onClick={() => setCurrentFeature(index)}
-                className={`h-1.5 rounded-full transition-all duration-300 ${
-                  index === currentFeature 
-                    ? 'w-6 bg-neutral-900 dark:bg-white' 
-                    : 'w-1.5 bg-neutral-300 dark:bg-neutral-600'
-                }`}
+                className={`h-1.5 rounded-full transition-all duration-300 ${index === currentFeature
+                  ? 'w-6 bg-neutral-900 dark:bg-white'
+                  : 'w-1.5 bg-neutral-300 dark:bg-neutral-600'
+                  }`}
               />
             ))}
           </div>
@@ -307,9 +314,9 @@ const Nombre = () => {
                   className="h-14 text-lg text-center rounded-2xl border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800 focus:bg-white dark:focus:bg-neutral-900 transition-colors placeholder:text-neutral-400"
                 />
               </div>
-              
-              <Button 
-                type="submit" 
+
+              <Button
+                type="submit"
                 className="w-full h-14 text-base font-semibold rounded-2xl bg-neutral-900 hover:bg-neutral-800 dark:bg-white dark:hover:bg-neutral-100 dark:text-neutral-900 transition-all duration-200 shadow-lg hover:shadow-xl hover:scale-[1.02] active:scale-[0.98]"
                 disabled={!nombre.trim()}
               >
@@ -327,6 +334,32 @@ const Nombre = () => {
           Powered by Piru
         </p>
       </div>
+
+      {/* Modal para carritos existentes */}
+      <Dialog open={showCarritoModal} onOpenChange={setShowCarritoModal}>
+        <DialogContent className="max-w-sm rounded-3xl p-6">
+          <DialogHeader className="text-center sm:text-center">
+            <div className="mx-auto w-16 h-16 rounded-full bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center mb-4">
+              <ShoppingCart className="w-8 h-8 text-orange-600 dark:text-orange-400" />
+            </div>
+            <DialogTitle className="text-xl">
+              {pedido?.nombrePedido ? `Pedido de ${pedido.nombrePedido}` : 'Pedido en grupo'}
+            </DialogTitle>
+            <DialogDescription className="text-center pt-2 space-y-2">
+              <p>Te estás uniendo a un pedido existente.</p>
+              <p className="font-medium text-orange-700 dark:text-orange-300">
+                Cuando el pedido esté listo, serán llamados como "{pedido?.nombrePedido ? `Pedido de ${pedido.nombrePedido}` : 'este pedido'}"
+              </p>
+            </DialogDescription>
+          </DialogHeader>
+          <Button
+            onClick={() => setShowCarritoModal(false)}
+            className="w-full h-12 mt-4 rounded-2xl font-semibold"
+          >
+            Entendido
+          </Button>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

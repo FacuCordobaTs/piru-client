@@ -14,6 +14,7 @@ import PedidoCerrado from './pages/PedidoCerrado'
 import Pago from './pages/Pago'
 import Factura from './pages/Factura'
 import { PagoExitoso, PagoFallido, PagoPendiente } from './pages/PagoResultado'
+import EsperandoPedido from './pages/EsperandoPedido'
 
 const router = createBrowserRouter([
   {
@@ -48,6 +49,10 @@ const router = createBrowserRouter([
     path: "/factura",
     element: <Factura />,
   },
+  {
+    path: "/esperando-pedido",
+    element: <EsperandoPedido />,
+  },
   // Rutas de resultado de pago de MercadoPago
   {
     path: "/pago-exitoso",
@@ -80,7 +85,7 @@ createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <ThemeProvider defaultTheme="system" storageKey="piru-ui-theme">
       <RouterProvider router={router} />
-      <Toaster 
+      <Toaster
         position="top-center"
         richColors
         closeButton

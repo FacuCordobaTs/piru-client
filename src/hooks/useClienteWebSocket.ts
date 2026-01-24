@@ -51,9 +51,10 @@ interface UseClienteWebSocketReturn {
 const WS_URL = import.meta.env.VITE_WS_URL || 'wss://api.piru.app'
 
 export const useClienteWebSocket = (): UseClienteWebSocketReturn => {
-  const { 
-    qrToken, clienteId, clienteNombre, setClientes, setPedidoId, 
-    setPedidoCerrado, clearPedidoCerrado, setSubtotalesPagados, pedidoId, sessionEnded, endSession
+  const {
+    qrToken, clienteId, clienteNombre, setClientes, setPedidoId,
+    setPedidoCerrado, clearPedidoCerrado, setSubtotalesPagados, pedidoId, sessionEnded, endSession,
+    setPedido, setPedidoListo
   } = useMesaStore()
   const { clearCarrito } = useCarritoStore()
   const [state, setState] = useState<WebSocketState | null>(null)
@@ -65,11 +66,11 @@ export const useClienteWebSocket = (): UseClienteWebSocketReturn => {
   const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const hasConnectedRef = useRef(false)
   const connectionIdRef = useRef<string | null>(null)
-  
+
   // Refs para acceder a los valores actuales sin causar reconexiones
   const clienteIdRef = useRef(clienteId)
   const clienteNombreRef = useRef(clienteNombre)
-  
+
   // Mantener refs actualizados
   useEffect(() => {
     clienteIdRef.current = clienteId
@@ -100,7 +101,7 @@ export const useClienteWebSocket = (): UseClienteWebSocketReturn => {
   useEffect(() => {
     // No enviar si la sesión terminó o si ya se envió para esta conexión
     if (sessionEnded) return
-    
+
     if (isConnected && clienteId && clienteNombre && !hasConnectedRef.current && connectionIdRef.current) {
       console.log('Enviando CLIENTE_CONECTADO para conexión:', connectionIdRef.current)
       hasConnectedRef.current = true
@@ -127,7 +128,7 @@ export const useClienteWebSocket = (): UseClienteWebSocketReturn => {
       wsRef.current.close(1000, 'qrToken changed')
       wsRef.current = null
     }
-    
+
     // Limpiar timeout de reconexión si existe
     if (reconnectTimeoutRef.current) {
       clearTimeout(reconnectTimeoutRef.current)
@@ -144,19 +145,19 @@ export const useClienteWebSocket = (): UseClienteWebSocketReturn => {
         console.log('Sesión terminada, no reconectando')
         return
       }
-      
+
       // Prevenir múltiples conexiones simultáneas
       if (wsRef.current && wsRef.current.readyState === WebSocket.CONNECTING) {
         console.log('Ya hay una conexión en progreso, ignorando...')
         return
       }
-      
+
       // Verificar que el ID de conexión no haya cambiado (componente desmontado y remontado)
       if (connectionIdRef.current !== instanceId) {
         console.log('ID de conexión cambió, abortando conexión antigua')
         return
       }
-      
+
       try {
         console.log('Conectando WebSocket para qrToken:', qrToken, 'instancia:', instanceId)
         const ws = new WebSocket(`${WS_URL}/ws/${qrToken}`)
@@ -169,7 +170,7 @@ export const useClienteWebSocket = (): UseClienteWebSocketReturn => {
             ws.close(1000, 'Obsolete connection')
             return
           }
-          
+
           console.log('WebSocket conectado para cliente:', qrToken)
           setIsConnected(true)
           setError(null)
@@ -188,7 +189,7 @@ export const useClienteWebSocket = (): UseClienteWebSocketReturn => {
                 const nuevosItems = data.payload.items || []
                 const nuevoTotal = data.payload.total || '0.00'
                 const nuevoPedidoId = data.payload.pedidoId
-                
+
                 // Siempre confiar en los datos del servidor - es la fuente de verdad
                 // Si el servidor envía un pedido vacío, es porque es un nuevo pedido
                 console.log('Estado inicial recibido:', {
@@ -196,7 +197,7 @@ export const useClienteWebSocket = (): UseClienteWebSocketReturn => {
                   estado: nuevoEstado,
                   items: nuevosItems.length
                 })
-                
+
                 setState({
                   items: nuevosItems,
                   total: nuevoTotal,
@@ -267,11 +268,11 @@ export const useClienteWebSocket = (): UseClienteWebSocketReturn => {
                 const cerradoItems = data.payload.items || []
                 const cerradoTotal = data.payload.pedido?.total || '0.00'
                 const cerradoPedidoId = data.payload.pedido?.id || pedidoId
-                
+
                 // Limpiar subtotales pagados de sesiones anteriores cuando se cierra un nuevo pedido
                 // Esto evita que se muestren como pagados cuando en realidad no lo están
                 setSubtotalesPagados([])
-                
+
                 // Guardar datos del pedido cerrado en el store para poder mostrarlos en la factura
                 if (cerradoItems.length > 0 && cerradoPedidoId) {
                   setPedidoCerrado({
@@ -280,7 +281,7 @@ export const useClienteWebSocket = (): UseClienteWebSocketReturn => {
                     pedidoId: cerradoPedidoId,
                   })
                 }
-                
+
                 setState({
                   items: cerradoItems,
                   total: cerradoTotal,
@@ -292,18 +293,18 @@ export const useClienteWebSocket = (): UseClienteWebSocketReturn => {
                 // El admin reseteó la mesa - se creó un nuevo pedido vacío
                 console.log('Mesa reseteada por admin:', data.payload)
                 const nuevoPedidoIdReset = data.payload.nuevoPedidoId
-                
+
                 // Limpiar carrito local
                 clearCarrito()
-                
+
                 // Limpiar datos del pedido cerrado anterior (ya no es relevante)
                 clearPedidoCerrado()
-                
+
                 // Actualizar el pedidoId al nuevo pedido
                 if (nuevoPedidoIdReset) {
                   setPedidoId(nuevoPedidoIdReset)
                 }
-                
+
                 // Establecer estado como pending con items vacíos
                 // El usuario será redirigido automáticamente por la lógica de redirección en las páginas
                 setState({
@@ -318,7 +319,7 @@ export const useClienteWebSocket = (): UseClienteWebSocketReturn => {
                 const pagadoTotal = data.payload.total || data.payload.pedido?.total || '0.00'
                 const pagadoPedidoId = data.payload.pedido?.id || pedidoId
                 const metodoPago = data.payload.metodo || 'efectivo'
-                
+
                 // Guardar datos del pedido pagado en el store para poder mostrarlos en la factura
                 if (pagadoItems.length > 0 && pagadoPedidoId) {
                   setPedidoCerrado({
@@ -327,10 +328,10 @@ export const useClienteWebSocket = (): UseClienteWebSocketReturn => {
                     pedidoId: pagadoPedidoId,
                   })
                 }
-                
+
                 // Terminar la sesión para evitar reconexiones
                 endSession()
-                
+
                 // Redirigir a la pantalla de factura con el método de pago
                 window.location.href = `/factura?metodo=${metodoPago}`
                 break
@@ -368,6 +369,22 @@ export const useClienteWebSocket = (): UseClienteWebSocketReturn => {
                 console.error('Error del servidor:', data.payload)
                 setError(data.payload.message)
                 break
+
+              // Mensajes de modo carrito
+              case 'NOMBRE_PEDIDO_ASIGNADO':
+                console.log('Nombre del pedido asignado (carrito):', data.payload)
+                // Actualizar el pedido en el store con el nuevo nombrePedido
+                const nombreAsignado = data.payload.nombrePedido
+                useMesaStore.getState().pedido && setPedido({
+                  ...useMesaStore.getState().pedido!,
+                  nombrePedido: nombreAsignado
+                })
+                break
+
+              case 'PEDIDO_LISTO_PARA_RETIRAR':
+                console.log('¡Pedido listo para retirar!', data.payload)
+                setPedidoListo(true)
+                break
             }
           } catch (err) {
             console.error('Error parseando mensaje WebSocket:', err)
@@ -386,11 +403,11 @@ export const useClienteWebSocket = (): UseClienteWebSocketReturn => {
             console.log('Conexión obsoleta cerrada, ignorando')
             return
           }
-          
+
           console.log('WebSocket cerrado, código:', event.code)
           setIsConnected(false)
           hasConnectedRef.current = false
-          
+
           // Solo reconectar si no fue un cierre intencional y la sesión no terminó
           if (event.code !== 1000 && !sessionEnded) {
             console.log('Intentando reconectar en 3 segundos...')
@@ -410,7 +427,7 @@ export const useClienteWebSocket = (): UseClienteWebSocketReturn => {
     return () => {
       console.log('Limpiando conexión WebSocket, instancia:', instanceId)
       connectionIdRef.current = null
-      
+
       if (reconnectTimeoutRef.current) {
         clearTimeout(reconnectTimeoutRef.current)
         reconnectTimeoutRef.current = null

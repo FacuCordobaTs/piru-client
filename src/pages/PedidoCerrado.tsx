@@ -568,6 +568,12 @@ const PedidoCerrado = () => {
     return acc
   }, {} as Record<string, typeof items>)
 
+  // Si es carrito y todo pagado, redirigir a pantalla de espera
+  if ((todoPagado || (sessionEnded && hayItems && totalPedidoNum > 0.01 && totalPendiente <= 0.01)) && restaurante?.esCarrito) {
+    navigate('/esperando-pedido')
+    return null
+  }
+
   if (todoPagado || (sessionEnded && hayItems && totalPedidoNum > 0.01 && totalPendiente <= 0.01)) {
     return (
       <div className="min-h-screen bg-linear-to-b from-neutral-100 to-neutral-200 dark:from-neutral-950 dark:to-neutral-900 py-8 pb-32">

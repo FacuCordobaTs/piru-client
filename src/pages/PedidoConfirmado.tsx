@@ -6,18 +6,18 @@ import { Badge } from '@/components/ui/badge'
 import { useMesaStore } from '@/store/mesaStore'
 import { useClienteWebSocket } from '@/hooks/useClienteWebSocket'
 import { toast } from 'sonner'
-import { 
-  CheckCircle2, ChefHat, Bell, Receipt, Plus, 
-  ArrowLeft, Package, UtensilsCrossed, Loader2 
+import {
+  CheckCircle2, ChefHat, Bell, Receipt, Plus,
+  ArrowLeft, Package, UtensilsCrossed, Loader2
 } from 'lucide-react'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { usePreventBackNavigation } from '@/hooks/usePreventBackNavigation'
 
 const PedidoConfirmado = () => {
   const navigate = useNavigate()
-  const { productos, clienteNombre, qrToken, isHydrated, sessionEnded } = useMesaStore()
+  const { productos, clienteNombre, qrToken, isHydrated, sessionEnded, restaurante } = useMesaStore()
   const { state: wsState, sendMessage } = useClienteWebSocket()
-  
+
   const [verPedidoAbierto, setVerPedidoAbierto] = useState(false)
   const [llamarMozoAbierto, setLlamarMozoAbierto] = useState(false)
   const [pedirCuentaAbierto, setPedirCuentaAbierto] = useState(false)
@@ -31,16 +31,23 @@ const PedidoConfirmado = () => {
   useEffect(() => {
     // Esperar a que el store se hidrate
     if (!isHydrated) return
-    
+
     // Si la sesión terminó, redirigir a escanear QR para cargar datos frescos
     if (sessionEnded) {
       navigate(`/mesa/${qrToken || 'invalid'}`)
       return
     }
-    
+
     // Si no hay datos del cliente, redirigir a escanear QR
     if (!clienteNombre || !qrToken) {
       navigate(`/mesa/${qrToken || 'invalid'}`)
+      return
+    }
+
+    // MODO CARRITO: Si es carrito y el pedido está en preparing, redirigir directo a pago
+    // En carritos, se paga antes de recibir el pedido
+    if (restaurante?.esCarrito && wsState?.estado === 'preparing') {
+      navigate('/pedido-cerrado')
       return
     }
 
@@ -54,7 +61,7 @@ const PedidoConfirmado = () => {
       }
       // Si es 'preparing' o 'delivered', quedarse aquí
     }
-  }, [clienteNombre, qrToken, wsState?.estado, navigate, isHydrated, sessionEnded])
+  }, [clienteNombre, qrToken, wsState?.estado, navigate, isHydrated, sessionEnded, restaurante?.esCarrito])
 
   const todosLosItems = wsState?.items || []
   const totalPedido = wsState?.total || '0.00'
@@ -96,14 +103,14 @@ const PedidoConfirmado = () => {
   return (
     <div className="min-h-screen bg-linear-to-b from-neutral-50 to-neutral-100 dark:from-neutral-950 dark:to-neutral-900 pb-32">
       <div className="max-w-md mx-auto px-6 py-12 space-y-8">
-        
+
         {/* Header con animación */}
         <div className="text-center space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-700">
           {/* Icono de éxito */}
           <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-primary/10 mb-2">
             <CheckCircle2 className="w-10 h-10 text-primary" />
           </div>
-          
+
           <h1 className="text-2xl font-bold text-neutral-900 dark:text-white">
             ¡Pedido confirmado!
           </h1>
@@ -173,9 +180,9 @@ const PedidoConfirmado = () => {
           <div className="flex flex-col h-full">
             {/* Header del Sheet */}
             <div className="px-6 py-5 flex items-center gap-4 border-b border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 sticky top-0 z-10">
-              <Button 
-                variant="ghost" 
-                size="icon" 
+              <Button
+                variant="ghost"
+                size="icon"
                 className="rounded-full -ml-2 hover:bg-neutral-100 dark:hover:bg-neutral-800"
                 onClick={() => setVerPedidoAbierto(false)}
               >
@@ -208,11 +215,10 @@ const PedidoConfirmado = () => {
                   const precio = parseFloat(item.precioUnitario || '0')
 
                   return (
-                    <div 
+                    <div
                       key={item.id}
-                      className={`relative flex gap-4 p-3 rounded-2xl border transition-all animate-in fade-in slide-in-from-right duration-300 ${
-                        esMio ? 'bg-card border-primary/20 shadow-sm' : 'bg-secondary/30 border-transparent opacity-90'
-                      }`}
+                      className={`relative flex gap-4 p-3 rounded-2xl border transition-all animate-in fade-in slide-in-from-right duration-300 ${esMio ? 'bg-card border-primary/20 shadow-sm' : 'bg-secondary/30 border-transparent opacity-90'
+                        }`}
                       style={{ animationDelay: `${index * 50}ms` }}
                     >
                       <div className="w-20 h-20 shrink-0 rounded-xl overflow-hidden bg-secondary">
@@ -260,7 +266,7 @@ const PedidoConfirmado = () => {
                   ${totalPedido}
                 </span>
               </div>
-              <Button 
+              <Button
                 className="w-full h-12 text-base font-semibold rounded-2xl bg-primary hover:bg-primary/90"
                 onClick={() => {
                   setVerPedidoAbierto(false)
@@ -287,8 +293,8 @@ const PedidoConfirmado = () => {
               Hemos enviado una notificación al mozo. Se acercará a tu mesa en breve.
             </DialogDescription>
           </DialogHeader>
-          <Button 
-            onClick={() => setLlamarMozoAbierto(false)} 
+          <Button
+            onClick={() => setLlamarMozoAbierto(false)}
             className="w-full h-12 mt-6 rounded-2xl bg-primary hover:bg-primary/90"
           >
             Entendido
@@ -309,15 +315,15 @@ const PedidoConfirmado = () => {
             </DialogDescription>
           </DialogHeader>
           <div className="flex gap-3 mt-6">
-            <Button 
-              variant="outline" 
-              onClick={() => setPedirCuentaAbierto(false)} 
+            <Button
+              variant="outline"
+              onClick={() => setPedirCuentaAbierto(false)}
               className="flex-1 h-12 rounded-2xl"
             >
               Cancelar
             </Button>
-            <Button 
-              onClick={confirmarCerrarPedido} 
+            <Button
+              onClick={confirmarCerrarPedido}
               className="flex-1 h-12 rounded-2xl bg-primary hover:bg-primary/90"
             >
               Sí, pedir cuenta

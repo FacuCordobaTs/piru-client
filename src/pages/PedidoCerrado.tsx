@@ -1127,13 +1127,13 @@ const PedidoCerrado = () => {
           )}
 
           {/* Clientes que deben pagar en efectivo */}
-          {clientesEfectivo.length > 0 && (
+          {clientesEsperandoConfirmacion.length > 0 && (
             <div className="space-y-3 pt-2">
               <p className="text-sm font-medium text-amber-600 dark:text-amber-400 flex items-center gap-2">
                 <Wallet className="w-4 h-4" />
-                Debe pagar en efectivo
+                Esperando confirmación del cajero
               </p>
-              {clientesEfectivo.map((cliente) => (
+              {clientesEsperandoConfirmacion.map((cliente: any) => (
                 <div
                   key={cliente.clienteNombre}
                   className="bg-amber-50 dark:bg-amber-950/30 rounded-2xl p-4 border border-amber-200 dark:border-amber-800"

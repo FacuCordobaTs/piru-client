@@ -44,22 +44,20 @@ const PedidoConfirmado = () => {
       return
     }
 
-    // MODO CARRITO: Si es carrito y el pedido está en preparing, redirigir directo a pago
-    // En carritos, se paga antes de recibir el pedido
+    // MODO CARRITO: Redirección forzada si está en preparing
     if (restaurante?.esCarrito && wsState?.estado === 'preparing') {
-      navigate('/pedido-cerrado')
+      // Usar replace: true para que el usuario no pueda volver atrás a esta pantalla
+      navigate('/pedido-cerrado', { replace: true })
       return
     }
 
-    // Redirigir según el estado actual del pedido
+    // Navegación estándar de estados
     if (wsState?.estado) {
       if (wsState.estado === 'closed') {
         navigate('/pedido-cerrado')
       } else if (wsState.estado === 'pending') {
-        // Si el pedido volvió a pending (posiblemente un nuevo pedido), ir al menú
         navigate('/menu')
       }
-      // Si es 'preparing' o 'delivered', quedarse aquí
     }
   }, [clienteNombre, qrToken, wsState?.estado, navigate, isHydrated, sessionEnded, restaurante?.esCarrito])
 

@@ -14,7 +14,7 @@ import { useClienteWebSocket } from '@/hooks/useClienteWebSocket'
  *   - disabled: Si es true, el guard no se ejecuta (útil para pantallas finales)
  */
 export const useRouteGuard = (
-  allowedStates: Array<'pending' | 'preparing' | 'closed' | null>,
+  allowedStates: Array<'pending' | 'preparing' | 'closed' | 'delivered' | null>,
   options?: {
     redirectTo?: string
     disabled?: boolean
@@ -56,37 +56,51 @@ export const useRouteGuard = (
     // Obtener el estado actual del pedido
     const currentState = wsState?.estado || null
 
-    // Verificar si el estado actual está permitido para esta ruta
-    const isStateAllowed = allowedStates.includes(currentState as 'pending' | 'preparing' | 'closed' | null)
+    // LÓGICA ESPECIAL PARA CARRITOS:
+    // Si estamos en un Carrito y el estado es 'preparing', el usuario DEBE poder estar en:
+    // 1. /pedido-cerrado (para pagar)
+    // 2. /esperando-pedido (si ya pagó)
+    // Por lo tanto, si la ruta actual es /pedido-cerrado, consideramos 'preparing' como válido forzosamente.
+    let isEffectiveStateAllowed = allowedStates.includes(currentState as any)
 
-    // Si el estado no está permitido, redirigir a la pantalla correcta
-    // Usar una clave única basada en la ruta y el estado para evitar loops
-    if (!isStateAllowed) {
+    if (restaurante?.esCarrito && currentState === 'preparing' && location.pathname === '/pedido-cerrado') {
+      isEffectiveStateAllowed = true;
+    }
+
+    if (!isEffectiveStateAllowed) {
       const redirectKey = `${location.pathname}-${currentState}`
 
-      // Solo redirigir si no hemos redirigido ya para esta combinación de ruta+estado
-      if (lastRedirectedState.current !== redirectKey) {
-        lastRedirectedState.current = redirectKey
+      // Evitar re-procesar la misma redirección
+      if (lastRedirectedState.current === redirectKey) return
 
-        if (redirectTo) {
-          navigate(redirectTo, { replace: true })
-        } else {
-          // Redirigir según el estado del pedido
-          if (currentState === 'preparing' || currentState === 'delivered') {
-            // Carritos: ir a pagar primero
-            if (restaurante?.esCarrito) {
-              navigate('/pedido-cerrado', { replace: true })
-            } else {
-              navigate('/pedido-confirmado', { replace: true })
-            }
-          } else if (currentState === 'closed') {
-            navigate('/pedido-cerrado', { replace: true })
+      let targetPath = ''
+
+      if (redirectTo) {
+        targetPath = redirectTo
+      } else {
+        // Lógica inteligente de redirección
+        if (currentState === 'preparing' || currentState === 'delivered') {
+          // Carritos: ir a pagar primero
+          if (restaurante?.esCarrito) {
+            targetPath = '/pedido-cerrado'
           } else {
-            // Estado 'pending' o null - ir al menú
-            navigate('/menu', { replace: true })
+            targetPath = '/pedido-confirmado'
           }
+        } else if (currentState === 'closed') {
+          targetPath = '/pedido-cerrado'
+        } else {
+          targetPath = '/menu' // Default para pending/null
         }
       }
+
+      // CORRECCIÓN CRÍTICA ANTI-BUCLE:
+      // Si la ruta destino es la misma en la que ya estamos, NO hacer nada.
+      if (targetPath === location.pathname) {
+        return;
+      }
+
+      lastRedirectedState.current = redirectKey
+      navigate(targetPath, { replace: true })
     }
   }, [
     isHydrated,

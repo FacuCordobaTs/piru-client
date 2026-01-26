@@ -55,27 +55,49 @@ export const useRouteGuard = (
     let targetPath = ''
     let shouldRedirect = false
 
-    // 1. Caso Especial: Carrito en Preparing/Delivered -> SIEMPRE a Pedido Cerrado (Pago)
-    if (esCarrito && (currentState === 'preparing' || currentState === 'delivered')) {
-      // Si YA estamos en pedido-cerrado o esperando-pedido, estamos bien.
-      if (location.pathname !== '/pedido-cerrado' && location.pathname !== '/esperando-pedido') {
-        targetPath = '/pedido-cerrado'
-        shouldRedirect = true
-      }
-    }
-    // 2. Caso Normal: Verificar estados permitidos
-    else if (!allowedStates.includes(currentState as any)) {
-      shouldRedirect = true
-      if (redirectTo) {
-        targetPath = redirectTo
-      } else {
-        // Lógica por defecto
-        if (currentState === 'preparing' || currentState === 'delivered') {
-          targetPath = '/pedido-confirmado' // Solo restaurantes clásicos llegan aquí
-        } else if (currentState === 'closed') {
+    // DETECCIÓN ROBUSTA DE MODO CARRITO
+    // Aseguramos que si existe la bandera, se respete por encima de todo
+    // (esCarrito ya fue declarado arriba: const esCarrito = restaurante?.esCarrito === true)
+
+    // 1. PRIORIDAD ABSOLUTA: Modo Carrito
+    if (esCarrito) {
+      if (currentState === 'preparing' || currentState === 'delivered') {
+        // En modo carrito, 'preparing' y 'delivered' SIEMPRE van a la pantalla de pago (pedido-cerrado)
+        // o a esperando-pedido si ya pagó (esto lo maneja el componente PedidoCerrado)
+        const validPaths = ['/pedido-cerrado', '/esperando-pedido']
+
+        if (!validPaths.includes(location.pathname)) {
           targetPath = '/pedido-cerrado'
+          shouldRedirect = true
+        }
+      }
+      // Si no es preparing/delivered, dejamos que fluya o (opcionalmente) aplicamos reglas de pending
+    }
+
+    // 2. PRIORIDAD ESTÁNDAR: Si NO se activó una redirección de carrito, verificamos estados permitidos
+    // Nota: El `else` aquí es implícito porque si `shouldRedirect` ya es true, no sobreescribimos
+    if (!shouldRedirect) {
+      // Si allowedStates no incluye el estado actual, DEBEMOS redirigir
+      if (!allowedStates.includes(currentState as any)) {
+        shouldRedirect = true
+
+        if (redirectTo) {
+          targetPath = redirectTo
         } else {
-          targetPath = '/menu'
+          // Lógica por defecto para RESTAURANTE (No Carrito)
+          if (currentState === 'preparing' || currentState === 'delivered') {
+            // CRÍTICO: Si por alguna razón estamos aquí y esCarrito es true (falso positivo anterior), 
+            // NO mandarlo a pedido-confirmado.
+            if (esCarrito) {
+              targetPath = '/pedido-cerrado'
+            } else {
+              targetPath = '/pedido-confirmado'
+            }
+          } else if (currentState === 'closed') {
+            targetPath = '/pedido-cerrado'
+          } else {
+            targetPath = '/menu'
+          }
         }
       }
     }
@@ -85,9 +107,10 @@ export const useRouteGuard = (
       // Protección anti-bucle: Si ya estamos en el target, no hacer nada
       if (location.pathname === targetPath) return
 
-      const redirectKey = `${location.pathname}-${currentState}`
+      const redirectKey = `${location.pathname}-${currentState}-${targetPath}`
       if (lastRedirectedState.current === redirectKey) return
 
+      console.log(`[RouteGuard] Redirecting from ${location.pathname} to ${targetPath} (State: ${currentState}, Carrito: ${esCarrito})`)
       lastRedirectedState.current = redirectKey
       navigate(targetPath, { replace: true })
     }

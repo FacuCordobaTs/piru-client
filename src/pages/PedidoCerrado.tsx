@@ -216,19 +216,26 @@ const PedidoCerrado = () => {
     }
 
     // LÓGICA ESPECÍFICA PARA CARRITOS
-    if (restaurante?.esCarrito && (wsState?.estado === 'preparing' || wsState?.estado === 'delivered')) {
+    const esCarrito = restaurante?.esCarrito === true
+
+    // Si es carrito y estamos en preparing/delivered -> Quedarse aquí.
+    if (esCarrito && (wsState?.estado === 'preparing' || wsState?.estado === 'delivered')) {
       // Si ya pagó todo, ir a esperando-pedido
       // AGREGADO: Verificación extra totalPagado > 0 para evitar falsos positivos con datos vacíos
       if (todoPagado && totalPagado > 0) {
         navigate('/esperando-pedido')
       }
-      return // Quedarse aquí para pagar
+      return // IMPORTANTE: Return explícito para evitar caer en la lógica de abajo
     }
 
-    // Si el estado es 'preparing' o 'delivered' (y NO es carrito), redirigir a pedido confirmado
-    if (wsState?.estado === 'preparing' || wsState?.estado === 'delivered') {
-      navigate('/pedido-confirmado')
-      return
+    // LÓGICA PARA RESTAURANTE CLÁSICO (NO CARRITO)
+    // Solo redirigir si estamos SEGUROS de que no es carrito (restaurante existe y esCarrito es false)
+    if (restaurante && !esCarrito) {
+      // Si el estado es 'preparing' o 'delivered', redirigir a pedido confirmado
+      if (wsState?.estado === 'preparing' || wsState?.estado === 'delivered') {
+        navigate('/pedido-confirmado')
+        return
+      }
     }
 
     // Si el estado es 'pending' y no hay pedidoCerrado válido, redirigir al menú

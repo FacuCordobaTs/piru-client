@@ -193,58 +193,47 @@ const PedidoCerrado = () => {
     // Esperar a que el store se hidrate
     if (!isHydrated) return
 
-    // Si no hay datos del cliente, redirigir a escanear QR para que cargue datos frescos
+    // Si no hay datos del cliente, redirigir a escanear QR
     if (!clienteNombre || !qrToken) {
       navigate(`/mesa/${qrToken || 'invalid'}`)
       return
     }
 
-    // PROTECCIÓN CONTRA REDIRECT PREMATURO:
-    // Si estamos cargando los subtotales, NO redirigir todavía
-    if (loadingSubtotales && restaurante?.esCarrito) return
-
-    // Si ya se pagó todo (hay items y total pendiente es 0), no redirigir
-    // EXCEPT if it's a carrito flow handled below
+    // Si ya se pagó todo, no redirigir (excepto lógica de carrito abajo)
     if (todoPagado && !restaurante?.esCarrito) return
 
-    // Si la sesión terminó legítimamente (hay items y se marcó como terminada), no redirigir
-    if (sessionEnded && hayItems && !restaurante?.esCarrito) return
+    // CRÍTICO: Si el estado del pedido es 'closed', SIEMPRE quedarse
+    if (wsState?.estado === 'closed') return
 
-    // CRÍTICO: Si el estado del pedido es 'closed', SIEMPRE quedarse en esta página
-    if (wsState?.estado === 'closed') {
-      return // No hacer ninguna redirección si el estado es 'closed'
-    }
-
-    // LÓGICA ESPECÍFICA PARA CARRITOS
-    const esCarrito = restaurante?.esCarrito === true
-
-    // Si es carrito y estamos en preparing/delivered -> Quedarse aquí.
-    if (esCarrito && (wsState?.estado === 'preparing' || wsState?.estado === 'delivered')) {
-      // Si ya pagó todo, ir a esperando-pedido
-      // AGREGADO: Verificación extra totalPagado > 0 para evitar falsos positivos con datos vacíos
-      if (todoPagado && totalPagado > 0) {
-        navigate('/esperando-pedido')
+    // === LÓGICA CARRITO ===
+    if (restaurante?.esCarrito) {
+      // Si es carrito y está preparando/entregado, ESTE ES EL LUGAR CORRECTO (para pagar).
+      // NO HACER NADA (return explícito para evitar que siga ejecutando código)
+      if (wsState?.estado === 'preparing' || wsState?.estado === 'delivered') {
+        // Opcional: Solo si ya pagó todo, mover a esperando-pedido
+        if (todoPagado && totalPagado > 0) {
+          navigate('/esperando-pedido')
+        }
+        return
       }
-      return // IMPORTANTE: Return explícito para evitar caer en la lógica de abajo
     }
 
-    // LÓGICA PARA RESTAURANTE CLÁSICO (NO CARRITO)
-    // Solo redirigir si estamos SEGUROS de que no es carrito (restaurante existe y esCarrito es false)
-    if (restaurante && !esCarrito) {
-      // Si el estado es 'preparing' o 'delivered', redirigir a pedido confirmado
+    // === LÓGICA RESTAURANTE CLÁSICO ===
+    // Solo redirigir si estamos SEGUROS de que NO es carrito
+    // (restaurante && !restaurante.esCarrito) es la clave para evitar race conditions
+    if (restaurante && !restaurante.esCarrito) {
       if (wsState?.estado === 'preparing' || wsState?.estado === 'delivered') {
         navigate('/pedido-confirmado')
         return
       }
     }
 
-    // Si el estado es 'pending' y no hay pedidoCerrado válido, redirigir al menú
+    // Fallbacks generales
     if (wsState?.estado === 'pending' && !pedidoCerrado) {
       navigate(`/mesa/${qrToken}`)
       return
     }
 
-    // Si no hay estado de websocket y tampoco hay pedidoCerrado, redirigir al menú
     if (!wsState?.estado && !pedidoCerrado) {
       navigate(`/mesa/${qrToken}`)
       return
@@ -257,16 +246,13 @@ const PedidoCerrado = () => {
     pedidoCerrado,
     navigate,
     todoPagado,
-    totalPagado, // Agregado a dependencias
+    totalPagado,
     sessionEnded,
     isHydrated,
     hayItems,
-    restaurante?.esCarrito,
-    loadingSubtotales // Agregado a dependencias
+    restaurante, // Asegurar que restaurante esté en dependencias
+    loadingSubtotales
   ])
-
-  // ... (El resto del componente sigue igual: handlers, renderizado, etc.)
-  // ... Copiar el resto del archivo original desde "Manejar selección de cliente" hacia abajo ...
 
   // Manejar selección de cliente
   const handleToggleCliente = (cliente: string) => {

@@ -28,22 +28,17 @@ export const useRouteGuard = (
   const redirectTo = options?.redirectTo
   const disabled = options?.disabled
 
-  // Resetear el flag cuando cambia la ruta (cada componente maneja su propia lógica)
+  // Resetear el flag cuando cambia la ruta
   useEffect(() => {
     lastRedirectedState.current = null
   }, [location.pathname])
 
   useEffect(() => {
-    // Si está deshabilitado, no hacer nada
     if (disabled) return
-
-    // Esperar a que el store se hidrate
     if (!isHydrated) return
-
-    // Si la sesión terminó, no hacer nada (ya está en la pantalla final)
     if (sessionEnded) return
 
-    // Si no hay datos del cliente, redirigir a escanear QR
+    // Validación de datos del cliente
     if (!clienteNombre || !qrToken) {
       const redirectKey = `no-cliente-${location.pathname}`
       if (lastRedirectedState.current !== redirectKey) {
@@ -53,55 +48,50 @@ export const useRouteGuard = (
       return
     }
 
-    // Obtener el estado actual del pedido
     const currentState = wsState?.estado || null
+    const esCarrito = restaurante?.esCarrito === true
 
-    // LÓGICA ESPECIAL PARA CARRITOS:
-    // Si estamos en un Carrito y el estado es 'preparing', el usuario DEBE poder estar en:
-    // 1. /pedido-cerrado (para pagar)
-    // 2. /esperando-pedido (si ya pagó)
-    // Por lo tanto, si la ruta actual es /pedido-cerrado, consideramos 'preparing' como válido forzosamente.
-    let isEffectiveStateAllowed = allowedStates.includes(currentState as any)
+    // === LÓGICA MAESTRA DE REDIRECCIÓN ===
+    let targetPath = ''
+    let shouldRedirect = false
 
-    if (restaurante?.esCarrito && currentState === 'preparing' && location.pathname === '/pedido-cerrado') {
-      isEffectiveStateAllowed = true;
+    // 1. Caso Especial: Carrito en Preparing/Delivered -> SIEMPRE a Pedido Cerrado (Pago)
+    if (esCarrito && (currentState === 'preparing' || currentState === 'delivered')) {
+      // Si YA estamos en pedido-cerrado o esperando-pedido, estamos bien.
+      if (location.pathname !== '/pedido-cerrado' && location.pathname !== '/esperando-pedido') {
+        targetPath = '/pedido-cerrado'
+        shouldRedirect = true
+      }
     }
-
-    if (!isEffectiveStateAllowed) {
-      const redirectKey = `${location.pathname}-${currentState}`
-
-      // Evitar re-procesar la misma redirección
-      if (lastRedirectedState.current === redirectKey) return
-
-      let targetPath = ''
-
+    // 2. Caso Normal: Verificar estados permitidos
+    else if (!allowedStates.includes(currentState as any)) {
+      shouldRedirect = true
       if (redirectTo) {
         targetPath = redirectTo
       } else {
-        // Lógica inteligente de redirección
+        // Lógica por defecto
         if (currentState === 'preparing' || currentState === 'delivered') {
-          // Carritos: ir a pagar primero
-          if (restaurante?.esCarrito) {
-            targetPath = '/pedido-cerrado'
-          } else {
-            targetPath = '/pedido-confirmado'
-          }
+          targetPath = '/pedido-confirmado' // Solo restaurantes clásicos llegan aquí
         } else if (currentState === 'closed') {
           targetPath = '/pedido-cerrado'
         } else {
-          targetPath = '/menu' // Default para pending/null
+          targetPath = '/menu'
         }
       }
+    }
 
-      // CORRECCIÓN CRÍTICA ANTI-BUCLE:
-      // Si la ruta destino es la misma en la que ya estamos, NO hacer nada.
-      if (targetPath === location.pathname) {
-        return;
-      }
+    // Ejecutar redirección si es necesaria
+    if (shouldRedirect && targetPath) {
+      // Protección anti-bucle: Si ya estamos en el target, no hacer nada
+      if (location.pathname === targetPath) return
+
+      const redirectKey = `${location.pathname}-${currentState}`
+      if (lastRedirectedState.current === redirectKey) return
 
       lastRedirectedState.current = redirectKey
       navigate(targetPath, { replace: true })
     }
+
   }, [
     isHydrated,
     sessionEnded,

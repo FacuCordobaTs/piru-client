@@ -34,6 +34,11 @@ export const useRouteGuard = (
   }, [location.pathname])
 
   useEffect(() => {
+    // === EMERGENCY OVERRIDE: GUARD DISABLED ===
+    // El usuario solicitó desactivar todo el guard para depuración
+    return
+
+    /*
     if (disabled) return
     if (!isHydrated) return
     if (sessionEnded) return
@@ -114,7 +119,7 @@ export const useRouteGuard = (
       lastRedirectedState.current = redirectKey
       navigate(targetPath, { replace: true })
     }
-
+    */
   }, [
     isHydrated,
     sessionEnded,

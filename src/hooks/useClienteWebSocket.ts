@@ -19,7 +19,7 @@ interface ItemPedido {
 interface WebSocketState {
   items: ItemPedido[]
   total: string
-  estado: 'pending' | 'preparing' | 'delivered' | 'closed'
+  estado: 'pending' | 'preparing' | 'delivered' | 'closed' | 'served'
 }
 
 // Estado de confirmación de cada cliente

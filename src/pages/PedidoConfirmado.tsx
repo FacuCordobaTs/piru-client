@@ -133,10 +133,14 @@ const PedidoConfirmado = () => {
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-sm font-semibold text-neutral-900 dark:text-white">
-                En preparación
+                {wsState?.estado === 'delivered' ? '¡Pedido Listo!' :
+                  wsState?.estado === 'served' ? '¡Buen provecho!' :
+                    'En preparación'}
               </p>
               <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-0.5">
-                Los mozos te traerán tu pedido pronto
+                {wsState?.estado === 'delivered' ? 'El mozo lo está trayendo a tu mesa' :
+                  wsState?.estado === 'served' ? 'Disfruta de tu comida' :
+                    'Los mozos te traerán tu pedido pronto'}
               </p>
             </div>
             <div className="shrink-0">

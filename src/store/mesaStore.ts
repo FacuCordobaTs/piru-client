@@ -171,6 +171,7 @@ export const useMesaStore = create<MesaState>()(
     {
       name: 'piru-mesa-storage',
       // Solo persistir los datos críticos que necesitamos después de recargas
+      // NO persistir estados de pago (subtotalesPagados, sessionEnded) porque son específicos del pedido actual
       partialize: (state) => ({
         clienteId: state.clienteId,
         clienteNombre: state.clienteNombre,
@@ -181,12 +182,16 @@ export const useMesaStore = create<MesaState>()(
         pedido: state.pedido,
         productos: state.productos,
         pedidoCerrado: state.pedidoCerrado,
-        subtotalesPagados: state.subtotalesPagados,
-        sessionEnded: state.sessionEnded,
+        // NOTA: No persistir subtotalesPagados ni sessionEnded
+        // Estos estados deben obtenerse del servidor para evitar estados inconsistentes
       }),
       onRehydrateStorage: () => (state) => {
         // Marcar como hidratado cuando termine de cargar desde localStorage
         if (state) {
+          // Limpiar estados de pago al rehidratar - siempre empezar limpio
+          state.subtotalesPagados = []
+          state.sessionEnded = false
+          state.pedidoListo = false
           state.setHydrated()
         }
       },

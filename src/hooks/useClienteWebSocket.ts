@@ -190,6 +190,20 @@ export const useClienteWebSocket = (): UseClienteWebSocketReturn => {
                 const nuevoTotal = data.payload.total || '0.00'
                 const nuevoPedidoId = data.payload.pedidoId
 
+                // Detectar si es un pedido diferente al guardado en localStorage
+                // Si es diferente, limpiar estados de pago que podrían ser del pedido anterior
+                const currentPedidoId = useMesaStore.getState().pedidoId
+                if (nuevoPedidoId && currentPedidoId && nuevoPedidoId !== currentPedidoId) {
+                  console.log('🔄 Nuevo pedido detectado, limpiando estado de pago anterior:', {
+                    anterior: currentPedidoId,
+                    nuevo: nuevoPedidoId
+                  })
+                  setSubtotalesPagados([])
+                  setPedidoListo(false)
+                  // También limpiar sessionEnded para permitir nuevo flujo
+                  useMesaStore.setState({ sessionEnded: false })
+                }
+
                 // Siempre confiar en los datos del servidor - es la fuente de verdad
                 // Si el servidor envía un pedido vacío, es porque es un nuevo pedido
                 console.log('Estado inicial recibido:', {
@@ -257,6 +271,9 @@ export const useClienteWebSocket = (): UseClienteWebSocketReturn => {
                   total: data.payload.pedido?.total || '0.00',
                   estado: 'preparing',
                 })
+                // Limpiar estados de pago - el pedido acaba de confirmarse, nadie ha pagado aún
+                setSubtotalesPagados([])
+                setPedidoListo(false)
                 // Limpiar estado de confirmación grupal
                 setConfirmacionGrupal(null)
                 setConfirmacionCancelada(null)

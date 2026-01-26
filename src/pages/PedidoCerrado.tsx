@@ -96,11 +96,26 @@ const PedidoCerrado = () => {
   const totalPagado = subtotales.filter(s => s.pagado).reduce((sum, s) => sum + s.subtotal, 0)
   const totalPedidoNum = parseFloat(totalPedido)
   const totalPendiente = totalPedidoNum - totalPagado
-  // todoPagado es true SOLO si hay items Y el total del pedido es mayor que 0 Y el total pendiente es 0
-  // Si no hay items, NO está "todo pagado", simplemente no hay nada que pagar
-  // También verificamos que totalPedido > 0 para evitar falsos positivos cuando los datos aún no se han cargado
+  // todoPagado es true SOLO si:
+  // 1. Hay items en el pedido
+  // 2. El total del pedido es mayor que 0
+  // 3. El total pendiente es <= 0.01 (margen para redondeo)
+  // 4. HAY AL MENOS UN CLIENTE PAGADO (esto evita falsos positivos cuando no hay datos de pago aún)
   const hayItems = todosLosItems.length > 0
-  const todoPagado = hayItems && totalPedidoNum > 0.01 && totalPendiente <= 0.01 // Pequeño margen para evitar errores de redondeo
+  const hayClientesPagados = subtotales.some(s => s.pagado)
+  const todoPagado = hayItems && totalPedidoNum > 0.01 && totalPendiente <= 0.01 && hayClientesPagados
+
+  // Debug logging
+  console.log('🧾 Estado pago PedidoCerrado:', {
+    hayItems,
+    totalPedidoNum,
+    totalPagado,
+    totalPendiente,
+    hayClientesPagados,
+    todoPagado,
+    subtotales: subtotales.map(s => ({ cliente: s.clienteNombre, pagado: s.pagado, estado: s.estado }))
+  })
+
   // Pendientes: los que no han seleccionado ningún método de pago (estado = pending o undefined)
   const clientesPendientes = subtotales.filter(s => !s.pagado && s.estado !== 'pending_cash')
   // Pagados: los que ya tienen confirmación de pago (estado = paid, cualquier método)

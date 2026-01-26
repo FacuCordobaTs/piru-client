@@ -199,8 +199,16 @@ const PedidoCerrado = () => {
       return
     }
 
+    // === CRITICAL: ESPERAR A QUE RESTAURANTE ESTÉ CARGADO ===
+    // Si restaurante es null, NO PODEMOS saber si es carrito o no.
+    // DEBEMOS esperar a que se cargue antes de tomar cualquier decisión de redirección.
+    if (!restaurante) {
+      console.log('[PedidoCerrado] Esperando a que restaurante se cargue...')
+      return
+    }
+
     // Si ya se pagó todo, no redirigir (excepto lógica de carrito abajo)
-    if (todoPagado && !restaurante?.esCarrito) return
+    if (todoPagado && !restaurante.esCarrito) return
 
     // CRÍTICO: Si el estado del pedido es 'closed', SIEMPRE quedarse
     if (wsState?.estado === 'closed') return
@@ -228,16 +236,16 @@ const PedidoCerrado = () => {
       }
     }
 
-    // Fallbacks generales
+    // Fallback: Solo redirigir si el estado es EXPLÍCITAMENTE 'pending' 
+    // (no undefined, que significa que el WebSocket aún no envió el estado)
     if (wsState?.estado === 'pending' && !pedidoCerrado) {
       navigate(`/mesa/${qrToken}`)
       return
     }
 
-    if (!wsState?.estado && !pedidoCerrado) {
-      navigate(`/mesa/${qrToken}`)
-      return
-    }
+    // NOTA: Removida la condición `if (!wsState?.estado && !pedidoCerrado)` 
+    // porque causaba redirecciones prematuras antes de que el WebSocket 
+    // estableciera el estado real del pedido.
 
   }, [
     clienteNombre,

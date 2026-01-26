@@ -44,8 +44,16 @@ const PedidoConfirmado = () => {
       return
     }
 
+    // === CRITICAL: ESPERAR A QUE RESTAURANTE ESTÉ CARGADO ===
+    // Si restaurante es null, NO PODEMOS saber si es carrito o no.
+    // DEBEMOS esperar a que se cargue antes de tomar cualquier decisión de redirección.
+    if (!restaurante) {
+      console.log('[PedidoConfirmado] Esperando a que restaurante se cargue...')
+      return
+    }
+
     // MODO CARRITO: Redirección forzada si está en preparing
-    if (restaurante?.esCarrito && wsState?.estado === 'preparing') {
+    if (restaurante.esCarrito && wsState?.estado === 'preparing') {
       // Usar replace: true para que el usuario no pueda volver atrás a esta pantalla
       navigate('/pedido-cerrado', { replace: true })
       return
@@ -59,7 +67,7 @@ const PedidoConfirmado = () => {
         navigate('/menu')
       }
     }
-  }, [clienteNombre, qrToken, wsState?.estado, navigate, isHydrated, sessionEnded, restaurante?.esCarrito])
+  }, [clienteNombre, qrToken, wsState?.estado, navigate, isHydrated, sessionEnded, restaurante])
 
   const todosLosItems = wsState?.items || []
   const totalPedido = wsState?.total || '0.00'

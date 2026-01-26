@@ -26,6 +26,17 @@ interface SubtotalCliente {
   estado?: 'pending' | 'pending_cash' | 'paid' | 'failed' // Estado para control granular
 }
 
+// Interface para items individuales de Mozo
+interface MozoItem {
+  itemId: number
+  subtotal: number
+  pagado: boolean
+  metodo?: string
+  estado: 'pending' | 'pending_cash' | 'paid' | 'failed'
+  nombreProducto: string
+  cantidad: number
+}
+
 // Variable para tipar los items (se usará más adelante)
 let todosLosItems: Array<{
   id: number
@@ -47,7 +58,9 @@ const PedidoCerrado = () => {
   const [isLoadingMP, setIsLoadingMP] = useState(false)
   const [isLoadingEfectivo, setIsLoadingEfectivo] = useState(false)
   const [selectedClientes, setSelectedClientes] = useState<string[]>([])
+  const [selectedMozoItems, setSelectedMozoItems] = useState<number[]>([]) // NEW: Track selected Mozo item IDs
   const [subtotalesEstado, setSubtotalesEstado] = useState<SubtotalPagado[]>([])
+  const [mozoItemsEstado, setMozoItemsEstado] = useState<MozoItem[]>([]) // NEW: Track Mozo items from API
   const [loadingSubtotales, setLoadingSubtotales] = useState(true) // Empezar en true para evitar redirects prematuros
   const lastPedidoIdRef = useRef<number | null>(null)
 
@@ -61,9 +74,12 @@ const PedidoCerrado = () => {
   const totalPedido = (isPreparing && wsState?.total) ? wsState.total : (pedidoCerrado?.total || wsState?.total || '0.00')
 
   // Agrupar items por cliente y calcular subtotales
+  // IMPORTANTE: Excluir items de "Mozo" - esos se manejan individualmente
   const subtotalesPorCliente = useCallback((): SubtotalCliente[] => {
     const itemsPorCliente = todosLosItems.reduce((acc, item) => {
       const cliente = item.clienteNombre || 'Sin nombre'
+      // Skip Mozo items - they are handled individually
+      if (cliente === 'Mozo') return acc
       if (!acc[cliente]) acc[cliente] = []
       acc[cliente].push(item)
       return acc
@@ -92,20 +108,29 @@ const PedidoCerrado = () => {
     })
   }, [todosLosItems, subtotalesEstado, subtotalesPagados])
 
-  // Calcular totales
+  // Calcular totales para clientes regulares
   const subtotales = subtotalesPorCliente()
-  // Contar como pagado: MercadoPago paid + Efectivo paid (confirmado por cajero)
-  const totalPagado = subtotales.filter(s => s.pagado).reduce((sum, s) => sum + s.subtotal, 0)
+
+  // Calcular totales para items de Mozo
+  const mozoItemsPendientes = mozoItemsEstado.filter(m => !m.pagado && m.estado !== 'pending_cash')
+  const mozoItemsPagados = mozoItemsEstado.filter(m => m.pagado)
+  const mozoItemsEsperando = mozoItemsEstado.filter(m => m.estado === 'pending_cash')
+
+  // Contar como pagado: Clientes + Items Mozo pagados
+  const totalPagadoClientes = subtotales.filter(s => s.pagado).reduce((sum, s) => sum + s.subtotal, 0)
+  const totalPagadoMozo = mozoItemsPagados.reduce((sum, m) => sum + m.subtotal, 0)
+  const totalPagado = totalPagadoClientes + totalPagadoMozo
+
   const totalPedidoNum = parseFloat(totalPedido)
   const totalPendiente = totalPedidoNum - totalPagado
   // todoPagado es true SOLO si:
   // 1. Hay items en el pedido
   // 2. El total del pedido es mayor que 0
   // 3. El total pendiente es <= 0.01 (margen para redondeo)
-  // 4. HAY AL MENOS UN CLIENTE PAGADO (esto evita falsos positivos cuando no hay datos de pago aún)
+  // 4. HAY AL MENOS UN PAGO (cliente o Mozo item) - evita falsos positivos
   const hayItems = todosLosItems.length > 0
-  const hayClientesPagados = subtotales.some(s => s.pagado)
-  const todoPagado = hayItems && totalPedidoNum > 0.01 && totalPendiente <= 0.01 && hayClientesPagados
+  const hayPagosProcesados = subtotales.some(s => s.pagado) || mozoItemsPagados.length > 0
+  const todoPagado = hayItems && totalPedidoNum > 0.01 && totalPendiente <= 0.01 && hayPagosProcesados
 
   // Debug logging
   useEffect(() => {
@@ -114,11 +139,12 @@ const PedidoCerrado = () => {
       totalPedidoNum,
       totalPagado,
       totalPendiente,
-      hayClientesPagados,
+      hayPagosProcesados,
       todoPagado,
-      loadingSubtotales
+      loadingSubtotales,
+      mozoItemsCount: mozoItemsEstado.length
     })
-  }, [hayItems, totalPedidoNum, totalPagado, totalPendiente, hayClientesPagados, todoPagado, loadingSubtotales])
+  }, [hayItems, totalPedidoNum, totalPagado, totalPendiente, hayPagosProcesados, todoPagado, loadingSubtotales, mozoItemsEstado.length])
 
   // Pendientes: los que no han seleccionado ningún método de pago (estado = pending o undefined)
   const clientesPendientes = subtotales.filter(s => !s.pagado && s.estado !== 'pending_cash')
@@ -143,20 +169,49 @@ const PedidoCerrado = () => {
       const response = await fetch(`${API_URL}/mp/subtotales/${idPedido}`)
       const data = await response.json()
 
-      if (data.success && data.subtotales) {
-        setSubtotalesEstado(data.subtotales.map((s: any) => ({
-          clienteNombre: s.clienteNombre,
-          monto: s.subtotal,
-          estado: s.estado || (s.pagado ? 'paid' : 'pending'),
-          metodo: s.metodo
-        })))
+      if (data.success) {
+        // Update client subtotales
+        if (data.subtotales) {
+          setSubtotalesEstado(data.subtotales.map((s: any) => ({
+            clienteNombre: s.clienteNombre,
+            monto: s.subtotal,
+            estado: s.estado || (s.pagado ? 'paid' : 'pending'),
+            metodo: s.metodo
+          })))
+        }
+
+        // Update Mozo items
+        if (data.mozoItems) {
+          setMozoItemsEstado(data.mozoItems.map((m: any) => ({
+            itemId: m.itemId,
+            subtotal: parseFloat(m.subtotal),
+            pagado: m.pagado || false,
+            metodo: m.metodo,
+            estado: m.estado || 'pending',
+            nombreProducto: m.nombreProducto || `Producto #${m.itemId}`,
+            cantidad: m.cantidad || 1
+          })))
+        } else {
+          // If no mozoItems in response, try to build from todosLosItems
+          const mozoItems = todosLosItems.filter(i => i.clienteNombre === 'Mozo')
+          if (mozoItems.length > 0) {
+            setMozoItemsEstado(mozoItems.map(item => ({
+              itemId: item.id,
+              subtotal: parseFloat(item.precioUnitario || '0') * item.cantidad,
+              pagado: false,
+              estado: 'pending' as const,
+              nombreProducto: item.nombreProducto || item.nombre || `Producto #${item.id}`,
+              cantidad: item.cantidad
+            })))
+          }
+        }
       }
     } catch (error) {
       console.error('Error al cargar subtotales:', error)
     } finally {
       setLoadingSubtotales(false)
     }
-  }, [pedidoCerrado?.pedidoId, pedidoId])
+  }, [pedidoCerrado?.pedidoId, pedidoId, todosLosItems])
 
   // Limpiar subtotalesEstado cuando cambia el pedidoId (nuevo pedido cerrado)
   useEffect(() => {
@@ -271,27 +326,46 @@ const PedidoCerrado = () => {
     )
   }
 
-  // Seleccionar todos los clientes pendientes
+  // Manejar selección de item de Mozo individual
+  const handleToggleMozoItem = (itemId: number) => {
+    setSelectedMozoItems(prev =>
+      prev.includes(itemId)
+        ? prev.filter(id => id !== itemId)
+        : [...prev, itemId]
+    )
+  }
+
+  // Seleccionar todos los pendientes (clientes + items de Mozo)
   const handleSelectAllPendientes = () => {
-    const pendientes = subtotales.filter(s => !s.pagado).map(s => s.clienteNombre)
-    setSelectedClientes(pendientes)
+    const pendientesClientes = subtotales.filter(s => !s.pagado && s.estado !== 'pending_cash').map(s => s.clienteNombre)
+    const pendientesMozo = mozoItemsPendientes.map(m => m.itemId)
+    setSelectedClientes(pendientesClientes)
+    setSelectedMozoItems(pendientesMozo)
   }
 
   // Seleccionar solo al cliente actual
   const handleSelectMiParte = () => {
     if (clienteNombre && !subtotales.find(s => s.clienteNombre === clienteNombre)?.pagado) {
       setSelectedClientes([clienteNombre])
+      setSelectedMozoItems([])
     }
   }
 
-  // Calcular total seleccionado
-  const totalSeleccionado = subtotales
+  // Calcular total seleccionado (clientes + items Mozo)
+  const totalSeleccionadoClientes = subtotales
     .filter(s => selectedClientes.includes(s.clienteNombre))
     .reduce((sum, s) => sum + s.subtotal, 0)
+  const totalSeleccionadoMozo = mozoItemsEstado
+    .filter(m => selectedMozoItems.includes(m.itemId))
+    .reduce((sum, m) => sum + m.subtotal, 0)
+  const totalSeleccionado = totalSeleccionadoClientes + totalSeleccionadoMozo
+
+  // Check if something is selected
+  const haySeleccion = selectedClientes.length > 0 || selectedMozoItems.length > 0
 
   const handlePagarEfectivo = async () => {
-    if (selectedClientes.length === 0) {
-      toast.error('Selecciona al menos una persona para pagar')
+    if (!haySeleccion) {
+      toast.error('Selecciona al menos una persona o producto para pagar')
       return
     }
 
@@ -309,7 +383,8 @@ const PedidoCerrado = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           pedidoId: idPedido,
-          clientesAPagar: selectedClientes,
+          clientesAPagar: selectedClientes.length > 0 ? selectedClientes : undefined,
+          mozoItemIds: selectedMozoItems.length > 0 ? selectedMozoItems : undefined,
           qrToken
         })
       })
@@ -321,6 +396,7 @@ const PedidoCerrado = () => {
           description: `Acércate a la caja para abonar $${totalSeleccionado.toFixed(2)}`
         })
         setSelectedClientes([])
+        setSelectedMozoItems([])
         await fetchSubtotales()
       } else {
         toast.error('Error al registrar pago', { description: data.error })
@@ -334,8 +410,8 @@ const PedidoCerrado = () => {
   }
 
   const handlePagarMercadoPago = async () => {
-    if (selectedClientes.length === 0) {
-      toast.error('Selecciona al menos una persona para pagar')
+    if (!haySeleccion) {
+      toast.error('Selecciona al menos una persona o producto para pagar')
       return
     }
 
@@ -355,7 +431,8 @@ const PedidoCerrado = () => {
         body: JSON.stringify({
           pedidoId: idPedido,
           qrToken: qrToken,
-          clientesAPagar: selectedClientes
+          clientesAPagar: selectedClientes.length > 0 ? selectedClientes : undefined,
+          mozoItemIds: selectedMozoItems.length > 0 ? selectedMozoItems : undefined
         })
       })
 
@@ -501,6 +578,90 @@ const PedidoCerrado = () => {
             </div>
           ))}
         </div>
+
+        {/* ========== PRODUCTOS AGREGADOS POR EL MOZO ========== */}
+        {mozoItemsEstado.length > 0 && (
+          <div className="mt-6 pt-4 border-t border-neutral-200">
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-xs font-semibold uppercase tracking-wide text-amber-600 flex items-center gap-2">
+                🍽️ Productos agregados por el Mozo
+              </span>
+            </div>
+
+            <div className="space-y-3">
+              {mozoItemsEstado.map((mozoItem) => {
+                const isSelected = selectedMozoItems.includes(mozoItem.itemId)
+                const isPaid = mozoItem.pagado
+                const isPendingCash = mozoItem.estado === 'pending_cash'
+
+                return (
+                  <div
+                    key={mozoItem.itemId}
+                    className={`flex items-start gap-3 ${isPaid ? 'opacity-50' : ''}`}
+                  >
+                    {/* Checkbox for selection (only show if not paid and not pending_cash) */}
+                    {showPaymentSelection && !isPaid && !isPendingCash && (
+                      <button
+                        onClick={() => handleToggleMozoItem(mozoItem.itemId)}
+                        className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all mt-0.5
+                          ${isSelected
+                            ? 'bg-sky-500 border-sky-500 text-white'
+                            : 'border-neutral-300 hover:border-sky-400'
+                          }`}
+                      >
+                        {isSelected && <Check className="w-3 h-3" />}
+                      </button>
+                    )}
+
+                    {/* Item info */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex justify-between items-start gap-2">
+                        <div className="flex-1">
+                          <p className="font-medium text-sm text-neutral-900 leading-tight flex items-center gap-2">
+                            {mozoItem.nombreProducto}
+                            {/* Pagado */}
+                            {isPaid && (
+                              <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full font-medium bg-emerald-100 text-emerald-700">
+                                <CheckCircle2 className="w-3 h-3" />
+                                Pagado
+                              </span>
+                            )}
+                            {/* Esperando confirmación */}
+                            {isPendingCash && (
+                              <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full font-medium bg-amber-100 text-amber-700">
+                                <Wallet className="w-3 h-3" />
+                                Esperando cajero
+                              </span>
+                            )}
+                          </p>
+                          <p className="text-xs text-neutral-500 mt-0.5">
+                            {mozoItem.cantidad} × ${(mozoItem.subtotal / mozoItem.cantidad).toFixed(2)}
+                          </p>
+                        </div>
+                        <p className={`font-semibold text-sm tabular-nums ${isPaid ? 'text-emerald-600 line-through' : 'text-neutral-900'
+                          }`}>
+                          ${mozoItem.subtotal.toFixed(2)}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+
+            {/* Subtotal de items Mozo */}
+            {mozoItemsEstado.length > 0 && (
+              <div className="flex justify-between items-center pt-2 mt-2 border-t border-neutral-100">
+                <span className="text-xs text-neutral-500">
+                  Subtotal Mozo ({mozoItemsPagados.length}/{mozoItemsEstado.length} pagados)
+                </span>
+                <span className="text-sm font-semibold tabular-nums text-neutral-700">
+                  ${mozoItemsEstado.reduce((sum, m) => sum + m.subtotal, 0).toFixed(2)}
+                </span>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Separador estilo ticket */}
@@ -971,7 +1132,6 @@ const PedidoCerrado = () => {
             )}
           </div>
 
-          {/* Lista de clientes pendientes */}
           <div className="space-y-3">
             {clientesPendientes.map((cliente) => {
               const isSelected = selectedClientes.includes(cliente.clienteNombre)
@@ -1026,6 +1186,60 @@ const PedidoCerrado = () => {
             })}
           </div>
 
+          {/* Lista de items de Mozo pendientes */}
+          {mozoItemsPendientes.length > 0 && (
+            <div className="mt-6">
+              <h3 className="font-semibold text-foreground flex items-center gap-2 mb-3">
+                <span className="text-amber-600 dark:text-amber-500 text-lg">🍽️</span>
+                Productos adicionales
+              </h3>
+              <div className="space-y-3">
+                {mozoItemsPendientes.map((item) => {
+                  const isSelected = selectedMozoItems.includes(item.itemId)
+
+                  return (
+                    <button
+                      key={item.itemId}
+                      onClick={() => handleToggleMozoItem(item.itemId)}
+                      className={`w-full rounded-2xl p-4 text-left transition-all active:scale-[0.98] ${isSelected
+                        ? 'bg-amber-500 text-white shadow-lg shadow-amber-500/20'
+                        : 'bg-card border border-border hover:border-amber-500/50'
+                        }`}
+                    >
+                      <div className="flex items-center gap-4">
+                        {/* Checkbox visual */}
+                        <div className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all ${isSelected
+                          ? 'bg-white border-white'
+                          : 'border-border'
+                          }`}>
+                          {isSelected && <Check className="w-4 h-4 text-amber-500" />}
+                        </div>
+
+                        {/* Info del item */}
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className={`font-semibold ${isSelected ? 'text-white' : 'text-foreground'}`}>
+                              {item.nombreProducto}
+                            </span>
+                          </div>
+                          <p className={`text-sm ${isSelected ? 'text-white/80' : 'text-muted-foreground'}`}>
+                            {item.cantidad} unidad{item.cantidad !== 1 ? 'es' : ''}
+                          </p>
+                        </div>
+
+                        {/* Monto */}
+                        <span className={`text-xl font-bold tabular-nums ${isSelected ? 'text-white' : 'text-foreground'
+                          }`}>
+                          ${item.subtotal.toFixed(2)}
+                        </span>
+                      </div>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
           {/* Clientes que ya pagaron (solo MercadoPago) */}
           {clientesPagados.length > 0 && (
             <div className="space-y-3 pt-2">
@@ -1064,7 +1278,7 @@ const PedidoCerrado = () => {
             <div className="space-y-3 pt-2">
               <p className="text-sm font-medium text-amber-600 dark:text-amber-400 flex items-center gap-2">
                 <Wallet className="w-4 h-4" />
-                Esperando confirmación del cajero
+                Personas esperando confirmación
               </p>
               {clientesEsperandoConfirmacion.map((cliente: any) => (
                 <div
@@ -1091,6 +1305,39 @@ const PedidoCerrado = () => {
               ))}
             </div>
           )}
+
+          {/* Items de Mozo esperando confirmación */}
+          {mozoItemsEsperando.length > 0 && (
+            <div className="space-y-3 pt-2">
+              <p className="text-sm font-medium text-amber-600 dark:text-amber-400 flex items-center gap-2">
+                <Wallet className="w-4 h-4" />
+                Productos esperando confirmación
+              </p>
+              {mozoItemsEsperando.map((item) => (
+                <div
+                  key={item.itemId}
+                  className="bg-amber-50 dark:bg-amber-950/30 rounded-2xl p-4 border border-amber-200 dark:border-amber-800"
+                >
+                  <div className="flex items-center gap-4">
+                    <div className="w-6 h-6 rounded-lg bg-amber-500 flex items-center justify-center">
+                      <Wallet className="w-4 h-4 text-white" />
+                    </div>
+                    <div className="flex-1">
+                      <span className="font-semibold text-amber-700 dark:text-amber-300">
+                        {item.nombreProducto}
+                      </span>
+                      <p className="text-xs text-amber-600/70 dark:text-amber-400/70">
+                        Acércate a la caja para pagar
+                      </p>
+                    </div>
+                    <span className="font-bold text-amber-600 dark:text-amber-400">
+                      ${item.subtotal.toFixed(2)}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
 
@@ -1101,14 +1348,17 @@ const PedidoCerrado = () => {
       <div className="fixed bottom-0 left-0 right-0 bg-background border-t border-border shadow-[0_-5px_20px_rgba(0,0,0,0.05)] z-20">
         <div className="max-w-md mx-auto px-5 py-4 space-y-3">
           {/* Resumen de selección */}
-          {selectedClientes.length > 0 ? (
+          {haySeleccion ? (
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground">
-                  {selectedClientes.length === 1
-                    ? selectedClientes[0]
-                    : `${selectedClientes.length} personas`
-                  }
+                  {selectedClientes.length > 0
+                    ? `${selectedClientes.length} persona${selectedClientes.length !== 1 ? 's' : ''}`
+                    : ''}
+                  {selectedClientes.length > 0 && selectedMozoItems.length > 0 ? ' + ' : ''}
+                  {selectedMozoItems.length > 0
+                    ? `${selectedMozoItems.length} producto${selectedMozoItems.length !== 1 ? 's' : ''}`
+                    : ''}
                 </p>
                 <p className="text-2xl font-black tracking-tight text-foreground">
                   ${totalSeleccionado.toFixed(2)}
@@ -1132,6 +1382,15 @@ const PedidoCerrado = () => {
                     +{selectedClientes.length - 4}
                   </div>
                 )}
+                {/* Visual indicator for Mozo items */}
+                {selectedMozoItems.length > 0 && (
+                  <div
+                    className="w-9 h-9 rounded-xl border-2 border-background shadow-sm bg-amber-500 text-white flex items-center justify-center text-xs font-bold"
+                    style={{ marginLeft: selectedClientes.length > 0 ? '-8px' : '0' }}
+                  >
+                    +{selectedMozoItems.length}
+                  </div>
+                )}
               </div>
             </div>
           ) : (
@@ -1144,7 +1403,7 @@ const PedidoCerrado = () => {
           <div className="grid grid-cols-2 gap-3">
             <Button
               onClick={handlePagarEfectivo}
-              disabled={selectedClientes.length === 0 || isLoadingEfectivo}
+              disabled={!haySeleccion || isLoadingEfectivo}
               className="h-14 text-base font-bold rounded-2xl shadow-lg shadow-primary/20"
               size="lg"
             >
@@ -1160,8 +1419,8 @@ const PedidoCerrado = () => {
 
             <Button
               onClick={handlePagarMercadoPago}
-              disabled={!mpDisponible || isLoadingMP || selectedClientes.length === 0}
-              className={`h-14 text-base font-bold rounded-2xl border-2 ${mpDisponible && selectedClientes.length > 0
+              disabled={!mpDisponible || isLoadingMP || !haySeleccion}
+              className={`h-14 text-base font-bold rounded-2xl border-2 ${mpDisponible && haySeleccion
                 ? 'bg-sky-500 text-white'
                 : ''
                 }`}

@@ -22,7 +22,7 @@ export const useRouteGuard = (
 ) => {
   const navigate = useNavigate()
   const location = useLocation()
-  const { clienteNombre, qrToken, isHydrated, sessionEnded } = useMesaStore()
+  const { clienteNombre, qrToken, isHydrated, sessionEnded, restaurante } = useMesaStore()
   const { state: wsState } = useClienteWebSocket()
   const lastRedirectedState = useRef<string | null>(null)
   const redirectTo = options?.redirectTo
@@ -63,17 +63,22 @@ export const useRouteGuard = (
     // Usar una clave única basada en la ruta y el estado para evitar loops
     if (!isStateAllowed) {
       const redirectKey = `${location.pathname}-${currentState}`
-      
+
       // Solo redirigir si no hemos redirigido ya para esta combinación de ruta+estado
       if (lastRedirectedState.current !== redirectKey) {
         lastRedirectedState.current = redirectKey
-        
+
         if (redirectTo) {
           navigate(redirectTo, { replace: true })
         } else {
           // Redirigir según el estado del pedido
           if (currentState === 'preparing' || currentState === 'delivered') {
-            navigate('/pedido-confirmado', { replace: true })
+            // Carritos: ir a pagar primero
+            if (restaurante?.esCarrito) {
+              navigate('/pedido-cerrado', { replace: true })
+            } else {
+              navigate('/pedido-confirmado', { replace: true })
+            }
           } else if (currentState === 'closed') {
             navigate('/pedido-cerrado', { replace: true })
           } else {
@@ -93,7 +98,8 @@ export const useRouteGuard = (
     redirectTo,
     disabled,
     navigate,
-    location.pathname
+    location.pathname,
+    restaurante?.esCarrito
   ])
 }
 

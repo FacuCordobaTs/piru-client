@@ -192,6 +192,17 @@ const PedidoCerrado = () => {
     // Verificar si debemos redirigir basados en el estado actual
 
     // Si el estado es 'preparing' o 'delivered', redirigir a pedido confirmado
+    // Si es carrito Y el estado es 'preparing' o 'delivered', quedarse aquí para pagar
+    // (los carritos pagan ANTES de recibir el pedido)
+    if (restaurante?.esCarrito && (wsState?.estado === 'preparing' || wsState?.estado === 'delivered')) {
+      // Si ya pagó todo, ir a esperando-pedido
+      if (todoPagado) {
+        navigate('/esperando-pedido')
+      }
+      return // Quedarse aquí para pagar
+    }
+
+    // Si el estado es 'preparing' o 'delivered' (y NO es carrito), redirigir a pedido confirmado
     if (wsState?.estado === 'preparing' || wsState?.estado === 'delivered') {
       navigate('/pedido-confirmado')
       return
@@ -218,7 +229,8 @@ const PedidoCerrado = () => {
     todoPagado,
     sessionEnded,
     isHydrated,
-    hayItems
+    hayItems,
+    restaurante?.esCarrito
   ])
 
   // Manejar selección de cliente

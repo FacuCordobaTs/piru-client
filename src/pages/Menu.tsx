@@ -87,12 +87,17 @@ const Menu = () => {
 
     if (wsState?.estado) {
       if (wsState.estado === 'preparing') {
-        navigate('/pedido-confirmado')
+        // Carritos: ir a pagar primero
+        if (restaurante?.esCarrito) {
+          navigate('/pedido-cerrado')
+        } else {
+          navigate('/pedido-confirmado')
+        }
       } else if (wsState.estado === 'closed') {
         navigate('/pedido-cerrado')
       }
     }
-  }, [clienteNombre, qrToken, wsState?.estado, navigate, isHydrated, sessionEnded])
+  }, [clienteNombre, qrToken, wsState?.estado, navigate, isHydrated, sessionEnded, restaurante?.esCarrito])
 
   // Lógica de productos y categorías (se mantiene igual)
   const categorias = ['All', ...Array.from(new Set(productos.map(p => p.categoria).filter(Boolean)))]
@@ -350,8 +355,8 @@ const Menu = () => {
                   onClick={() => setSelectedCategory(category || 'All')}
                   variant={selectedCategory === category ? "default" : "secondary"}
                   className={`rounded-lg px-5 h-10 text-xs font-medium whitespace-nowrap snap-start transition-all ${selectedCategory === category
-                      ? "shadow-md"
-                      : "bg-secondary/50 hover:bg-secondary border border-transparent"
+                    ? "shadow-md"
+                    : "bg-secondary/50 hover:bg-secondary border border-transparent"
                     }`}
                 >
                   {category === 'All' ? 'Todas' : category}
@@ -630,8 +635,8 @@ const Menu = () => {
                 return (
                   <div key={conf.clienteId} className="flex flex-col items-center gap-1.5">
                     <div className={`relative w-14 h-14 rounded-xl border-2 shadow-sm flex items-center justify-center font-bold text-sm transition-all duration-300 ${conf.confirmado
-                        ? 'bg-orange-500 border-orange-600 text-white ring-2 ring-orange-300 dark:ring-orange-700'
-                        : 'bg-zinc-200 dark:bg-zinc-700 border-zinc-300 dark:border-zinc-600 text-zinc-500 dark:text-zinc-400'
+                      ? 'bg-orange-500 border-orange-600 text-white ring-2 ring-orange-300 dark:ring-orange-700'
+                      : 'bg-zinc-200 dark:bg-zinc-700 border-zinc-300 dark:border-zinc-600 text-zinc-500 dark:text-zinc-400'
                       }`}>
                       {conf.nombre.slice(0, 2).toUpperCase()}
                       {conf.confirmado && (

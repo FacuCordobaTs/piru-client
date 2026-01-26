@@ -138,10 +138,38 @@ export const useMesaStore = create<MesaState>()(
       setRestaurante: (restaurante) => set({ restaurante }),
       setProductos: (productos) => set({ productos }),
       setClientes: (clientes) => set({ clientes }),
-      setPedidoId: (pedidoId) => set({ pedidoId }),
+
+      // CORRECCIÓN CRÍTICA: Al cambiar el ID del pedido, limpiar datos viejos
+      setPedidoId: (pedidoId) => set((state) => {
+        if (state.pedidoId !== pedidoId) {
+          return {
+            pedidoId,
+            subtotalesPagados: [], // Limpiar pagos anteriores
+            pedidoCerrado: null,   // Limpiar recibo anterior
+            sessionEnded: false,
+            pedidoListo: false
+          }
+        }
+        return { pedidoId }
+      }),
+
       setPedido: (pedido) => set({ pedido }),
       setClienteInfo: (id, nombre) => set({ clienteId: id, clienteNombre: nombre }),
-      setQrToken: (token) => set({ qrToken: token }),
+
+      // CORRECCIÓN CRÍTICA: Al cambiar de mesa (QR), limpiar todo
+      setQrToken: (token) => set((state) => {
+        if (state.qrToken !== token) {
+          return {
+            qrToken: token,
+            subtotalesPagados: [],
+            pedidoCerrado: null,
+            sessionEnded: false,
+            pedidoListo: false
+          }
+        }
+        return { qrToken: token }
+      }),
+
       setLoading: (loading) => set({ isLoading: loading }),
       setError: (error) => set({ error }),
       setPedidoCerrado: (data) => set({ pedidoCerrado: data }),
@@ -156,7 +184,7 @@ export const useMesaStore = create<MesaState>()(
         productos: [],
         clientes: [],
         pedidoId: null,
-        pedido: null, // IMPORTANTE: también limpiar el pedido
+        pedido: null,
         clienteId: null,
         clienteNombre: null,
         qrToken: null,
@@ -182,8 +210,6 @@ export const useMesaStore = create<MesaState>()(
         pedido: state.pedido,
         productos: state.productos,
         pedidoCerrado: state.pedidoCerrado,
-        // NOTA: No persistir subtotalesPagados ni sessionEnded
-        // Estos estados deben obtenerse del servidor para evitar estados inconsistentes
       }),
       onRehydrateStorage: () => (state) => {
         // Marcar como hidratado cuando termine de cargar desde localStorage
@@ -200,7 +226,6 @@ export const useMesaStore = create<MesaState>()(
 )
 
 // Marcar como hidratado después de un breve delay si onRehydrateStorage no lo hizo
-// Esto cubre edge cases donde la hidratación falla o no hay datos
 if (typeof window !== 'undefined') {
   setTimeout(() => {
     if (!useMesaStore.getState().isHydrated) {
@@ -208,4 +233,3 @@ if (typeof window !== 'undefined') {
     }
   }, 100)
 }
-

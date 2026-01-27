@@ -8,7 +8,7 @@ import { useClienteWebSocket } from '@/hooks/useClienteWebSocket'
 import { toast } from 'sonner'
 import {
   CheckCircle2, ChefHat, Bell, Receipt, Plus,
-  ArrowLeft, Package, UtensilsCrossed, Loader2
+  ArrowLeft, UtensilsCrossed, Loader2, Utensils
 } from 'lucide-react'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { usePreventBackNavigation } from '@/hooks/usePreventBackNavigation'
@@ -236,7 +236,7 @@ const PedidoConfirmado = () => {
                           <img src={imagen} alt="img" className="w-full h-full object-cover" />
                         ) : (
                           <div className="w-full h-full flex items-center justify-center text-muted-foreground">
-                            <Package className="w-6 h-6" />
+                            <Utensils className="w-6 h-6 text-orange-500" />
                           </div>
                         )}
                       </div>

@@ -8,7 +8,7 @@ import { useClienteWebSocket } from '@/hooks/useClienteWebSocket'
 import { toast } from 'sonner'
 import {
   Trash2, ArrowLeft,
-  Wifi, WifiOff, Package, ChefHat, UtensilsCrossed, Receipt,
+  Wifi, WifiOff, Package, ChefHat, UtensilsCrossed, Receipt, Utensils,
   BellRing, HandPlatter, Check, X, Users, Loader2
 } from 'lucide-react'
 import { ProductDetailDrawer } from '@/components/ProductDetailDrawer'
@@ -487,7 +487,7 @@ const Menu = () => {
                           <img src={imagen} alt="img" className="w-full h-full object-cover" />
                         ) : (
                           <div className="w-full h-full flex items-center justify-center text-muted-foreground">
-                            <Package className="w-6 h-6" />
+                            <Utensils className="w-6 h-6 text-orange-500" />
                           </div>
                         )}
                       </div>
@@ -730,7 +730,7 @@ const ProductoCard = ({ producto, onClick, fullWidth }: { producto: any, onClick
         />
       ) : (
         <div className="w-full h-full flex items-center justify-center bg-linear-to-br from-zinc-800 to-zinc-900">
-          <Package className="w-12 h-12 text-zinc-600" />
+          <Utensils className="w-12 h-12 text-orange-500" />
         </div>
       )}
     </div>

@@ -5,7 +5,7 @@ import {
 } from '@/components/ui/drawer'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
-import { X } from 'lucide-react'
+import { X, Utensils } from 'lucide-react'
 
 interface Ingrediente {
   id: number
@@ -82,14 +82,14 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder }: Pr
             {/* 2. Image Container: flex-1 allows it to grow/shrink. min-h-0 is crucial for flex-shrink to work */}
             <div className="relative flex-1 min-h-0 w-full bg-secondary">
               {product.imagenUrl ? (
-                <img 
-                  src={product.imagenUrl} 
-                  alt={product.nombre} 
-                  className="absolute inset-0 w-full h-full object-cover" 
+                <img
+                  src={product.imagenUrl}
+                  alt={product.nombre}
+                  className="absolute inset-0 w-full h-full object-cover"
                 />
               ) : (
                 <div className="absolute inset-0 w-full h-full flex items-center justify-center">
-                  <span className="text-muted-foreground">Sin imagen</span>
+                  <Utensils className="w-20 h-20 text-orange-500" />
                 </div>
               )}
             </div>
@@ -126,7 +126,7 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder }: Pr
                       Modificar Ingredientes
                     </Button>
                   )}
-              </div>
+                </div>
               ) : (
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
@@ -145,11 +145,10 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder }: Pr
                       return (
                         <div
                           key={ingrediente.id}
-                          className={`flex items-center space-x-3 p-2 rounded-lg cursor-pointer transition-colors ${
-                            estaIncluido
-                              ? 'bg-primary/10 border border-primary/30'
-                              : 'bg-destructive/10 border border-destructive/30'
-                          }`}
+                          className={`flex items-center space-x-3 p-2 rounded-lg cursor-pointer transition-colors ${estaIncluido
+                            ? 'bg-primary/10 border border-primary/30'
+                            : 'bg-destructive/10 border border-destructive/30'
+                            }`}
                           onClick={() => toggleIngrediente(ingrediente.id)}
                         >
                           <Checkbox

@@ -235,9 +235,41 @@ const PedidoCerrado = () => {
   useEffect(() => {
     const idPedido = pedidoCerrado?.pedidoId || pedidoId
     if (subtotalesPagados.length > 0 && idPedido) {
-      // Verificar que los subtotales correspondan al pedido actual
-      // Por ahora, simplemente actualizar si hay subtotales (el servidor los filtra)
-      setSubtotalesEstado(subtotalesPagados)
+      // Separar clientes regulares de items de Mozo
+      const clientesRegulares = subtotalesPagados.filter(
+        (s: any) => !s.clienteNombre?.startsWith('Mozo:item:') && !s.isMozoItem
+      )
+      const mozoItems = subtotalesPagados.filter(
+        (s: any) => s.clienteNombre?.startsWith('Mozo:item:') || s.isMozoItem
+      )
+
+      // Actualizar subtotales de clientes regulares
+      setSubtotalesEstado(clientesRegulares)
+
+      // Actualizar items de Mozo si hay datos
+      if (mozoItems.length > 0) {
+        setMozoItemsEstado(prev => {
+          // Merge: actualizar items existentes con los nuevos estados
+          const updated = prev.map(mozoItem => {
+            // Buscar si hay una actualización para este item
+            const mozoKey = `Mozo:item:${mozoItem.itemId}`
+            const updatedData = mozoItems.find(
+              (s: any) => s.clienteNombre === mozoKey || s.itemId === mozoItem.itemId
+            )
+
+            if (updatedData) {
+              return {
+                ...mozoItem,
+                estado: updatedData.estado || mozoItem.estado,
+                metodo: updatedData.metodo || mozoItem.metodo,
+                pagado: updatedData.estado === 'paid'
+              }
+            }
+            return mozoItem
+          })
+          return updated
+        })
+      }
     } else if (subtotalesPagados.length === 0) {
       // Si no hay subtotales pagados, limpiar el estado local también
       setSubtotalesEstado([])

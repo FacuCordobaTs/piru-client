@@ -14,6 +14,7 @@ interface Restaurante {
   imagenUrl: string | null
   mpConnected: boolean | null
   esCarrito: boolean | null
+  splitPayment: boolean | null
 }
 
 interface Ingrediente {

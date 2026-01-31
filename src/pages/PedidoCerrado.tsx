@@ -798,6 +798,311 @@ const PedidoCerrado = () => {
   }
 
   // Renderizado normal para no-carrito o sessionEnded legacy
+
+  // === MODIFICACIÓN: VISTA UNIFICADA (NO SPLIT) ===
+  // Si el restaurante tiene splitPayment = false, mostramos la vista estilo "Factura"
+  // pero con funcionalidad de pago del TOTAL.
+  if (restaurante?.splitPayment === false) {
+    // Calcular totales globales pendientes
+    const totalPendienteClientes = subtotales.filter(s => !s.pagado).reduce((sum, s) => sum + s.subtotal, 0)
+    const totalPendienteMozo = mozoItemsPendientes.reduce((sum, m) => sum + m.subtotal, 0)
+    const totalAPagar = totalPendienteClientes + totalPendienteMozo
+
+    // Función para pagar todo
+    const handlePagarTodo = async (metodo: 'efectivo' | 'mercadopago') => {
+      // Recopilar TODOS los items pendientes
+      const todosClientesPendientes = subtotales.filter(s => !s.pagado).map(s => s.clienteNombre)
+      const todosMozoItemsPendientes = mozoItemsPendientes.map(m => m.itemId)
+
+      if (todosClientesPendientes.length === 0 && todosMozoItemsPendientes.length === 0) {
+        toast.error('No hay nada pendiente de pago')
+        return
+      }
+
+      // Establecer selección temporalmente (aunque no se use en la UI, los handlers lo usan)
+      setSelectedClientes(todosClientesPendientes)
+      setSelectedMozoItems(todosMozoItemsPendientes)
+
+      // Llamar al handler correspondiente pasando los datos explícitamente si fuera posible,
+      // pero como usan el estado, seteamos el estado arriba.
+      // Sin embargo, como setState es asíncrono, necesitamos una versión modificada de los handlers
+      // O hack: llamar a la API directamente aquí.
+
+      const idPedido = pedidoCerrado?.pedidoId || pedidoId
+      if (!idPedido) return
+
+      if (metodo === 'efectivo') {
+        setIsLoadingEfectivo(true)
+        try {
+          const response = await fetch(`${API_URL}/mp/pagar-efectivo`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              pedidoId: idPedido,
+              clientesAPagar: todosClientesPendientes.length > 0 ? todosClientesPendientes : undefined,
+              mozoItemIds: todosMozoItemsPendientes.length > 0 ? todosMozoItemsPendientes : undefined,
+              qrToken
+            })
+          })
+          const data = await response.json()
+          if (data.success) {
+            toast.info('Debe pagar en efectivo', { description: `Acércate a la caja para abonar $${totalAPagar.toFixed(2)}` })
+            await fetchSubtotales()
+          } else {
+            toast.error('Error', { description: data.error })
+          }
+        } catch (e) {
+          console.error(e);
+          toast.error('Error de conexión')
+        } finally { setIsLoadingEfectivo(false) }
+      } else {
+        // MercadoPago
+        setIsLoadingMP(true)
+        try {
+          const response = await fetch(`${API_URL}/mp/crear-preferencia`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              pedidoId: idPedido,
+              qrToken: qrToken,
+              clientesAPagar: todosClientesPendientes.length > 0 ? todosClientesPendientes : undefined,
+              mozoItemIds: todosMozoItemsPendientes.length > 0 ? todosMozoItemsPendientes : undefined
+            })
+          })
+          const data = await response.json()
+          if (data.success && data.url_pago) {
+            window.location.href = data.url_pago
+          } else {
+            toast.error('Error', { description: data.error })
+          }
+        } catch (e) { console.error(e); toast.error('Error de conexión') } finally { setIsLoadingMP(false) }
+      }
+    }
+
+    return (
+      <div className="min-h-screen bg-linear-to-b from-neutral-100 to-neutral-200 dark:from-neutral-950 dark:to-neutral-900 py-8 pb-32">
+        <div className="max-w-md mx-auto space-y-6 px-4">
+
+          {/* Header similar a Factura.tsx */}
+          <div className="text-center px-6 space-y-3">
+            <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-neutral-100 dark:bg-neutral-800 mb-2">
+              <Receipt className="w-8 h-8 text-neutral-600 dark:text-neutral-400" />
+            </div>
+            <h1 className="text-2xl font-bold text-neutral-900 dark:text-white">
+              Ticket de la Mesa
+            </h1>
+            <p className="text-sm text-neutral-600 dark:text-neutral-400">
+              Detalle del consumo total
+            </p>
+          </div>
+
+          {/* Ticket Visual (Copiado de Factura.tsx y adaptado) */}
+          <div
+            ref={reciboRef}
+            style={{
+              backgroundColor: '#ffffff',
+              color: '#171717',
+              borderRadius: '16px',
+              boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1)',
+              overflow: 'hidden',
+              fontFamily: 'system-ui, -apple-system, sans-serif',
+            }}
+          >
+            {/* Header del recibo */}
+            <div style={{
+              backgroundColor: '#fafafa',
+              padding: '20px 24px',
+              textAlign: 'center',
+              borderBottom: '1px dashed #e5e5e5',
+            }}>
+              <h2 style={{ fontWeight: '700', fontSize: '18px', color: '#171717', margin: 0 }}>
+                {restaurante?.nombre || 'Restaurante'}
+              </h2>
+              <p style={{ fontSize: '14px', color: '#737373', marginTop: '4px' }}>Mesa {mesa?.nombre}</p>
+              <div style={{ marginTop: '8px', fontSize: '12px', color: '#a3a3a3' }}>
+                <p style={{ margin: 0 }}>Ticket de Pedido</p>
+                <p style={{ margin: 0 }}>{fecha}</p>
+              </div>
+            </div>
+
+            {/* Lista de productos agrupados (Reusando lógica de subtotales) */}
+            <div style={{ padding: '16px 24px' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                {/* Clientes Regulares */}
+                {subtotales.map((clienteData) => (
+                  <div key={clienteData.clienteNombre} style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    <p style={{
+                      fontSize: '12px',
+                      fontWeight: '600',
+                      color: '#737373',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.05em',
+                      margin: 0,
+                    }}>
+                      {clienteData.clienteNombre} {clienteData.pagado ? '(PAGADO)' : ''}
+                    </p>
+
+                    {clienteData.items.map((item) => {
+                      const precio = parseFloat(item.precioUnitario || '0')
+                      const subtotal = precio * item.cantidad
+                      return (
+                        <div key={item.id} style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'flex-start',
+                          gap: '16px',
+                          opacity: clienteData.pagado ? 0.5 : 1
+                        }}>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <p style={{ fontWeight: '500', fontSize: '14px', color: '#171717', margin: 0 }}>
+                              {item.nombreProducto || item.nombre}
+                            </p>
+                            <p style={{ fontSize: '12px', color: '#737373', margin: '2px 0 0 0' }}>
+                              {item.cantidad} × ${precio.toFixed(2)}
+                            </p>
+                          </div>
+                          <p style={{ fontWeight: '600', fontSize: '14px', color: '#171717', margin: 0 }}>
+                            ${subtotal.toFixed(2)}
+                          </p>
+                        </div>
+                      )
+                    })}
+
+                    <div style={{
+                      display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                      paddingTop: '4px', borderTop: '1px solid #f5f5f5',
+                      opacity: clienteData.pagado ? 0.5 : 1
+                    }}>
+                      <span style={{ fontSize: '12px', color: '#737373' }}>Subtotal</span>
+                      <span style={{ fontSize: '14px', fontWeight: '600', color: '#404040' }}>${clienteData.subtotal.toFixed(2)}</span>
+                    </div>
+                  </div>
+                ))}
+
+                {/* Items Mozo */}
+                {mozoItemsEstado.length > 0 && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', borderTop: '1px dashed #e5e5e5', paddingTop: '16px' }}>
+                    <p style={{ fontSize: '12px', fontWeight: '600', color: '#ea580c', textTransform: 'uppercase', margin: 0 }}>
+                      Agregados por Mozo
+                    </p>
+                    {mozoItemsEstado.map((m) => (
+                      <div key={m.itemId} style={{ display: 'flex', justifyContent: 'space-between', opacity: m.pagado ? 0.5 : 1 }}>
+                        <div>
+                          <p style={{ fontWeight: '500', fontSize: '14px', color: '#171717', margin: 0 }}>{m.nombreProducto}</p>
+                          <p style={{ fontSize: '12px', color: '#737373', margin: 0 }}>{m.cantidad} × ${(m.subtotal / m.cantidad).toFixed(2)}</p>
+                        </div>
+                        <p style={{ fontWeight: '600', fontSize: '14px', color: '#171717', margin: 0 }}>${m.subtotal.toFixed(2)}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Separador */}
+            <div style={{ position: 'relative', padding: '0 24px' }}>
+              <div style={{ position: 'absolute', left: 0, top: '50%', width: '16px', height: '16px', backgroundColor: '#f5f5f5', borderRadius: '50%', transform: 'translate(-50%, -50%)' }} />
+              <div style={{ position: 'absolute', right: 0, top: '50%', width: '16px', height: '16px', backgroundColor: '#f5f5f5', borderRadius: '50%', transform: 'translate(50%, -50%)' }} />
+              <div style={{ borderTop: '1px dashed #e5e5e5' }} />
+            </div>
+
+            {/* Totales */}
+            <div style={{ padding: '16px 24px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontSize: '14px', color: '#737373' }}>Total Consumido</span>
+                <span style={{ fontSize: '16px', fontWeight: '700', color: '#171717' }}>${totalPedido}</span>
+              </div>
+              {totalPagado > 0 && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '4px' }}>
+                  <span style={{ fontSize: '14px', color: '#059669' }}>Ya pagado</span>
+                  <span style={{ fontSize: '14px', fontWeight: '700', color: '#059669' }}>-${totalPagado.toFixed(2)}</span>
+                </div>
+              )}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '12px', paddingTop: '12px', borderTop: '1px solid #f5f5f5' }}>
+                <span style={{ fontSize: '16px', fontWeight: '900', color: '#171717' }}>A PAGAR</span>
+                <span style={{ fontSize: '24px', fontWeight: '900', color: '#171717' }}>${totalPendiente.toFixed(2)}</span>
+              </div>
+            </div>
+
+            {/* Footer del recibo */}
+            <div style={{
+              backgroundColor: '#fafafa',
+              padding: '16px 24px',
+              textAlign: 'center',
+              borderTop: '1px dashed #e5e5e5',
+            }}>
+              <p style={{
+                fontSize: '10px',
+                color: '#a3a3a3',
+                textTransform: 'uppercase',
+                letterSpacing: '0.1em',
+                margin: 0,
+              }}>
+                Powered by Piru
+              </p>
+            </div>
+          </div>
+
+          {/* Botones de Acción */}
+          <div className="space-y-3 pb-8">
+            {/* Botón Descargar (como pidió el usuario) */}
+            <Button
+              variant="outline"
+              className="w-full h-12 rounded-xl bg-white dark:bg-neutral-800 border-neutral-200 dark:border-neutral-700"
+              onClick={handleDescargar}
+              disabled={isDownloading}
+            >
+              {isDownloading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Generando imagen...
+                </>
+              ) : (
+                <>
+                  <Download className="mr-2 h-4 w-4" />
+                  Descargar Ticket
+                </>
+              )}
+            </Button>
+
+            {/* Botones de Pago (Solo si hay pendiente) */}
+            {totalPendiente > 0.01 && (
+              <>
+                {mpDisponible && (
+                  <Button
+                    className="w-full h-14 text-lg rounded-xl bg-[#009EE3] hover:bg-[#008ED0] text-white shadow-lg shadow-[#009EE3]/20"
+                    onClick={() => handlePagarTodo('mercadopago')}
+                    disabled={isLoadingMP}
+                  >
+                    {isLoadingMP ? <Loader2 className="animate-spin" /> : 'Pagar con MercadoPago'}
+                  </Button>
+                )}
+
+                <Button
+                  className="w-full h-14 text-lg rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg shadow-emerald-600/20"
+                  onClick={() => handlePagarTodo('efectivo')}
+                  disabled={isLoadingEfectivo}
+                >
+                  {isLoadingEfectivo ? <Loader2 className="animate-spin" /> : 'Pagar en Efectivo'}
+                </Button>
+              </>
+            )}
+
+            {totalPendiente <= 0.01 && (
+              <div className="p-4 bg-emerald-100 text-emerald-800 rounded-xl text-center font-bold">
+                ¡Cuenta saldada!
+              </div>
+            )}
+          </div>
+
+          <ExitDialog />
+        </div>
+      </div>
+    )
+  }
+
+  // Renderizado normal para no-carrito o sessionEnded legacy
+
   if (!restaurante?.esCarrito && (todoPagado || (sessionEnded && hayItems && totalPedidoNum > 0.01 && totalPendiente <= 0.01))) {
     return (
       <div className="min-h-screen bg-linear-to-b from-neutral-100 to-neutral-200 dark:from-neutral-950 dark:to-neutral-900 py-8 pb-32">

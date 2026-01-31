@@ -138,6 +138,7 @@ const Nombre = () => {
               imagenUrl: string | null
               mpConnected: boolean | null
               esCarrito: boolean | null
+              splitPayment: boolean | null
             } | null
           }
         }

@@ -43,7 +43,7 @@ const AgregarProducto = () => {
     return a.localeCompare(b)
   })
 
-  const agregarAlPedido = (producto: typeof productos[0] | any, cantidad: number = 1) => {
+  const agregarAlPedido = (producto: typeof productos[0] | any, cantidad: number = 1, ingredientesExcluidos?: number[]) => {
     if (!clienteNombre) return
     sendMessage({
       type: 'AGREGAR_ITEM',
@@ -52,7 +52,8 @@ const AgregarProducto = () => {
         clienteNombre,
         cantidad,
         precioUnitario: String(producto.precio),
-        imagenUrl: producto.imagenUrl
+        imagenUrl: producto.imagenUrl,
+        ingredientesExcluidos
       },
     })
     toast.success('Agregado a la orden', { description: `${producto.nombre}`, duration: 1500 })
@@ -94,8 +95,8 @@ const AgregarProducto = () => {
                   onClick={() => setSelectedCategory(category || 'All')}
                   variant={selectedCategory === category ? "default" : "secondary"}
                   className={`rounded-lg px-5 h-10 text-xs font-medium whitespace-nowrap snap-start transition-all ${selectedCategory === category
-                      ? "shadow-md"
-                      : "bg-secondary/50 hover:bg-secondary border border-transparent"
+                    ? "shadow-md"
+                    : "bg-secondary/50 hover:bg-secondary border border-transparent"
                     }`}
                 >
                   {category === 'All' ? 'Todas' : category}

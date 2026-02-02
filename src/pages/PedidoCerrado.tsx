@@ -62,6 +62,7 @@ const PedidoCerrado = () => {
   const [subtotalesEstado, setSubtotalesEstado] = useState<SubtotalPagado[]>([])
   const [mozoItemsEstado, setMozoItemsEstado] = useState<MozoItem[]>([]) // NEW: Track Mozo items from API
   const [loadingSubtotales, setLoadingSubtotales] = useState(true) // Empezar en true para evitar redirects prematuros
+  const [serverTodoPagado, setServerTodoPagado] = useState<boolean | null>(null) // Server-authoritative payment status
   const lastPedidoIdRef = useRef<number | null>(null)
 
   // Verificar si MercadoPago está disponible
@@ -124,13 +125,13 @@ const PedidoCerrado = () => {
   const totalPedidoNum = parseFloat(totalPedido)
   const totalPendiente = totalPedidoNum - totalPagado
   // todoPagado es true SOLO si:
-  // 1. Hay items en el pedido
-  // 2. El total del pedido es mayor que 0
-  // 3. El total pendiente es <= 0.01 (margen para redondeo)
-  // 4. HAY AL MENOS UN PAGO (cliente o Mozo item) - evita falsos positivos
+  // 1. Server says it's paid (authoritative source) OR
+  // 2. Client-side calculation confirms it (fallback)
   const hayItems = todosLosItems.length > 0
   const hayPagosProcesados = subtotales.some(s => s.pagado) || mozoItemsPagados.length > 0
-  const todoPagado = hayItems && totalPedidoNum > 0.01 && totalPendiente <= 0.01 && hayPagosProcesados
+  const clientCalculatedPagado = hayItems && totalPedidoNum > 0.01 && totalPendiente <= 0.01 && hayPagosProcesados
+  // PRIORITY: Use server's value if available (more reliable for mozo items)
+  const todoPagado = serverTodoPagado !== null ? serverTodoPagado : clientCalculatedPagado
 
   // Debug logging
   useEffect(() => {
@@ -204,6 +205,11 @@ const PedidoCerrado = () => {
               cantidad: item.cantidad
             })))
           }
+        }
+
+        // Use server's authoritative todoPagado value
+        if (data.resumen && data.resumen.todoPagado !== undefined) {
+          setServerTodoPagado(data.resumen.todoPagado)
         }
       }
     } catch (error) {

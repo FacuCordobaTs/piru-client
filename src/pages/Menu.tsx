@@ -143,6 +143,8 @@ const Menu = () => {
       ? `${producto.nombre} (sin ${ingredientesExcluidos.length} ingrediente${ingredientesExcluidos.length !== 1 ? 's' : ''})`
       : producto.nombre
     toast.success('Agregado a la orden', { description: mensaje, duration: 1500 })
+    // Abrir el carrito automáticamente tras agregar un producto
+    setTimeout(() => abrirCarrito(), 350)
   }
 
   const handleEliminarItem = (itemPedidoId: number) => {

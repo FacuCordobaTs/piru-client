@@ -139,17 +139,12 @@ const Menu = () => {
         ingredientesExcluidos: ingredientesExcluidos || []
       },
     })
-    const mensaje = ingredientesExcluidos && ingredientesExcluidos.length > 0
-      ? `${producto.nombre} (sin ${ingredientesExcluidos.length} ingrediente${ingredientesExcluidos.length !== 1 ? 's' : ''})`
-      : producto.nombre
-    toast.success('Agregado a la orden', { description: mensaje, duration: 1500 })
     // Abrir el carrito automáticamente tras agregar un producto
     setTimeout(() => abrirCarrito(), 350)
   }
 
   const handleEliminarItem = (itemPedidoId: number) => {
     sendMessage({ type: 'ELIMINAR_ITEM', payload: { itemId: itemPedidoId }, })
-    toast.success('Producto eliminado')
   }
 
   // --- LÓGICA DE CONFIRMACIÓN GRUPAL ---
@@ -201,7 +196,6 @@ const Menu = () => {
     }
   }, [confirmacionGrupal?.activa])
 
-  // Efecto para mostrar toast cuando se cancela la confirmación
   useEffect(() => {
     if (confirmacionCancelada) {
       toast.error(`${confirmacionCancelada.canceladoPor} canceló la confirmación`, {

@@ -139,6 +139,7 @@ const Nombre = () => {
               mpConnected: boolean | null
               esCarrito: boolean | null
               splitPayment: boolean | null
+              soloCartaDigital: boolean
             } | null
           }
         }

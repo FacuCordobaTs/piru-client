@@ -336,7 +336,9 @@ const Menu = () => {
         {/* --- MENSAJE EXPLICANDO DE QUE DEBEN SELECCIONAR LOS PRODUCTOS Y CONFIRMAR EL PEDIDO  --- */}
         <section className="space-y-3 py-4 px-4 bg-secondary/50 rounded-lg">
           <p className="text-sm font-medium">
-            Selecciona los productos y confirma el pedido para que el mozo pueda atender tu mesa.
+            {restaurante?.soloCartaDigital
+              ? 'Arma tu pedido aquí para leerle fácilmente al mozo lo que elegiste cuando se acerque a tu mesa.'
+              : 'Selecciona los productos y confirma el pedido para que el mozo pueda atender tu mesa.'}
           </p>
         </section>
 
@@ -532,10 +534,17 @@ const Menu = () => {
                   <span className="text-muted-foreground text-sm">Total a pagar</span>
                   <span className="text-2xl font-black tracking-tight">${totalPedido}</span>
                 </div>
-                <Button className="w-full h-14 text-base font-bold rounded-2xl shadow-lg shadow-primary/20" size="lg" onClick={iniciarConfirmacionPedido}>
-                  Confirmar Pedido
-                  <ArrowLeft className="w-5 h-5 ml-2 rotate-180" />
-                </Button>
+                {!restaurante?.soloCartaDigital && (
+                  <Button className="w-full h-14 text-base font-bold rounded-2xl shadow-lg shadow-primary/20" size="lg" onClick={iniciarConfirmacionPedido}>
+                    Confirmar Pedido
+                    <ArrowLeft className="w-5 h-5 ml-2 rotate-180" />
+                  </Button>
+                )}
+                {restaurante?.soloCartaDigital && (
+                  <div className="text-center text-sm font-medium text-orange-600 dark:text-orange-400 py-3 bg-orange-100/50 dark:bg-orange-900/20 rounded-xl">
+                    Léele tu pedido al mozo cuando pase 😊
+                  </div>
+                )}
               </div>
             )}
           </div>

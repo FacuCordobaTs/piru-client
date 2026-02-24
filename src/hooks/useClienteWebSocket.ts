@@ -2,7 +2,6 @@ import { useEffect, useRef, useState, useCallback } from 'react'
 import { useMesaStore } from '@/store/mesaStore'
 import { useCarritoStore } from '@/store/carritoStore'
 import { toast } from 'sonner'
-import confetti from 'canvas-confetti'
 
 interface ItemPedido {
   id: number
@@ -264,31 +263,7 @@ export const useClienteWebSocket = (): UseClienteWebSocketReturn => {
                 ) {
                   const name = data.payload.nuevoItem.clienteNombre
                   const product = data.payload.nuevoItem.nombreProducto || 'un producto'
-
-                  // Animación de confeti profesional desde los bordes inferiores
-                  const colors = ['#f59e0b', '#10b981', '#3b82f6', '#ec4899', '#8b5cf6']
-                  confetti({
-                    particleCount: 60,
-                    angle: 60,
-                    spread: 55,
-                    origin: { x: 0, y: 0.8 },
-                    colors: colors
-                  })
-                  confetti({
-                    particleCount: 60,
-                    angle: 120,
-                    spread: 55,
-                    origin: { x: 1, y: 0.8 },
-                    colors: colors
-                  })
-
-                  // Toast profesional personalizado
-                  toast.success(`¡${name} acaba de pedir algo!`, {
-                    description: `Agregó ${product} a la mesa.`,
-                    icon: '☺️',
-                    duration: 4000,
-                    className: 'border-l-4 border-l-amber-500 bg-background shadow-xl',
-                  })
+                  toast(`${name} agregó ${product} al pedido 🍽️`)
                 }
 
                 // Actualizar el estado con los items y pedido del servidor

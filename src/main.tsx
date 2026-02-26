@@ -15,6 +15,9 @@ import Pago from './pages/Pago'
 import Factura from './pages/Factura'
 import { PagoExitoso, PagoFallido, PagoPendiente } from './pages/PagoResultado'
 import EsperandoPedido from './pages/EsperandoPedido'
+import MenuDelivery from './pages/MenuDelivery'
+import CheckoutDelivery from './pages/CheckoutDelivery'
+import SuccessDelivery from './pages/SuccessDelivery'
 
 const router = createBrowserRouter([
   {
@@ -78,6 +81,18 @@ const router = createBrowserRouter([
   {
     path: "/mesa/:qrToken/pago-pendiente",
     element: <PagoPendiente />,
+  },
+  {
+    path: "/:username",
+    element: <MenuDelivery />,
+  },
+  {
+    path: "/:username/checkout",
+    element: <CheckoutDelivery />,
+  },
+  {
+    path: "/:username/success",
+    element: <SuccessDelivery />,
   },
 ]);
 

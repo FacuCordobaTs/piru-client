@@ -17,10 +17,14 @@ const CheckoutDelivery = () => {
     const [loading, setLoading] = useState(false)
 
     const [tipoPedido, setTipoPedido] = useState<'delivery' | 'takeaway'>('delivery')
-    const [nombre, setNombre] = useState('')
-    const [telefono, setTelefono] = useState('')
-    const [direccion, setDireccion] = useState('')
+    const [nombre, setNombre] = useState(localStorage.getItem('cliente_nombre') || '')
+    const [telefono, setTelefono] = useState(localStorage.getItem('cliente_telefono') || '')
+    const [direccion, setDireccion] = useState(localStorage.getItem('cliente_direccion') || '')
     const [notas, setNotas] = useState('')
+
+    const hasSavedInfo = !!(localStorage.getItem('cliente_nombre') && localStorage.getItem('cliente_telefono'))
+    const [editMode, setEditMode] = useState(!hasSavedInfo)
+
 
     useEffect(() => {
         const savedCart = sessionStorage.getItem('deliveryCart')
@@ -67,6 +71,13 @@ const CheckoutDelivery = () => {
 
             const data = await res.json()
             if (data.success) {
+                // Save client info for future purchases
+                localStorage.setItem('cliente_nombre', nombre)
+                localStorage.setItem('cliente_telefono', telefono)
+                if (tipoPedido === 'delivery') {
+                    localStorage.setItem('cliente_direccion', direccion)
+                }
+
                 sessionStorage.removeItem('deliveryCart')
                 // Save info about the created order for the success page
                 sessionStorage.setItem('deliveryOrderInfo', JSON.stringify({
@@ -123,26 +134,54 @@ const CheckoutDelivery = () => {
                         </div>
                     </RadioGroup>
                 </section>
-
                 <section className="space-y-4">
-                    <div className="space-y-2">
-                        <Label htmlFor="nombre">Tu Nombre</Label>
-                        <Input id="nombre" placeholder="Ej: Juan Perez" className="h-12 rounded-xl" value={nombre} onChange={e => setNombre(e.target.value)} />
-                    </div>
+                    {editMode ? (
+                        <div className="space-y-4">
+                            <div className="space-y-2">
+                                <Label htmlFor="nombre">Tu Nombre</Label>
+                                <Input id="nombre" placeholder="Ej: Juan Perez" className="h-12 rounded-xl" value={nombre} onChange={e => setNombre(e.target.value)} />
+                            </div>
 
-                    <div className="space-y-2">
-                        <Label htmlFor="telefono">Celular (WhatsApp)</Label>
-                        <Input id="telefono" type="tel" placeholder="Ej: +54 9 11 1234-5678" className="h-12 rounded-xl" value={telefono} onChange={e => setTelefono(e.target.value)} />
-                    </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="telefono">Celular (WhatsApp)</Label>
+                                <Input id="telefono" type="tel" placeholder="Ej: +54 9 11 1234-5678" className="h-12 rounded-xl" value={telefono} onChange={e => setTelefono(e.target.value)} />
+                            </div>
 
-                    {tipoPedido === 'delivery' && (
-                        <div className="space-y-2 animate-in fade-in slide-in-from-top-2">
-                            <Label htmlFor="direccion">Dirección completa</Label>
-                            <Input id="direccion" placeholder="Calle, número, piso, depto..." className="h-12 rounded-xl" value={direccion} onChange={e => setDireccion(e.target.value)} />
+                            {tipoPedido === 'delivery' && (
+                                <div className="space-y-2 animate-in fade-in slide-in-from-top-2">
+                                    <Label htmlFor="direccion">Dirección completa</Label>
+                                    <Input id="direccion" placeholder="Calle, número, piso, depto..." className="h-12 rounded-xl" value={direccion} onChange={e => setDireccion(e.target.value)} />
+                                </div>
+                            )}
+                        </div>
+                    ) : (
+                        <div className="bg-secondary/20 p-5 rounded-2xl border border-border/50 space-y-3 relative group">
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setEditMode(true)}
+                                className="absolute top-4 right-4 text-xs h-8"
+                            >
+                                Editar
+                            </Button>
+                            <div>
+                                <p className="text-sm text-muted-foreground mb-1">Nombre</p>
+                                <p className="font-semibold text-foreground">{nombre}</p>
+                            </div>
+                            <div>
+                                <p className="text-sm text-muted-foreground mb-1">Celular</p>
+                                <p className="font-semibold text-foreground">{telefono}</p>
+                            </div>
+                            {tipoPedido === 'delivery' && (
+                                <div className="animate-in fade-in slide-in-from-top-2 pt-2 border-t border-border/50">
+                                    <p className="text-sm text-muted-foreground mb-1">Dirección de entrega</p>
+                                    <p className="font-semibold text-foreground">{direccion || <span className="text-destructive font-medium text-xs">Falta dirección. Presiona Editar.</span>}</p>
+                                </div>
+                            )}
                         </div>
                     )}
 
-                    <div className="space-y-2">
+                    <div className="space-y-2 pt-4 border-t border-border/50">
                         <Label htmlFor="notas">Notas adicionales <span className="text-muted-foreground font-normal">(opcional)</span></Label>
                         <Textarea id="notas" placeholder="Ej: El timbre no anda, llamar al llegar..." className="min-h-[100px] rounded-xl resize-none" value={notas} onChange={(e: any) => setNotas(e.target.value)} />
                     </div>
@@ -166,8 +205,8 @@ const CheckoutDelivery = () => {
                 >
                     {loading ? <Loader2 className="w-6 h-6 animate-spin" /> : 'Confirmar Datos y Pedir'}
                 </Button>
-            </div>
-        </div>
+            </div >
+        </div >
     )
 }
 

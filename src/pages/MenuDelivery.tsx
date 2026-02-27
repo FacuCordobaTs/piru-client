@@ -151,7 +151,7 @@ const MenuDelivery = () => {
     const confirmarPedido = () => {
         if (cartItems.length === 0) return
         // Guardar cartItems temporalmente para pasar al checkout
-        sessionStorage.setItem('deliveryCart', JSON.stringify({ items: cartItems, restauranteId: restaurante.id }))
+        sessionStorage.setItem('deliveryCart', JSON.stringify({ items: cartItems, restauranteId: restaurante.id, deliveryFee: restaurante.deliveryFee }))
         navigate(`/${username}/checkout`)
     }
 

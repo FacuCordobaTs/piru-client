@@ -35,7 +35,9 @@ const CheckoutDelivery = () => {
         }
     }, [username, navigate])
 
-    const total = cart?.items?.reduce((sum: number, item: any) => sum + (parseFloat(item.precio) * item.cantidad), 0) || 0
+    const deliveryFee = cart?.deliveryFee ? parseFloat(cart.deliveryFee) : 0
+    const itemsTotal = cart?.items?.reduce((sum: number, item: any) => sum + (parseFloat(item.precio) * item.cantidad), 0) || 0
+    const total = tipoPedido === 'delivery' ? itemsTotal + deliveryFee : itemsTotal
 
     const handleConfirm = async () => {
         if (!nombre.trim()) return toast.error('Ingresa tu nombre')
@@ -190,8 +192,14 @@ const CheckoutDelivery = () => {
                 <section className="bg-secondary/30 rounded-2xl p-4">
                     <div className="flex justify-between items-center text-sm mb-2">
                         <span className="text-muted-foreground">Subtotal ({cart.items?.length} items)</span>
-                        <span className="font-medium">${total.toFixed(2)}</span>
+                        <span className="font-medium">${itemsTotal.toFixed(2)}</span>
                     </div>
+                    {tipoPedido === 'delivery' && (
+                        <div className="flex justify-between items-center text-sm mb-2">
+                            <span className="text-muted-foreground">{deliveryFee === 0 ? 'Delivery GRATIS' : 'Delivery'}</span>
+                            <span className="font-medium">${deliveryFee.toFixed(2)}</span>
+                        </div>
+                    )}
                     <div className="flex justify-between items-center font-bold text-lg mt-4 pt-4 border-t border-border">
                         <span>Total a enviar</span>
                         <span className="text-orange-600 dark:text-orange-400">${total.toFixed(2)}</span>

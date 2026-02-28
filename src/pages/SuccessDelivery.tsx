@@ -10,8 +10,11 @@ const SuccessDelivery = () => {
     const navigate = useNavigate()
     const [orderInfo, setOrderInfo] = useState<any>(null)
     const [status, setStatus] = useState<'pending_payment' | 'verifying' | 'confirmed'>('pending_payment')
-    const [timeLeft, setTimeLeft] = useState(5)
 
+    const [cucuruAlias, setCucuruAlias] = useState<string | null>(null)
+    const [isLoadingAlias, setIsLoadingAlias] = useState(true)
+
+    // Cargar info del pedido
     useEffect(() => {
         const savedInfo = sessionStorage.getItem('deliveryOrderInfo')
         if (savedInfo) {
@@ -21,29 +24,91 @@ const SuccessDelivery = () => {
         }
     }, [username, navigate])
 
+    // Cargar alias
     useEffect(() => {
-        let timer: any
-        if (status === 'verifying' && timeLeft > 0) {
-            timer = setTimeout(() => setTimeLeft(prev => prev - 1), 1000)
-        } else if (status === 'verifying' && timeLeft === 0) {
-            setStatus('confirmed')
-            toast.success('Transferencia recibida', {
-                icon: <CheckCircle2 className="w-5 h-5 text-green-500" />
-            })
+        const fetchRestaurante = async () => {
+            try {
+                const url = import.meta.env.VITE_API_URL || 'http://localhost:3000/api'
+                const response = await fetch(`${url}/public/restaurante/${username}`)
+                const data = await response.json()
+                if (data.success && data.data.restaurante.cucuruAlias) {
+                    setCucuruAlias(data.data.restaurante.cucuruAlias)
+                }
+            } catch (err) {
+                console.error('Error fetching restaurante data', err)
+            } finally {
+                setIsLoadingAlias(false)
+            }
         }
-        return () => clearTimeout(timer)
-    }, [status, timeLeft])
+        if (username) {
+            fetchRestaurante()
+        }
+    }, [username])
+
+    // WebSocket Connection
+    useEffect(() => {
+        if (!orderInfo) return
+
+        let ws: WebSocket
+        let isConnecting = false
+
+        const connectWebSocket = () => {
+            if (isConnecting) return
+            isConnecting = true
+
+            // Ajustamos la lógica de wsURL para Vite/dev server si env VITE_WS_URL no existe
+            const wsBase = import.meta.env.VITE_WS_URL
+                ? import.meta.env.VITE_WS_URL
+                : import.meta.env.VITE_API_URL
+                    ? import.meta.env.VITE_API_URL.replace('http', 'ws').replace('/api', '')
+                    : 'ws://localhost:3000'
+
+            ws = new WebSocket(`${wsBase}/ws/public/${orderInfo.tipoPedido}/${orderInfo.pedidoId}`)
+
+            ws.onopen = () => {
+                isConnecting = false
+                console.log('Conectado al seguimiento de pago')
+            }
+
+            ws.onmessage = (event) => {
+                try {
+                    const data = JSON.parse(event.data)
+                    if (data.type === 'PAGO_ACREDITADO') {
+                        setStatus('confirmed')
+                        toast.success('¡Transferencia recibida!', {
+                            icon: <CheckCircle2 className="w-5 h-5 text-green-500" />
+                        })
+                    }
+                } catch (e) {
+                    console.error('Error parsing WS message', e)
+                }
+            }
+
+            ws.onclose = () => {
+                isConnecting = false
+                // Intentar reconectar si el pago no se ha confirmado
+                setTimeout(() => {
+                    if (status !== 'confirmed') connectWebSocket()
+                }, 3000)
+            }
+        }
+
+        connectWebSocket()
+
+        return () => {
+            if (ws) ws.close()
+        }
+    }, [orderInfo, status])
 
     if (!orderInfo) return null
 
-    const alias = 'piru.app.mp' // Mock alias
-
     const handleCopyAlias = async () => {
         try {
-            await navigator.clipboard.writeText(alias)
-            toast.success('Alias copiado', { description: alias })
-            // Simulate 5 seconds payment verification
-            setStatus('verifying')
+            if (cucuruAlias) {
+                await navigator.clipboard.writeText(cucuruAlias)
+                toast.success('Alias copiado', { description: cucuruAlias })
+                setStatus('verifying')
+            }
         } catch (err) {
             toast.error('No se pudo copiar el alias')
         }
@@ -78,11 +143,18 @@ const SuccessDelivery = () => {
 
                             <div className="pt-2">
                                 <Button
-                                    className="w-full h-14 text-lg font-bold rounded-xl shadow-md gap-3 bg-blue-600 hover:bg-blue-700 text-white"
+                                    className="w-full h-14 text-lg font-bold rounded-xl shadow-md gap-3 bg-purple-600 hover:bg-purple-700 text-white disabled:opacity-50"
                                     onClick={handleCopyAlias}
+                                    disabled={isLoadingAlias || !cucuruAlias}
                                 >
-                                    <Copy className="w-5 h-5" />
-                                    Copiar Alias: {alias}
+                                    {isLoadingAlias ? (
+                                        <Loader2 className="w-5 h-5 animate-spin" />
+                                    ) : (
+                                        <>
+                                            <Copy className="w-5 h-5" />
+                                            {cucuruAlias ? `Copiar Alias: ${cucuruAlias}` : 'Cargando Alias...'}
+                                        </>
+                                    )}
                                 </Button>
                                 <p className="text-xs text-muted-foreground mt-3 font-medium">
                                     Haz clic para copiar y transferir desde tu app bancaria
@@ -96,11 +168,10 @@ const SuccessDelivery = () => {
                     <div className="text-center space-y-6 animate-in fade-in zoom-in-95 duration-300 flex flex-col items-center">
                         <div className="relative w-24 h-24 flex items-center justify-center">
                             <Loader2 className="w-16 h-16 text-orange-500 animate-spin absolute" />
-                            <span className="font-bold text-xl">{timeLeft}</span>
                         </div>
                         <div className="space-y-2">
-                            <h2 className="text-xl font-bold">Verificando transferencia...</h2>
-                            <p className="text-muted-foreground animate-pulse">Por favor, no cierres esta pantalla</p>
+                            <h2 className="text-xl font-bold">Aguardando transferencia...</h2>
+                            <p className="text-muted-foreground animate-pulse">Por favor, realiza el pago y no cierres esta pantalla</p>
                         </div>
                     </div>
                 )}
@@ -118,7 +189,6 @@ const SuccessDelivery = () => {
                         </div>
 
                         <div className="bg-card border border-border rounded-3xl p-6 shadow-sm shadow-black/5 space-y-6 relative overflow-hidden">
-
                             {/* Receipt jagged edge effect */}
                             <div className="absolute top-0 left-0 w-full h-2 bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdib3g9IjAgMCAyMCAyIiBwcmVzZXJ2ZUFzcGVjdFJhdGlvPSJub25lIiBmaWxsPSJjdXJyZW50Q29sb3IiPjxwb2x5Z29uIHBvaW50cz0iMCAwLCAyMCAwLCAxMCAyIg==')] opacity-10" />
 

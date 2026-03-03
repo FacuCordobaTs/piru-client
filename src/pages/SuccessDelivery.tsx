@@ -12,7 +12,10 @@ const SuccessDelivery = () => {
     const [status, setStatus] = useState<'pending_payment' | 'verifying' | 'confirmed'>('pending_payment')
 
     const [cucuruAlias, setCucuruAlias] = useState<string | null>(null)
+    const [mpConnected, setMpConnected] = useState<boolean>(false)
+    const [transferenciaAlias, setTransferenciaAlias] = useState<string | null>(null)
     const [isLoadingAlias, setIsLoadingAlias] = useState(true)
+    const [isCreatingMP, setIsCreatingMP] = useState(false)
 
     // Cargar info del pedido
     useEffect(() => {
@@ -24,15 +27,17 @@ const SuccessDelivery = () => {
         }
     }, [username, navigate])
 
-    // Cargar alias
+    // Cargar config
     useEffect(() => {
         const fetchRestaurante = async () => {
             try {
                 const url = import.meta.env.VITE_API_URL || 'http://localhost:3000/api'
                 const response = await fetch(`${url}/public/restaurante/${username}`)
                 const data = await response.json()
-                if (data.success && data.data.restaurante.cucuruAlias) {
+                if (data.success && data.data.restaurante) {
                     setCucuruAlias(data.data.restaurante.cucuruAlias)
+                    setMpConnected(data.data.restaurante.mpConnected)
+                    setTransferenciaAlias(data.data.restaurante.transferenciaAlias)
                 }
             } catch (err) {
                 console.error('Error fetching restaurante data', err)
@@ -102,15 +107,57 @@ const SuccessDelivery = () => {
 
     if (!orderInfo) return null
 
-    const handleCopyAlias = async () => {
+    const handleCopyAlias = async (aliasToCopy: string) => {
         try {
-            if (cucuruAlias) {
-                await navigator.clipboard.writeText(cucuruAlias)
-                toast.success('Alias copiado', { description: cucuruAlias })
-                setStatus('verifying')
-            }
+            await navigator.clipboard.writeText(aliasToCopy)
+            toast.success('Alias copiado', { description: aliasToCopy })
         } catch (err) {
             toast.error('No se pudo copiar el alias')
+        }
+    }
+
+    const handleCrearMP = async () => {
+        setIsCreatingMP(true)
+        try {
+            const url = import.meta.env.VITE_API_URL || 'http://localhost:3000/api'
+            const response = await fetch(`${url}/mp/crear-preferencia-externo`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    pedidoId: orderInfo.pedidoId,
+                    tipoPedido: orderInfo.tipoPedido
+                })
+            })
+            const data = await response.json()
+            if (data.success && data.url_pago) {
+                window.location.href = data.url_pago
+            } else {
+                toast.error('Error', { description: 'No se pudo generar el pago con MercadoPago' })
+            }
+        } catch (err) {
+            toast.error('Error conectando con MP')
+            console.error(err)
+        } finally {
+            setIsCreatingMP(false)
+        }
+    }
+
+    const setMetodoPago = async (metodo: string) => {
+        try {
+            const url = import.meta.env.VITE_API_URL || 'http://localhost:3000/api'
+            const endpoint = orderInfo.tipoPedido === 'delivery'
+                ? `/public/delivery/${orderInfo.pedidoId}/metodo-pago`
+                : `/public/takeaway/${orderInfo.pedidoId}/metodo-pago`
+
+            await fetch(`${url}${endpoint}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ metodoPago: metodo })
+            })
+            setStatus('confirmed')
+            toast.success('Método de pago registrado')
+        } catch (error) {
+            console.error('Error setting method', error)
         }
     }
 
@@ -142,23 +189,60 @@ const SuccessDelivery = () => {
                             <p className="text-4xl font-black">${total?.toFixed(2)}</p>
 
                             <div className="pt-2">
-                                <Button
-                                    className="w-full h-14 text-lg font-bold rounded-xl shadow-md gap-3 bg-purple-600 hover:bg-purple-700 text-white disabled:opacity-50"
-                                    onClick={handleCopyAlias}
-                                    disabled={isLoadingAlias || !cucuruAlias}
-                                >
-                                    {isLoadingAlias ? (
+                                {isLoadingAlias ? (
+                                    <Button className="w-full h-14" disabled>
                                         <Loader2 className="w-5 h-5 animate-spin" />
-                                    ) : (
-                                        <>
+                                    </Button>
+                                ) : cucuruAlias ? (
+                                    <>
+                                        <Button
+                                            className="w-full h-14 text-lg font-bold rounded-xl shadow-md gap-3 bg-purple-600 hover:bg-purple-700 text-white"
+                                            onClick={() => {
+                                                handleCopyAlias(cucuruAlias)
+                                                setStatus('verifying')
+                                            }}
+                                        >
                                             <Copy className="w-5 h-5" />
-                                            {cucuruAlias ? `Copiar Alias: ${cucuruAlias}` : 'Cargando Alias...'}
-                                        </>
-                                    )}
-                                </Button>
-                                <p className="text-xs text-muted-foreground mt-3 font-medium">
-                                    Haz clic para copiar y transferir desde tu app bancaria
-                                </p>
+                                            Copiar Alias: {cucuruAlias}
+                                        </Button>
+                                        <p className="text-xs text-center text-muted-foreground mt-3 font-medium">
+                                            Haz clic para copiar y transferir desde tu app bancaria
+                                        </p>
+                                    </>
+                                ) : mpConnected ? (
+                                    <>
+                                        <Button
+                                            className="w-full h-14 text-lg font-bold rounded-xl shadow-md gap-3 bg-[#009EE3] hover:bg-[#008DD0] text-white"
+                                            onClick={handleCrearMP}
+                                            disabled={isCreatingMP}
+                                        >
+                                            {isCreatingMP ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Pagar con MercadoPago'}
+                                        </Button>
+                                    </>
+                                ) : (
+                                    <div className="space-y-3">
+                                        <Button
+                                            className="w-full h-14 text-lg font-bold rounded-xl shadow-md gap-3 bg-slate-900 border-2 border-slate-900 text-white hover:bg-slate-800"
+                                            onClick={() => setMetodoPago('efectivo')}
+                                        >
+                                            Pagar en Efectivo
+                                        </Button>
+
+                                        {transferenciaAlias && (
+                                            <Button
+                                                variant="outline"
+                                                className="w-full h-14 text-lg font-bold rounded-xl border-2 border-slate-200"
+                                                onClick={() => {
+                                                    handleCopyAlias(transferenciaAlias)
+                                                    setMetodoPago('transferencia')
+                                                }}
+                                            >
+                                                <Copy className="w-5 h-5 mr-2" />
+                                                Transferir a {transferenciaAlias}
+                                            </Button>
+                                        )}
+                                    </div>
+                                )}
                             </div>
                         </div>
                     </div>

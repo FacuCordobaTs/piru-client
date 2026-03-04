@@ -23,8 +23,37 @@ const MenuDelivery = () => {
     const [productos, setProductos] = useState<any[]>([])
     const [loading, setLoading] = useState(true)
 
-    // Local cart state
     const [cartItems, setCartItems] = useState<any[]>([])
+
+    const [telefonoCliente, setTelefonoCliente] = useState(localStorage.getItem('cliente_telefono') || '')
+    const [puntosCliente, setPuntosCliente] = useState<number | null>(null)
+    const [loadingPuntos, setLoadingPuntos] = useState(false)
+    const [modalPuntosOpen, setModalPuntosOpen] = useState(false)
+
+    // Function to fetch points
+    const fetchPuntos = useCallback(async (telefono: string, restauranteId: number) => {
+        if (!telefono || !restauranteId) return
+        setLoadingPuntos(true)
+        try {
+            const url = import.meta.env.VITE_API_URL || 'http://localhost:3000/api'
+            const res = await fetch(`${url}/public/restaurante/${restauranteId}/cliente/${encodeURIComponent(telefono)}`)
+            if (res.ok) {
+                const data = await res.json()
+                if (data.success) {
+                    setPuntosCliente(data.data.puntos)
+                } else {
+                    setPuntosCliente(0) // No client yet
+                }
+            } else {
+                setPuntosCliente(0)
+            }
+        } catch (error) {
+            console.error('Error fetching puntos:', error)
+            setPuntosCliente(0)
+        } finally {
+            setLoadingPuntos(false)
+        }
+    }, [])
 
     useEffect(() => {
         const fetchRestaurante = async () => {
@@ -38,6 +67,9 @@ const MenuDelivery = () => {
                 if (data.success) {
                     setRestaurante(data.data.restaurante)
                     setProductos(data.data.productos)
+                    if (data.data.restaurante.sistemaPuntos && telefonoCliente) {
+                        fetchPuntos(telefonoCliente, data.data.restaurante.id)
+                    }
                 } else {
                     toast.error(data.message)
                 }
@@ -95,7 +127,21 @@ const MenuDelivery = () => {
         return () => window.removeEventListener('popstate', handlePopState)
     }, [carritoAbierto, drawerOpen])
 
-    const categorias = ['All', ...Array.from(new Set(productos.map(p => p.categoria).filter(Boolean)))]
+    const handleLoginPuntos = (e: any) => {
+        e.preventDefault()
+        const tel = new FormData(e.target).get('telefono') as string
+        if (tel) {
+            localStorage.setItem('cliente_telefono', tel)
+            setTelefonoCliente(tel)
+            setModalPuntosOpen(false)
+            fetchPuntos(tel, restaurante?.id)
+        }
+    }
+
+    const categoriasBase = Array.from(new Set(productos.map(p => p.categoria).filter(Boolean)))
+    const tieneProductosCanje = productos.some(p => p.puntosNecesarios > 0)
+    const categorias = ['All', ...categoriasBase]
+    if (restaurante?.sistemaPuntos && tieneProductosCanje) categorias.push('Canje Puntos')
 
     const productosPorCategoria = productos.reduce((acc, producto) => {
         const categoria = producto.categoria || 'Sin categoría'
@@ -129,15 +175,27 @@ const MenuDelivery = () => {
                 .map((i: any) => i.nombre)
         }
 
+        const esCanje = !!producto.intentandoCanjear;
+        if (esCanje) {
+            const puntosRestantes = (puntosCliente || 0) - puntosEnCarrito() - (producto.puntosNecesarios * cantidad);
+            if (puntosRestantes < 0) {
+                toast.error('No tienes suficientes puntos para agregar este producto.');
+                return;
+            }
+        }
+
         const newItem = {
             id: Math.random().toString(36).substr(2, 9),
             productoId: producto.id,
-            nombre: producto.nombre,
-            precio: producto.precio,
+            nombre: esCanje ? `${producto.nombre} (Canje)` : producto.nombre,
+            precio: esCanje ? '0.00' : producto.precio,
             imagenUrl: producto.imagenUrl,
             cantidad,
             ingredientesExcluidos: ingredientesExcluidos || [],
-            ingredientesExcluidosNombres: ingExNombres
+            ingredientesExcluidosNombres: ingExNombres,
+            esCanjePuntos: esCanje,
+            puntosNecesarios: esCanje ? producto.puntosNecesarios : 0,
+            puntosGanados: esCanje ? 0 : producto.puntosGanados
         }
 
         setCartItems(prev => [...prev, newItem])
@@ -150,12 +208,13 @@ const MenuDelivery = () => {
 
     const confirmarPedido = () => {
         if (cartItems.length === 0) return
-        // Guardar cartItems temporalmente para pasar al checkout
         sessionStorage.setItem('deliveryCart', JSON.stringify({ items: cartItems, restauranteId: restaurante.id, deliveryFee: restaurante.deliveryFee }))
         navigate(`/${username}/checkout`)
     }
 
     const totalPedido = cartItems.reduce((sum, item) => sum + (parseFloat(item.precio) * item.cantidad), 0).toFixed(2)
+    const puntosEnCarrito = () => cartItems.reduce((sum, item) => sum + (item.esCanjePuntos ? item.puntosNecesarios * item.cantidad : 0), 0)
+    const puntosGanadosCarrito = () => cartItems.reduce((sum, item) => sum + (!item.esCanjePuntos && item.puntosGanados ? item.puntosGanados * item.cantidad : 0), 0)
 
     if (loading) {
         return <div className="min-h-screen flex justify-center items-center">Cargando...</div>
@@ -194,6 +253,35 @@ const MenuDelivery = () => {
                         </div>
                     </div>
                 </section>
+
+                {restaurante?.sistemaPuntos && (
+                    <section className="bg-orange-500/10 border border-orange-500/20 p-4 rounded-xl flex items-center justify-between shadow-sm">
+                        <div className="flex flex-col">
+                            <div className="flex items-center gap-2 mb-1">
+                                <span className="bg-orange-500 text-white text-xs px-2 py-0.5 rounded-full font-bold">PUNTOS</span>
+                                {puntosCliente !== null && (
+                                    <span className="font-semibold text-foreground text-sm">
+                                        {puntosCliente - puntosEnCarrito() + puntosGanadosCarrito()} pts
+                                    </span>
+                                )}
+                            </div>
+                            <p className="text-xs text-muted-foreground max-w-[200px]">
+                                {puntosCliente === null ? 'Identifícate para ver tus puntos disponibles y canjear.' : 'Puntos acumulados. Canjea por productos.'}
+                            </p>
+                        </div>
+                        <div>
+                            {puntosCliente === null ? (
+                                <Button size="sm" onClick={() => setModalPuntosOpen(true)} className="bg-orange-500 hover:bg-orange-600 text-white shadow-sm font-semibold rounded-lg text-xs">
+                                    Identifícate
+                                </Button>
+                            ) : (
+                                <Button disabled variant="outline" size="sm" className="bg-background/80 border-orange-500/30 text-xs font-semibold text-orange-600 dark:text-orange-400">
+                                    Activo
+                                </Button>
+                            )}
+                        </div>
+                    </section>
+                )}
 
                 <section className="space-y-3 py-4 px-4 bg-secondary/50 rounded-lg">
                     <p className="text-sm font-medium">
@@ -250,6 +338,21 @@ const MenuDelivery = () => {
                         ) : (
                             <EmptyState />
                         )
+                    ) : selectedCategory === 'Canje Puntos' ? (
+                        <div className="space-y-4">
+                            <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider px-1">
+                                Productos a Canjear
+                            </h3>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 px-1">
+                                {productos.filter(p => p.puntosNecesarios > 0).map((producto: any) => (
+                                    <ProductoCanjeCard
+                                        key={producto.id}
+                                        producto={producto}
+                                        onClick={() => abrirDetalleProducto({ ...producto, intentandoCanjear: true })}
+                                    />
+                                ))}
+                            </div>
+                        </div>
                     ) : (
                         productosFiltrados.length > 0 ? (
                             <div className="space-y-4">
@@ -381,6 +484,26 @@ const MenuDelivery = () => {
                 </SheetContent>
             </Sheet>
 
+            <Sheet open={modalPuntosOpen} onOpenChange={setModalPuntosOpen}>
+                <SheetContent side="bottom" className="rounded-t-3xl border-none">
+                    <form onSubmit={handleLoginPuntos} className="p-4 py-8 space-y-6">
+                        <div className="text-center space-y-2">
+                            <div className="w-12 h-12 bg-orange-100 dark:bg-orange-500/20 rounded-full flex items-center justify-center mx-auto text-orange-500 mb-4">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2v20" /><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" /></svg>
+                            </div>
+                            <h3 className="text-xl font-bold">Consulta tus Puntos</h3>
+                            <p className="text-sm text-muted-foreground">Ingresa tu celular de WhatsApp para ver los puntos de pedidos anteriores.</p>
+                        </div>
+                        <div className="space-y-2">
+                            <input type="tel" name="telefono" required defaultValue={telefonoCliente} className="w-full text-center py-4 rounded-xl border border-input bg-transparent text-lg placeholder:text-muted-foreground focus:ring-2 focus:ring-orange-500 transition-all outline-none" placeholder="Tu número de celular" />
+                        </div>
+                        <Button type="submit" className="w-full h-12 rounded-xl text-base bg-orange-500 hover:bg-orange-600 text-white font-bold">
+                            {loadingPuntos ? 'Consultando...' : 'Ver Puntos'}
+                        </Button>
+                    </form>
+                </SheetContent>
+            </Sheet>
+
             <ProductDetailDrawer
                 product={selectedProduct ? { ...selectedProduct, categoria: selectedProduct.categoria ?? undefined } : null}
                 open={drawerOpen}
@@ -431,3 +554,27 @@ const ProductoCard = ({ producto, onClick, fullWidth }: { producto: any, onClick
 )
 
 export default MenuDelivery
+
+const ProductoCanjeCard = ({ producto, onClick }: { producto: any, onClick: () => void }) => (
+    <div
+        className="group relative w-full h-24 rounded-2xl overflow-hidden cursor-pointer shadow-sm border border-orange-500/20 hover:border-orange-500/50 bg-card hover:bg-secondary/50 transition-all duration-300 flex items-center p-3 gap-4"
+        onClick={onClick}
+    >
+        <div className="w-16 h-16 shrink-0 rounded-xl overflow-hidden bg-zinc-900 border border-border/50">
+            {producto.imagenUrl ? (
+                <img src={producto.imagenUrl} alt={producto.nombre} className="w-full h-full object-cover" />
+            ) : (
+                <div className="w-full h-full flex items-center justify-center bg-linear-to-br from-zinc-800 to-zinc-900"><Utensils className="w-6 h-6 text-orange-500" /></div>
+            )}
+        </div>
+        <div className="flex-1 min-w-0 flex flex-col justify-center">
+            <h3 className="font-semibold text-sm text-foreground truncate">{producto.nombre}</h3>
+            <p className="text-xs text-muted-foreground line-clamp-1">{producto.descripcion || 'Canje de puntos'}</p>
+        </div>
+        <div className="flex flex-col items-end justify-center px-2">
+            <span className="text-[10px] font-bold text-orange-500 mb-0.5">COSTO</span>
+            <span className="font-extrabold text-orange-500 d text-lg leading-none">{producto.puntosNecesarios}</span>
+            <span className="text-[10px] font-medium text-orange-500 mt-0.5">pts</span>
+        </div>
+    </div>
+)

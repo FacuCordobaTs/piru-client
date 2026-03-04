@@ -57,7 +57,8 @@ const CheckoutDelivery = () => {
                 items: cart.items.map((i: any) => ({
                     productoId: i.productoId,
                     cantidad: i.cantidad,
-                    ingredientesExcluidos: i.ingredientesExcluidos
+                    ingredientesExcluidos: i.ingredientesExcluidos,
+                    esCanjePuntos: i.esCanjePuntos || false
                 }))
             }
 

@@ -20,6 +20,7 @@ interface Product {
   imagenUrl: string | null
   categoria?: string
   ingredientes?: Ingrediente[]
+  descuento?: number | null
 }
 
 interface ProductDetailDrawerProps {
@@ -100,18 +101,32 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder }: Pr
             <div className="p-6 space-y-4 shrink-0 bg-background relative z-10 -mt-8 rounded-t-3xl shadow-[0_-15px_30px_-15px_rgba(0,0,0,0.1)] dark:shadow-[0_-15px_30px_-15px_rgba(0,0,0,0.5)] animate-in slide-in-from-bottom-8 fade-in duration-700 ease-out fill-mode-both">
               <div className="flex items-start justify-between gap-4">
                 <div className="flex-1">
-                  <h3 className="text-2xl font-bold text-foreground mb-1 leading-tight">{product.nombre}</h3>
+                  <div className="flex items-center gap-2 flex-wrap mb-1">
+                    <h3 className="text-2xl font-bold text-foreground leading-tight">{product.nombre}</h3>
+                    {product.descuento && product.descuento > 0 && (
+                      <span className="bg-emerald-500 text-white text-[10px] font-extrabold px-2.5 py-0.5 rounded-full uppercase tracking-wide shadow-sm">
+                        {product.descuento}% OFF
+                      </span>
+                    )}
+                  </div>
                   <p className="text-sm text-muted-foreground">{product.categoria || 'Sin categoría'}</p>
                 </div>
-                <div>
-                  <p className="text-2xl font-bold text-primary">${(parseFloat(String(product.precio)) * quantity).toFixed(2)}</p>
+                <div className="text-right">
+                  {product.descuento && product.descuento > 0 ? (
+                    <>
+                      <p className="text-sm text-muted-foreground line-through">${(parseFloat(String(product.precio)) * quantity).toFixed(2)}</p>
+                      <p className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">${(parseFloat(String(product.precio)) * (1 - product.descuento / 100) * quantity).toFixed(2)}</p>
+                    </>
+                  ) : (
+                    <p className="text-2xl font-bold text-primary">${(parseFloat(String(product.precio)) * quantity).toFixed(2)}</p>
+                  )}
                 </div>
               </div>
 
               {/* Description: We use line-clamp to ensure the text doesn't push the layout if it's exceptionally long */}
-              <div className="space-y-1">
+              <div className="space-y-1.5 pt-2 border-t border-border/50">
                 <h4 className="font-semibold text-sm text-foreground">Descripción</h4>
-                <p className="text-sm text-muted-foreground leading-relaxed line-clamp-3">
+                <p className="text-sm text-foreground/60 leading-relaxed line-clamp-3">
                   {product.descripcion || 'Sin descripción'}
                 </p>
               </div>

@@ -188,12 +188,12 @@ const SuccessDelivery = () => {
                 --popover-foreground: ${primario};
                 --primary: ${primario};
                 --primary-foreground: ${secundario};
-                --secondary: ${primario}15;
+                --secondary: ${primario}18;
                 --secondary-foreground: ${primario};
                 --muted: ${primario}15;
-                --muted-foreground: ${primario};
-                --border: ${primario}20;
-                --input: ${primario}20;
+                --muted-foreground: ${primario}99;
+                --border: ${primario}30;
+                --input: ${primario}30;
             }
 
             .dark {
@@ -205,12 +205,12 @@ const SuccessDelivery = () => {
                 --popover-foreground: ${secundario};
                 --primary: ${secundario};
                 --primary-foreground: ${primario};
-                --secondary: ${secundario}15;
+                --secondary: ${secundario}18;
                 --secondary-foreground: ${secundario};
                 --muted: ${secundario}15;
-                --muted-foreground: ${secundario};
-                --border: ${secundario}20;
-                --input: ${secundario}20;
+                --muted-foreground: ${secundario}b3;
+                --border: ${secundario}30;
+                --input: ${secundario}30;
             }
         `}} />
     ) : null;

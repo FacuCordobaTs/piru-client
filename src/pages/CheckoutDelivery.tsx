@@ -150,12 +150,12 @@ const CheckoutDelivery = () => {
                 --popover-foreground: ${primario};
                 --primary: ${primario};
                 --primary-foreground: ${secundario};
-                --secondary: ${primario}15;
+                --secondary: ${primario}18;
                 --secondary-foreground: ${primario};
                 --muted: ${primario}15;
-                --muted-foreground: ${primario};
-                --border: ${primario}20;
-                --input: ${primario}20;
+                --muted-foreground: ${primario}99;
+                --border: ${primario}30;
+                --input: ${primario}30;
             }
 
             .dark {
@@ -167,12 +167,12 @@ const CheckoutDelivery = () => {
                 --popover-foreground: ${secundario};
                 --primary: ${secundario};
                 --primary-foreground: ${primario};
-                --secondary: ${secundario}15;
+                --secondary: ${secundario}18;
                 --secondary-foreground: ${secundario};
                 --muted: ${secundario}15;
-                --muted-foreground: ${secundario};
-                --border: ${secundario}20;
-                --input: ${secundario}20;
+                --muted-foreground: ${secundario}b3;
+                --border: ${secundario}30;
+                --input: ${secundario}30;
             }
         `}} />
     ) : null;
@@ -247,7 +247,7 @@ const CheckoutDelivery = () => {
                             )}
                         </div>
                     ) : (
-                        <div className="bg-secondary/20 p-5 rounded-2xl border border-border/50 space-y-3 relative group">
+                        <div className="bg-secondary/40 p-5 rounded-2xl border border-border space-y-3 relative group">
                             <Button
                                 variant="outline"
                                 size="sm"
@@ -280,7 +280,7 @@ const CheckoutDelivery = () => {
 
                     {!isLoadingRestaurante && !cucuruAlias && !mpConnected && (
                         <div className="space-y-4 pt-4 border-t border-border/50 animate-in fade-in slide-in-from-bottom-2">
-                            <Label className="text-base text-primary/90 font-bold">¿Cómo vas a pagar el pedido?</Label>
+                            <Label className="text-base font-bold">¿Cómo vas a pagar el pedido?</Label>
                             <RadioGroup value={metodoPago || ''} onValueChange={(v: any) => setMetodoPago(v)} className="grid grid-cols-2 gap-4">
                                 <div className={`relative flex flex-col items-center justify-center p-4 border-2 rounded-2xl cursor-pointer hover:bg-secondary/50 transition-colors ${metodoPago === 'efectivo' ? 'border-emerald-500 bg-emerald-500/5' : 'border-border'}`} onClick={() => setMetodoPago('efectivo')}>
                                     <Label className="cursor-pointer font-semibold">Efectivo</Label>
@@ -293,20 +293,36 @@ const CheckoutDelivery = () => {
                     )}
                 </section>
 
-                <section className="bg-secondary/30 rounded-2xl p-4">
+                <section className="bg-secondary/50 rounded-2xl p-5 border border-border/50">
                     <div className="flex justify-between items-center text-sm mb-2">
                         <span className="text-muted-foreground">Subtotal ({cart.items?.length} items)</span>
                         <span className="font-medium">${itemsTotal.toFixed(2)}</span>
                     </div>
+                    {(() => {
+                        const totalAhorro = cart?.items?.reduce((sum: number, item: any) => {
+                            if (item.descuento && item.descuento > 0 && item.precioOriginal) {
+                                const original = parseFloat(item.precioOriginal) * item.cantidad
+                                const conDescuento = parseFloat(item.precio) * item.cantidad
+                                return sum + (original - conDescuento)
+                            }
+                            return sum
+                        }, 0) || 0
+                        return totalAhorro > 0 ? (
+                            <div className="flex justify-between items-center text-sm mb-2">
+                                <span className="text-emerald-600 dark:text-emerald-400 font-medium">Ahorro por ofertas</span>
+                                <span className="text-emerald-600 dark:text-emerald-400 font-medium">-${totalAhorro.toFixed(2)}</span>
+                            </div>
+                        ) : null
+                    })()}
                     {tipoPedido === 'delivery' && (
                         <div className="flex justify-between items-center text-sm mb-2">
                             <span className="text-muted-foreground">{deliveryFee === 0 ? 'Delivery GRATIS' : 'Delivery'}</span>
                             <span className="font-medium">${deliveryFee.toFixed(2)}</span>
                         </div>
                     )}
-                    <div className="flex justify-between items-center font-bold text-lg mt-4 pt-4 border-t border-border">
+                    <div className="flex justify-between items-center font-bold text-lg mt-4 pt-4 border-t-2 border-foreground/15">
                         <span>Total a enviar</span>
-                        <span className="text-primary/90">${total.toFixed(2)}</span>
+                        <span className="text-xl">${total.toFixed(2)}</span>
                     </div>
                 </section>
 

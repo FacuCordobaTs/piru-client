@@ -206,11 +206,19 @@ const MenuDelivery = () => {
             }
         }
 
+        // Calculate discounted price
+        let precioFinal = producto.precio
+        if (!esCanje && producto.descuento && producto.descuento > 0) {
+            precioFinal = (parseFloat(producto.precio) * (1 - producto.descuento / 100)).toFixed(2)
+        }
+
         const newItem = {
             id: Math.random().toString(36).substr(2, 9),
             productoId: producto.id,
             nombre: esCanje ? `${producto.nombre} (Canje)` : producto.nombre,
-            precio: esCanje ? '0.00' : producto.precio,
+            precio: esCanje ? '0.00' : precioFinal,
+            precioOriginal: producto.precio,
+            descuento: producto.descuento || 0,
             imagenUrl: producto.imagenUrl,
             cantidad,
             ingredientesExcluidos: ingredientesExcluidos || [],
@@ -256,12 +264,12 @@ const MenuDelivery = () => {
                 --popover-foreground: ${primario};
                 --primary: ${primario};
                 --primary-foreground: ${secundario};
-                --secondary: ${primario}15;
+                --secondary: ${primario}18;
                 --secondary-foreground: ${primario};
                 --muted: ${primario}15;
-                --muted-foreground: ${primario};
-                --border: ${primario}20;
-                --input: ${primario}20;
+                --muted-foreground: ${primario}99;
+                --border: ${primario}30;
+                --input: ${primario}30;
             }
 
             .dark {
@@ -273,12 +281,12 @@ const MenuDelivery = () => {
                 --popover-foreground: ${secundario};
                 --primary: ${secundario};
                 --primary-foreground: ${primario};
-                --secondary: ${secundario}15;
+                --secondary: ${secundario}18;
                 --secondary-foreground: ${secundario};
                 --muted: ${secundario}15;
-                --muted-foreground: ${secundario};
-                --border: ${secundario}20;
-                --input: ${secundario}20;
+                --muted-foreground: ${secundario}b3;
+                --border: ${secundario}30;
+                --input: ${secundario}30;
             }
         `}} />
     ) : null;
@@ -531,7 +539,12 @@ const MenuDelivery = () => {
                                                             </p>
                                                         )}
                                                     </div>
-                                                    <p className="font-bold text-base">${(precio * item.cantidad).toFixed(2)}</p>
+                                                    <div className="text-right">
+                                                        {item.descuento > 0 && (
+                                                            <p className="text-[10px] text-muted-foreground line-through">${(parseFloat(item.precioOriginal) * item.cantidad).toFixed(2)}</p>
+                                                        )}
+                                                        <p className="font-bold text-base">${(precio * item.cantidad).toFixed(2)}</p>
+                                                    </div>
                                                 </div>
                                                 <div className="flex items-center justify-end gap-3 mt-2">
                                                     <button onClick={() => handleEliminarItem(item.id)} className="w-8 h-8 flex items-center justify-center rounded-full bg-destructive/10 text-destructive hover:bg-destructive hover:text-white transition-colors">
@@ -598,37 +611,57 @@ const EmptyState = () => (
     </div>
 )
 
-const ProductoCard = ({ producto, onClick, fullWidth }: { producto: any, onClick: () => void, fullWidth?: boolean }) => (
-    <div
-        className={`group relative ${fullWidth ? 'w-full' : 'w-44 shrink-0'} h-52 rounded-3xl overflow-hidden cursor-pointer ${!fullWidth ? 'snap-start' : ''} shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-[1.02] active:scale-[0.98]`}
-        onClick={onClick}
-    >
-        <div className="absolute inset-0 bg-zinc-900">
-            {producto.imagenUrl ? (
-                <img
-                    src={producto.imagenUrl}
-                    alt={producto.nombre}
-                    className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700 ease-out"
-                />
-            ) : (
-                <div className="w-full h-full flex items-center justify-center bg-linear-to-br from-zinc-800 to-zinc-900">
-                    <Utensils className="w-12 h-12 text-primary" />
+const ProductoCard = ({ producto, onClick, fullWidth }: { producto: any, onClick: () => void, fullWidth?: boolean }) => {
+    const tieneDescuento = producto.descuento && producto.descuento > 0
+    const precioOriginal = parseFloat(producto.precio)
+    const precioFinal = tieneDescuento ? precioOriginal * (1 - producto.descuento / 100) : precioOriginal
+
+    return (
+        <div
+            className={`group relative ${fullWidth ? 'w-full' : 'w-44 shrink-0'} h-52 rounded-3xl overflow-hidden cursor-pointer ${!fullWidth ? 'snap-start' : ''} shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-[1.02] active:scale-[0.98]`}
+            onClick={onClick}
+        >
+            <div className="absolute inset-0 bg-zinc-900">
+                {producto.imagenUrl ? (
+                    <img
+                        src={producto.imagenUrl}
+                        alt={producto.nombre}
+                        className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700 ease-out"
+                    />
+                ) : (
+                    <div className="w-full h-full flex items-center justify-center bg-linear-to-br from-zinc-800 to-zinc-900">
+                        <Utensils className="w-12 h-12 text-primary" />
+                    </div>
+                )}
+            </div>
+            <div className="absolute inset-0 bg-linear-to-t from-black/90 via-transparent to-transparent" />
+            {tieneDescuento && (
+                <div className="absolute top-2.5 left-2.5 z-10">
+                    <span className="bg-emerald-500 text-white text-[10px] font-extrabold px-2 py-0.5 rounded-full shadow-lg uppercase tracking-wide">
+                        {producto.descuento}% OFF
+                    </span>
                 </div>
             )}
-        </div>
-        <div className="absolute inset-0 bg-linear-to-t from-black/90 via-transparent to-transparent" />
-        <div className="absolute bottom-0 left-0 right-0 p-3.5">
-            <div className="rounded-2xl p-3 bg-white/70 dark:bg-white/10 backdrop-blur-md border border-white/30 dark:border-white/10 shadow-[0_4px_30px_rgba(0,0,0,0.1)]">
-                <h3 className="font-semibold text-sm text-zinc-900 dark:text-white truncate leading-tight">
-                    {producto.nombre}
-                </h3>
-                <span className="font-bold text-lg text-zinc-800 dark:text-white/90 mt-0.5 block">
-                    ${parseFloat(producto.precio).toFixed(2)}
-                </span>
+            <div className="absolute bottom-0 left-0 right-0 p-3.5">
+                <div className="rounded-2xl p-3 bg-white/70 dark:bg-white/10 backdrop-blur-md border border-white/30 dark:border-white/10 shadow-[0_4px_30px_rgba(0,0,0,0.1)]">
+                    <h3 className="font-semibold text-sm text-zinc-900 dark:text-white truncate leading-tight">
+                        {producto.nombre}
+                    </h3>
+                    <div className="flex items-baseline gap-2 mt-0.5">
+                        <span className={`font-bold text-lg ${tieneDescuento ? 'text-emerald-600 dark:text-emerald-400' : 'text-zinc-800 dark:text-white/90'}`}>
+                            ${precioFinal.toFixed(0)}
+                        </span>
+                        {tieneDescuento && (
+                            <span className="text-xs text-zinc-500 dark:text-white/40 line-through">
+                                ${precioOriginal.toFixed(0)}
+                            </span>
+                        )}
+                    </div>
+                </div>
             </div>
         </div>
-    </div>
-)
+    )
+}
 
 export default MenuDelivery
 

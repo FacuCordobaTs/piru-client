@@ -14,6 +14,7 @@ const SuccessDelivery = () => {
     const [cucuruAlias, setCucuruAlias] = useState<string | null>(null)
     const [mpConnected, setMpConnected] = useState<boolean>(false)
     const [transferenciaAlias, setTransferenciaAlias] = useState<string | null>(null)
+    const [restauranteData, setRestauranteData] = useState<any>(null)
     const [isLoadingAlias, setIsLoadingAlias] = useState(true)
     const [isCreatingMP, setIsCreatingMP] = useState(false)
 
@@ -38,6 +39,7 @@ const SuccessDelivery = () => {
                     setCucuruAlias(data.data.restaurante.cucuruAlias)
                     setMpConnected(data.data.restaurante.mpConnected)
                     setTransferenciaAlias(data.data.restaurante.transferenciaAlias)
+                    setRestauranteData(data.data.restaurante)
 
                     const savedInfo = JSON.parse(sessionStorage.getItem('deliveryOrderInfo') || '{}');
                     if (!data.data.restaurante.cucuruAlias && !data.data.restaurante.mpConnected && savedInfo.metodoPago) {
@@ -168,11 +170,57 @@ const SuccessDelivery = () => {
 
     const { items, tipoPedido, total, pedidoId } = orderInfo
 
+    const cachedThemeStr = sessionStorage.getItem(`theme_${username}`)
+    const cachedTheme = cachedThemeStr ? JSON.parse(cachedThemeStr) : null
+
+    const primario = restauranteData?.colorPrimario || cachedTheme?.primario
+    const secundario = restauranteData?.colorSecundario || cachedTheme?.secundario
+
+    const themeStyles = (primario && secundario) ? (
+        <style dangerouslySetInnerHTML={{
+            __html: `
+            :root {
+                --background: ${secundario};
+                --foreground: ${primario};
+                --card: ${secundario};
+                --card-foreground: ${primario};
+                --popover: ${secundario};
+                --popover-foreground: ${primario};
+                --primary: ${primario};
+                --primary-foreground: ${secundario};
+                --secondary: ${primario}15;
+                --secondary-foreground: ${primario};
+                --muted: ${primario}15;
+                --muted-foreground: ${primario};
+                --border: ${primario}20;
+                --input: ${primario}20;
+            }
+
+            .dark {
+                --background: ${primario};
+                --foreground: ${secundario};
+                --card: ${primario};
+                --card-foreground: ${secundario};
+                --popover: ${primario};
+                --popover-foreground: ${secundario};
+                --primary: ${secundario};
+                --primary-foreground: ${primario};
+                --secondary: ${secundario}15;
+                --secondary-foreground: ${secundario};
+                --muted: ${secundario}15;
+                --muted-foreground: ${secundario};
+                --border: ${secundario}20;
+                --input: ${secundario}20;
+            }
+        `}} />
+    ) : null;
+
     return (
         <div className="min-h-screen bg-background font-sans selection:bg-primary/20 pb-10 flex flex-col items-center">
+            {themeStyles}
             <div className="w-full fixed top-0 z-20 bg-background/80 backdrop-blur-md border-b border-border/50">
                 <div className="max-w-xl mx-auto px-4 py-3 flex items-center justify-between">
-                    <span className="font-semibold text-lg bg-linear-to-r from-orange-600 to-orange-400 bg-clip-text text-transparent">Piru</span>
+                    <span className="font-semibold text-lg bg-linear-to-r from-primary to-primary bg-clip-text text-transparent opacity-80">Piru</span>
                     <ThemeToggle />
                 </div>
             </div>
@@ -182,15 +230,15 @@ const SuccessDelivery = () => {
                 {status === 'pending_payment' && (
                     <div className="text-center space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
                         <div className="mx-auto w-20 h-20 rounded-full bg-secondary flex items-center justify-center border-4 border-background shadow-lg">
-                            <Utensils className="w-10 h-10 text-orange-500" />
+                            <Utensils className="w-10 h-10 text-primary" />
                         </div>
                         <div className="space-y-2">
                             <h1 className="text-2xl font-black tracking-tight">¡Casi listo!</h1>
                             <p className="text-muted-foreground">Tu pedido #{pedidoId} fue creado.</p>
                         </div>
 
-                        <div className="bg-orange-50 dark:bg-orange-950/30 border border-orange-200 dark:border-orange-900/50 rounded-2xl p-6 shadow-sm mx-auto max-w-sm w-full space-y-4">
-                            <p className="font-medium text-orange-800 dark:text-orange-300">Total a transferir</p>
+                        <div className="bg-primary/5 border border-primary/20 rounded-2xl p-6 shadow-sm mx-auto max-w-sm w-full space-y-4">
+                            <p className="font-medium text-primary/80">Total a transferir</p>
                             <p className="text-4xl font-black">${total?.toFixed(2)}</p>
 
                             <div className="pt-2">
@@ -256,7 +304,7 @@ const SuccessDelivery = () => {
                 {status === 'verifying' && (
                     <div className="text-center space-y-6 animate-in fade-in zoom-in-95 duration-300 flex flex-col items-center">
                         <div className="relative w-24 h-24 flex items-center justify-center">
-                            <Loader2 className="w-16 h-16 text-orange-500 animate-spin absolute" />
+                            <Loader2 className="w-16 h-16 text-primary animate-spin absolute" />
                         </div>
                         <div className="space-y-2">
                             <h2 className="text-xl font-bold">Aguardando transferencia...</h2>
@@ -279,14 +327,14 @@ const SuccessDelivery = () => {
 
                         <div className="bg-card border border-border rounded-3xl p-6 shadow-sm shadow-black/5 space-y-6 relative overflow-hidden">
                             {orderInfo.metodoPago === 'transferencia' && transferenciaAlias && (
-                                <div className="p-4 border-2 border-orange-200 dark:border-orange-900/50 rounded-2xl bg-orange-50 dark:bg-orange-950/20 mb-4">
-                                    <p className="text-sm font-bold text-orange-800 dark:text-orange-400 mb-2">Por favor, transferí el total a este alias:</p>
+                                <div className="p-4 border-2 border-primary/20 rounded-2xl bg-primary/5 mb-4">
+                                    <p className="text-sm font-bold text-primary/80 mb-2">Por favor, transferí el total a este alias:</p>
                                     <Button
                                         variant="outline"
-                                        className="w-full h-12 text-base font-bold rounded-xl border-orange-200 hover:bg-orange-100 dark:hover:bg-orange-900/30"
+                                        className="w-full h-12 text-base font-bold rounded-xl border-primary/20 hover:bg-primary/10"
                                         onClick={() => handleCopyAlias(transferenciaAlias)}
                                     >
-                                        <Copy className="w-5 h-5 mr-2 text-orange-500" />
+                                        <Copy className="w-5 h-5 mr-2 text-primary" />
                                         {transferenciaAlias}
                                     </Button>
                                     <p className="text-xs mt-3 text-center text-muted-foreground">Tu pedido comenzará a prepararse una vez recibido el pago.</p>
@@ -325,7 +373,7 @@ const SuccessDelivery = () => {
                                     {items?.map((item: any, i: number) => (
                                         <div key={i} className="flex justify-between items-start gap-2 border-b border-border/50 pb-3 last:border-0 last:pb-0">
                                             <div className="flex gap-2">
-                                                <span className="font-semibold text-orange-600 dark:text-orange-400 min-w-4">{item.cantidad}x</span>
+                                                <span className="font-semibold text-primary/90 min-w-4">{item.cantidad}x</span>
                                                 <div>
                                                     <p className="font-medium text-sm leading-tight">{item.nombreProducto || item.nombre}</p>
                                                     {item.ingredientesExcluidosNombres?.length > 0 && (

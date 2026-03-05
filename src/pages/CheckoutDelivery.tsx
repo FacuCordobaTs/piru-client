@@ -28,6 +28,7 @@ const CheckoutDelivery = () => {
     const [cucuruAlias, setCucuruAlias] = useState<string | null>(null)
     const [mpConnected, setMpConnected] = useState<boolean>(false)
     const [metodoPago, setMetodoPago] = useState<'efectivo' | 'transferencia' | null>(null)
+    const [restauranteData, setRestauranteData] = useState<any>(null)
     const [isLoadingRestaurante, setIsLoadingRestaurante] = useState(true)
 
     useEffect(() => {
@@ -39,6 +40,7 @@ const CheckoutDelivery = () => {
                 if (data.success && data.data.restaurante) {
                     setCucuruAlias(data.data.restaurante.cucuruAlias)
                     setMpConnected(data.data.restaurante.mpConnected)
+                    setRestauranteData(data.data.restaurante)
                 }
             } catch (err) {
                 console.error('Error fetching restaurante data', err)
@@ -51,7 +53,7 @@ const CheckoutDelivery = () => {
 
 
     useEffect(() => {
-        const savedCart = sessionStorage.getItem('deliveryCart')
+        const savedCart = localStorage.getItem(`deliveryCart_${username}`)
         if (savedCart) {
             setCart(JSON.parse(savedCart))
         } else {
@@ -110,7 +112,7 @@ const CheckoutDelivery = () => {
                     localStorage.setItem('cliente_direccion', direccion)
                 }
 
-                sessionStorage.removeItem('deliveryCart')
+                localStorage.removeItem(`deliveryCart_${username}`)
                 // Save info about the created order for the success page
                 sessionStorage.setItem('deliveryOrderInfo', JSON.stringify({
                     pedidoId: data.data.id,
@@ -130,10 +132,56 @@ const CheckoutDelivery = () => {
         }
     }
 
+    const cachedThemeStr = sessionStorage.getItem(`theme_${username}`)
+    const cachedTheme = cachedThemeStr ? JSON.parse(cachedThemeStr) : null
+
+    const primario = restauranteData?.colorPrimario || cachedTheme?.primario
+    const secundario = restauranteData?.colorSecundario || cachedTheme?.secundario
+
+    const themeStyles = (primario && secundario) ? (
+        <style dangerouslySetInnerHTML={{
+            __html: `
+            :root {
+                --background: ${secundario};
+                --foreground: ${primario};
+                --card: ${secundario};
+                --card-foreground: ${primario};
+                --popover: ${secundario};
+                --popover-foreground: ${primario};
+                --primary: ${primario};
+                --primary-foreground: ${secundario};
+                --secondary: ${primario}15;
+                --secondary-foreground: ${primario};
+                --muted: ${primario}15;
+                --muted-foreground: ${primario};
+                --border: ${primario}20;
+                --input: ${primario}20;
+            }
+
+            .dark {
+                --background: ${primario};
+                --foreground: ${secundario};
+                --card: ${primario};
+                --card-foreground: ${secundario};
+                --popover: ${primario};
+                --popover-foreground: ${secundario};
+                --primary: ${secundario};
+                --primary-foreground: ${primario};
+                --secondary: ${secundario}15;
+                --secondary-foreground: ${secundario};
+                --muted: ${secundario}15;
+                --muted-foreground: ${secundario};
+                --border: ${secundario}20;
+                --input: ${secundario}20;
+            }
+        `}} />
+    ) : null;
+
     if (!cart) return null
 
     return (
         <div className="min-h-screen bg-background font-sans selection:bg-primary/20 pb-10">
+            {themeStyles}
             <div className="sticky top-0 z-20 bg-background/80 backdrop-blur-md border-b border-border/50">
                 <div className="max-w-xl mx-auto px-4 py-3 flex items-center justify-between">
                     <div className="flex items-center gap-3">
@@ -155,13 +203,13 @@ const CheckoutDelivery = () => {
                 <section className="space-y-4">
                     <Label className="text-base">¿Cómo vas a recibir tu pedido?</Label>
                     <RadioGroup defaultValue="delivery" value={tipoPedido} onValueChange={(v: any) => setTipoPedido(v)} className="grid grid-cols-2 gap-4">
-                        <div className={`relative flex flex-col items-center justify-center p-4 border-2 rounded-2xl cursor-pointer hover:bg-secondary/50 transition-colors ${tipoPedido === 'delivery' ? 'border-orange-500 bg-orange-500/5' : 'border-border'}`} onClick={() => setTipoPedido('delivery')}>
-                            <MapPin className={`w-8 h-8 mb-2 ${tipoPedido === 'delivery' ? 'text-orange-500' : 'text-muted-foreground'}`} />
+                        <div className={`relative flex flex-col items-center justify-center p-4 border-2 rounded-2xl cursor-pointer hover:bg-secondary/50 transition-colors ${tipoPedido === 'delivery' ? 'border-primary bg-primary/5' : 'border-border'}`} onClick={() => setTipoPedido('delivery')}>
+                            <MapPin className={`w-8 h-8 mb-2 ${tipoPedido === 'delivery' ? 'text-primary' : 'text-muted-foreground'}`} />
                             <Label className="cursor-pointer font-semibold mb-1">Delivery</Label>
                             <span className="text-xs text-muted-foreground text-center">Te lo llevamos</span>
                         </div>
-                        <div className={`relative flex flex-col items-center justify-center p-4 border-2 rounded-2xl cursor-pointer hover:bg-secondary/50 transition-colors ${tipoPedido === 'takeaway' ? 'border-orange-500 bg-orange-500/5' : 'border-border'}`} onClick={() => setTipoPedido('takeaway')}>
-                            <Store className={`w-8 h-8 mb-2 ${tipoPedido === 'takeaway' ? 'text-orange-500' : 'text-muted-foreground'}`} />
+                        <div className={`relative flex flex-col items-center justify-center p-4 border-2 rounded-2xl cursor-pointer hover:bg-secondary/50 transition-colors ${tipoPedido === 'takeaway' ? 'border-primary bg-primary/5' : 'border-border'}`} onClick={() => setTipoPedido('takeaway')}>
+                            <Store className={`w-8 h-8 mb-2 ${tipoPedido === 'takeaway' ? 'text-primary' : 'text-muted-foreground'}`} />
                             <Label className="cursor-pointer font-semibold mb-1">Take Away</Label>
                             <span className="text-xs text-muted-foreground text-center">Lo pasas a buscar</span>
                         </div>
@@ -221,7 +269,7 @@ const CheckoutDelivery = () => {
 
                     {!isLoadingRestaurante && !cucuruAlias && !mpConnected && (
                         <div className="space-y-4 pt-4 border-t border-border/50 animate-in fade-in slide-in-from-bottom-2">
-                            <Label className="text-base text-orange-600 dark:text-orange-400 font-bold">¿Cómo vas a pagar el pedido?</Label>
+                            <Label className="text-base text-primary/90 font-bold">¿Cómo vas a pagar el pedido?</Label>
                             <RadioGroup value={metodoPago || ''} onValueChange={(v: any) => setMetodoPago(v)} className="grid grid-cols-2 gap-4">
                                 <div className={`relative flex flex-col items-center justify-center p-4 border-2 rounded-2xl cursor-pointer hover:bg-secondary/50 transition-colors ${metodoPago === 'efectivo' ? 'border-emerald-500 bg-emerald-500/5' : 'border-border'}`} onClick={() => setMetodoPago('efectivo')}>
                                     <Label className="cursor-pointer font-semibold">Efectivo</Label>
@@ -247,12 +295,12 @@ const CheckoutDelivery = () => {
                     )}
                     <div className="flex justify-between items-center font-bold text-lg mt-4 pt-4 border-t border-border">
                         <span>Total a enviar</span>
-                        <span className="text-orange-600 dark:text-orange-400">${total.toFixed(2)}</span>
+                        <span className="text-primary/90">${total.toFixed(2)}</span>
                     </div>
                 </section>
 
                 <Button
-                    className="w-full h-14 text-lg font-bold rounded-2xl bg-orange-500 hover:bg-orange-600 shadow-lg shadow-orange-500/20"
+                    className="w-full h-14 text-lg font-bold rounded-2xl bg-primary hover:bg-primary/90 shadow-lg"
                     onClick={handleConfirm}
                     disabled={loading}
                 >

@@ -76,26 +76,28 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder }: Pr
   return (
     <Drawer open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
       {/* 1. Fixed height set to 75vh (3/4 of screen) and flex-col layout */}
-      <DrawerContent className="h-[75vh] flex flex-col overflow-hidden">
+      <DrawerContent className="h-[80vh] flex flex-col overflow-hidden border-none outline-none">
         {product ? (
           <>
             {/* 2. Image Container: flex-1 allows it to grow/shrink. min-h-0 is crucial for flex-shrink to work */}
-            <div className="relative flex-1 min-h-0 w-full bg-secondary">
+            <div className="relative flex-1 min-h-0 w-full bg-secondary overflow-hidden">
               {product.imagenUrl ? (
                 <img
                   src={product.imagenUrl}
                   alt={product.nombre}
-                  className="absolute inset-0 w-full h-full object-cover"
+                  className="absolute inset-0 w-full h-full object-cover animate-in fade-in zoom-in-95 duration-1000 ease-out"
                 />
               ) : (
-                <div className="absolute inset-0 w-full h-full flex items-center justify-center">
-                  <Utensils className="w-20 h-20 text-orange-500" />
+                <div className="absolute inset-0 w-full h-full flex items-center justify-center animate-in fade-in zoom-in-95 duration-1000 ease-out">
+                  <Utensils className="w-20 h-20 text-primary/30" />
                 </div>
               )}
+              {/* Overlay gradiente suave desde abajo para evitar cortes bruscos */}
+              <div className="absolute inset-x-0 bottom-0 h-32 bg-linear-to-t from-background via-background/60 to-transparent" />
             </div>
 
             {/* 3. Content Container: shrink-0 ensures this area doesn't get squished by the image */}
-            <div className="p-6 space-y-4 shrink-0 bg-background">
+            <div className="p-6 space-y-4 shrink-0 bg-background relative z-10 -mt-8 rounded-t-3xl shadow-[0_-15px_30px_-15px_rgba(0,0,0,0.1)] dark:shadow-[0_-15px_30px_-15px_rgba(0,0,0,0.5)] animate-in slide-in-from-bottom-8 fade-in duration-700 ease-out fill-mode-both">
               <div className="flex items-start justify-between gap-4">
                 <div className="flex-1">
                   <h3 className="text-2xl font-bold text-foreground mb-1 leading-tight">{product.nombre}</h3>
@@ -162,7 +164,7 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder }: Pr
                     })}
                   </div>
                   {ingredientesExcluidos.length > 0 && (
-                    <p className="text-xs text-orange-600 dark:text-orange-400 font-medium">
+                    <p className="text-xs text-primary/80 font-medium">
                       {ingredientesExcluidos.length} ingrediente{ingredientesExcluidos.length !== 1 ? 's' : ''} excluido{ingredientesExcluidos.length !== 1 ? 's' : ''}
                     </p>
                   )}
@@ -175,7 +177,7 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder }: Pr
                 <Button
                   size="lg"
                   onClick={handleAdd}
-                  className="rounded-lg px-8 h-14 bg-primary hover:bg-primary/90 font-semibold w-full"
+                  className="rounded-2xl px-8 h-14 bg-primary hover:bg-primary/90 font-bold w-full transition-all duration-200 active:scale-[0.98] shadow-lg shadow-primary/20"
                 >
                   Agregar al pedido
                 </Button>

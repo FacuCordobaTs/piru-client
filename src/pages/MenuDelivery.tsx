@@ -23,7 +23,23 @@ const MenuDelivery = () => {
     const [productos, setProductos] = useState<any[]>([])
     const [loading, setLoading] = useState(true)
 
-    const [cartItems, setCartItems] = useState<any[]>([])
+    const [cartItems, setCartItems] = useState<any[]>(() => {
+        const saved = localStorage.getItem(`deliveryCart_${username}`)
+        if (saved) {
+            try { return JSON.parse(saved).items || [] } catch { return [] }
+        }
+        return []
+    })
+
+    useEffect(() => {
+        if (restaurante) {
+            localStorage.setItem(`deliveryCart_${username}`, JSON.stringify({
+                items: cartItems,
+                restauranteId: restaurante.id,
+                deliveryFee: restaurante.deliveryFee
+            }))
+        }
+    }, [cartItems, restaurante, username])
 
     const [telefonoCliente, setTelefonoCliente] = useState(localStorage.getItem('cliente_telefono') || '')
     const [puntosCliente, setPuntosCliente] = useState<number | null>(null)
@@ -67,6 +83,12 @@ const MenuDelivery = () => {
                 if (data.success) {
                     setRestaurante(data.data.restaurante)
                     setProductos(data.data.productos)
+                    if (data.data.restaurante.colorPrimario && data.data.restaurante.colorSecundario) {
+                        sessionStorage.setItem(`theme_${username}`, JSON.stringify({
+                            primario: data.data.restaurante.colorPrimario,
+                            secundario: data.data.restaurante.colorSecundario
+                        }))
+                    }
                     if (data.data.restaurante.sistemaPuntos && telefonoCliente) {
                         fetchPuntos(telefonoCliente, data.data.restaurante.id)
                     }
@@ -208,7 +230,7 @@ const MenuDelivery = () => {
 
     const confirmarPedido = () => {
         if (cartItems.length === 0) return
-        sessionStorage.setItem('deliveryCart', JSON.stringify({ items: cartItems, restauranteId: restaurante.id, deliveryFee: restaurante.deliveryFee }))
+        localStorage.setItem(`deliveryCart_${username}`, JSON.stringify({ items: cartItems, restauranteId: restaurante.id, deliveryFee: restaurante.deliveryFee }))
         navigate(`/${username}/checkout`)
     }
 
@@ -216,8 +238,60 @@ const MenuDelivery = () => {
     const puntosEnCarrito = () => cartItems.reduce((sum, item) => sum + (item.esCanjePuntos ? item.puntosNecesarios * item.cantidad : 0), 0)
     const puntosGanadosCarrito = () => cartItems.reduce((sum, item) => sum + (!item.esCanjePuntos && item.puntosGanados ? item.puntosGanados * item.cantidad : 0), 0)
 
+    const cachedThemeStr = sessionStorage.getItem(`theme_${username}`)
+    const cachedTheme = cachedThemeStr ? JSON.parse(cachedThemeStr) : null
+
+    const primario = restaurante?.colorPrimario || cachedTheme?.primario
+    const secundario = restaurante?.colorSecundario || cachedTheme?.secundario
+
+    const themeStyles = (primario && secundario) ? (
+        <style dangerouslySetInnerHTML={{
+            __html: `
+            :root {
+                --background: ${secundario};
+                --foreground: ${primario};
+                --card: ${secundario};
+                --card-foreground: ${primario};
+                --popover: ${secundario};
+                --popover-foreground: ${primario};
+                --primary: ${primario};
+                --primary-foreground: ${secundario};
+                --secondary: ${primario}15;
+                --secondary-foreground: ${primario};
+                --muted: ${primario}15;
+                --muted-foreground: ${primario};
+                --border: ${primario}20;
+                --input: ${primario}20;
+            }
+
+            .dark {
+                --background: ${primario};
+                --foreground: ${secundario};
+                --card: ${primario};
+                --card-foreground: ${secundario};
+                --popover: ${primario};
+                --popover-foreground: ${secundario};
+                --primary: ${secundario};
+                --primary-foreground: ${primario};
+                --secondary: ${secundario}15;
+                --secondary-foreground: ${secundario};
+                --muted: ${secundario}15;
+                --muted-foreground: ${secundario};
+                --border: ${secundario}20;
+                --input: ${secundario}20;
+            }
+        `}} />
+    ) : null;
+
     if (loading) {
-        return <div className="min-h-screen flex justify-center items-center">Cargando...</div>
+        return (
+            <div className="min-h-screen bg-background text-foreground flex justify-center items-center">
+                {themeStyles}
+                <div className="flex flex-col items-center gap-2">
+                    <span className="text-sm font-medium animate-pulse">Cargando...</span>
+                </div>
+            </div>
+        )
     }
 
     if (!restaurante) {
@@ -226,12 +300,10 @@ const MenuDelivery = () => {
 
     return (
         <div className="min-h-screen pb-32 bg-background font-sans selection:bg-primary/20">
+            {themeStyles}
             <div className="sticky top-0 z-20 bg-background/80 backdrop-blur-md border-b border-border/50 supports-backdrop-filter:bg-background/60">
                 <div className="max-w-2xl mx-auto px-4 py-3">
                     <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-secondary/50">
-                            <span className="text-sm font-medium">{restaurante.nombre}</span>
-                        </div>
                         <div className="flex items-center gap-2">
                             <ThemeToggle />
                         </div>
@@ -241,24 +313,35 @@ const MenuDelivery = () => {
 
             <div className="max-w-2xl mx-auto px-5 pt-4 space-y-6">
                 <section className="space-y-4">
-                    <div className="flex items-center gap-4">
+                    <div className="flex items-center justify-center gap-4">
                         {restaurante.imagenUrl && (
-                            <img src={restaurante.imagenUrl} alt="logo" className="w-16 h-16 rounded-full object-cover border-2 border-border shadow-sm" />
+                            <img
+                                src={restaurante.imagenUrl}
+                                alt="logo"
+                                className={`w-48 h-48 rounded-md object-cover ${restaurante.imagenLightUrl ? 'hidden dark:block' : ''}`}
+                            />
                         )}
-                        <div>
+                        {restaurante.imagenLightUrl && (
+                            <img
+                                src={restaurante.imagenLightUrl}
+                                alt="logo"
+                                className="w-48 h-48 rounded-md object-cover block dark:hidden"
+                            />
+                        )}
+                        {/* <div>
                             <p className="text-sm text-muted-foreground font-medium mb-0.5">Bienvenido a</p>
-                            <h1 className="text-3xl font-extrabold tracking-tight bg-linear-to-r from-orange-800 to-orange-400 bg-clip-text text-transparent dark:from-orange-400 dark:to-orange-200">
+                            <h1 className="text-3xl font-extrabold tracking-tight text-primary">
                                 {restaurante.nombre}
                             </h1>
-                        </div>
+                        </div> */}
                     </div>
                 </section>
 
                 {restaurante?.sistemaPuntos && (
-                    <section className="bg-orange-500/10 border border-orange-500/20 p-4 rounded-xl flex items-center justify-between shadow-sm">
+                    <section className="bg-primary/10 border border-primary/20 p-4 rounded-xl flex items-center justify-between shadow-sm">
                         <div className="flex flex-col">
                             <div className="flex items-center gap-2 mb-1">
-                                <span className="bg-orange-500 text-white text-xs px-2 py-0.5 rounded-full font-bold">PUNTOS</span>
+                                <span className="bg-primary text-primary-foreground text-xs px-2 py-0.5 rounded-full font-bold">PUNTOS</span>
                                 {puntosCliente !== null && (
                                     <span className="font-semibold text-foreground text-sm">
                                         {puntosCliente - puntosEnCarrito() + puntosGanadosCarrito()} pts
@@ -271,23 +354,17 @@ const MenuDelivery = () => {
                         </div>
                         <div>
                             {puntosCliente === null ? (
-                                <Button size="sm" onClick={() => setModalPuntosOpen(true)} className="bg-orange-500 hover:bg-orange-600 text-white shadow-sm font-semibold rounded-lg text-xs">
+                                <Button size="sm" onClick={() => setModalPuntosOpen(true)} className="bg-primary hover:bg-primary/90 text-primary-foreground shadow-sm font-semibold rounded-lg text-xs">
                                     Identifícate
                                 </Button>
                             ) : (
-                                <Button disabled variant="outline" size="sm" className="bg-background/80 border-orange-500/30 text-xs font-semibold text-orange-600 dark:text-orange-400">
+                                <Button disabled variant="outline" size="sm" className="bg-background/80 border-primary/30 text-xs font-semibold text-primary/80">
                                     Activo
                                 </Button>
                             )}
                         </div>
                     </section>
                 )}
-
-                <section className="space-y-3 py-4 px-4 bg-secondary/50 rounded-lg">
-                    <p className="text-sm font-medium">
-                        Selecciona los productos y arma tu pedido para Delivery o Take Away.
-                    </p>
-                </section>
 
                 {categorias.length > 1 && (
                     <section className="space-y-3 pt-2">
@@ -438,7 +515,7 @@ const MenuDelivery = () => {
                                                     <img src={imagen} alt="img" className="w-full h-full object-cover" />
                                                 ) : (
                                                     <div className="w-full h-full flex items-center justify-center text-muted-foreground">
-                                                        <Utensils className="w-6 h-6 text-orange-500" />
+                                                        <Utensils className="w-6 h-6 text-primary" />
                                                     </div>
                                                 )}
                                             </div>
@@ -449,7 +526,7 @@ const MenuDelivery = () => {
                                                         <p className="font-bold text-sm truncate">{item.nombre}</p>
                                                         {/* item.ingredientesExcluidosNombres */}
                                                         {item.ingredientesExcluidosNombres?.length > 0 && (
-                                                            <p className="text-xs text-orange-600 dark:text-orange-400 font-medium mt-1">
+                                                            <p className="text-xs text-primary/80 font-medium mt-1">
                                                                 ⚠️ Sin: {item.ingredientesExcluidosNombres.join(', ')}
                                                             </p>
                                                         )}
@@ -474,7 +551,7 @@ const MenuDelivery = () => {
                                     <span className="text-muted-foreground text-sm">Total a pagar</span>
                                     <span className="text-2xl font-black tracking-tight">${totalPedido}</span>
                                 </div>
-                                <Button className="w-full h-14 text-base font-bold rounded-2xl shadow-lg shadow-primary/20 bg-orange-500 hover:bg-orange-600" size="lg" onClick={confirmarPedido}>
+                                <Button className="w-full h-14 text-base font-bold rounded-2xl shadow-lg shadow-primary/20 bg-primary hover:bg-primary/90 text-primary-foreground" size="lg" onClick={confirmarPedido}>
                                     Continuar
                                     <ArrowLeft className="w-5 h-5 ml-2 rotate-180" />
                                 </Button>
@@ -488,16 +565,16 @@ const MenuDelivery = () => {
                 <SheetContent side="bottom" className="rounded-t-3xl border-none">
                     <form onSubmit={handleLoginPuntos} className="p-4 py-8 space-y-6">
                         <div className="text-center space-y-2">
-                            <div className="w-12 h-12 bg-orange-100 dark:bg-orange-500/20 rounded-full flex items-center justify-center mx-auto text-orange-500 mb-4">
+                            <div className="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center mx-auto text-primary mb-4">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2v20" /><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" /></svg>
                             </div>
                             <h3 className="text-xl font-bold">Consulta tus Puntos</h3>
                             <p className="text-sm text-muted-foreground">Ingresa tu celular de WhatsApp para ver los puntos de pedidos anteriores.</p>
                         </div>
                         <div className="space-y-2">
-                            <input type="tel" name="telefono" required defaultValue={telefonoCliente} className="w-full text-center py-4 rounded-xl border border-input bg-transparent text-lg placeholder:text-muted-foreground focus:ring-2 focus:ring-orange-500 transition-all outline-none" placeholder="Tu número de celular" />
+                            <input type="tel" name="telefono" required defaultValue={telefonoCliente} className="w-full text-center py-4 rounded-xl border border-input bg-transparent text-lg placeholder:text-muted-foreground focus:ring-2 focus:ring-primary transition-all outline-none" placeholder="Tu número de celular" />
                         </div>
-                        <Button type="submit" className="w-full h-12 rounded-xl text-base bg-orange-500 hover:bg-orange-600 text-white font-bold">
+                        <Button type="submit" className="w-full h-12 rounded-xl text-base bg-primary hover:bg-primary/90 text-primary-foreground font-bold">
                             {loadingPuntos ? 'Consultando...' : 'Ver Puntos'}
                         </Button>
                     </form>
@@ -535,7 +612,7 @@ const ProductoCard = ({ producto, onClick, fullWidth }: { producto: any, onClick
                 />
             ) : (
                 <div className="w-full h-full flex items-center justify-center bg-linear-to-br from-zinc-800 to-zinc-900">
-                    <Utensils className="w-12 h-12 text-orange-500" />
+                    <Utensils className="w-12 h-12 text-primary" />
                 </div>
             )}
         </div>
@@ -557,14 +634,14 @@ export default MenuDelivery
 
 const ProductoCanjeCard = ({ producto, onClick }: { producto: any, onClick: () => void }) => (
     <div
-        className="group relative w-full h-24 rounded-2xl overflow-hidden cursor-pointer shadow-sm border border-orange-500/20 hover:border-orange-500/50 bg-card hover:bg-secondary/50 transition-all duration-300 flex items-center p-3 gap-4"
+        className="group relative w-full h-24 rounded-2xl overflow-hidden cursor-pointer shadow-sm border border-primary/20 hover:border-primary/50 bg-card hover:bg-secondary/50 transition-all duration-300 flex items-center p-3 gap-4"
         onClick={onClick}
     >
         <div className="w-16 h-16 shrink-0 rounded-xl overflow-hidden bg-zinc-900 border border-border/50">
             {producto.imagenUrl ? (
                 <img src={producto.imagenUrl} alt={producto.nombre} className="w-full h-full object-cover" />
             ) : (
-                <div className="w-full h-full flex items-center justify-center bg-linear-to-br from-zinc-800 to-zinc-900"><Utensils className="w-6 h-6 text-orange-500" /></div>
+                <div className="w-full h-full flex items-center justify-center bg-linear-to-br from-zinc-800 to-zinc-900"><Utensils className="w-6 h-6 text-primary" /></div>
             )}
         </div>
         <div className="flex-1 min-w-0 flex flex-col justify-center">
@@ -572,9 +649,9 @@ const ProductoCanjeCard = ({ producto, onClick }: { producto: any, onClick: () =
             <p className="text-xs text-muted-foreground line-clamp-1">{producto.descripcion || 'Canje de puntos'}</p>
         </div>
         <div className="flex flex-col items-end justify-center px-2">
-            <span className="text-[10px] font-bold text-orange-500 mb-0.5">COSTO</span>
-            <span className="font-extrabold text-orange-500 d text-lg leading-none">{producto.puntosNecesarios}</span>
-            <span className="text-[10px] font-medium text-orange-500 mt-0.5">pts</span>
+            <span className="text-[10px] font-bold text-primary mb-0.5">COSTO</span>
+            <span className="font-extrabold text-primary text-lg leading-none">{producto.puntosNecesarios}</span>
+            <span className="text-[10px] font-medium text-primary mt-0.5">pts</span>
         </div>
     </div>
 )

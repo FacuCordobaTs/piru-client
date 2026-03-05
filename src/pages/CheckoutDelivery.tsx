@@ -25,9 +25,10 @@ const CheckoutDelivery = () => {
     const hasSavedInfo = !!(localStorage.getItem('cliente_nombre') && localStorage.getItem('cliente_telefono'))
     const [editMode, setEditMode] = useState(!hasSavedInfo)
 
-    const [cucuruAlias, setCucuruAlias] = useState<string | null>(null)
+    const [cucuruConfigurado, setCucuruConfigurado] = useState<boolean>(false)
     const [mpConnected, setMpConnected] = useState<boolean>(false)
-    const [metodoPago, setMetodoPago] = useState<'efectivo' | 'transferencia' | null>(null)
+    const [transferenciaAlias, setTransferenciaAlias] = useState<string | null>(null)
+    const [metodoPago, setMetodoPago] = useState<'efectivo' | 'transferencia' | 'mercadopago' | null>(null)
     const [restauranteData, setRestauranteData] = useState<any>(null)
     const [isLoadingRestaurante, setIsLoadingRestaurante] = useState(true)
 
@@ -38,8 +39,9 @@ const CheckoutDelivery = () => {
                 const response = await fetch(`${url}/public/restaurante/${username}`)
                 const data = await response.json()
                 if (data.success && data.data.restaurante) {
-                    setCucuruAlias(data.data.restaurante.cucuruAlias)
+                    setCucuruConfigurado(data.data.restaurante.cucuruConfigurado)
                     setMpConnected(data.data.restaurante.mpConnected)
+                    setTransferenciaAlias(data.data.restaurante.transferenciaAlias)
                     setRestauranteData(data.data.restaurante)
                 }
             } catch (err) {
@@ -69,7 +71,7 @@ const CheckoutDelivery = () => {
         if (!nombre.trim()) return toast.error('Ingresa tu nombre')
         if (!telefono.trim()) return toast.error('Ingresa tu celular')
         if (tipoPedido === 'delivery' && !direccion.trim()) return toast.error('Ingresa tu dirección')
-        if (!isLoadingRestaurante && !cucuruAlias && !mpConnected && !metodoPago) return toast.error('Selecciona un método de pago')
+        if (!isLoadingRestaurante && !metodoPago) return toast.error('Selecciona un método de pago')
 
         setLoading(true)
         try {
@@ -89,7 +91,7 @@ const CheckoutDelivery = () => {
                 }))
             }
 
-            if (!cucuruAlias && !mpConnected && metodoPago) {
+            if (metodoPago) {
                 payload.metodoPago = metodoPago
             }
 
@@ -119,7 +121,9 @@ const CheckoutDelivery = () => {
                     tipoPedido,
                     total: total,
                     items: cart.items,
-                    metodoPago: metodoPago
+                    metodoPago: metodoPago,
+                    cucuruAlias: data.data.cucuruAlias,
+                    cucuruAccountNumber: data.data.cucuruAccountNumber
                 }))
                 navigate(`/${username}/success`)
             } else {
@@ -278,16 +282,23 @@ const CheckoutDelivery = () => {
                         <Textarea id="notas" placeholder="Ej: El timbre no anda, llamar al llegar..." className="min-h-[100px] rounded-xl resize-none" value={notas} onChange={(e: any) => setNotas(e.target.value)} />
                     </div>
 
-                    {!isLoadingRestaurante && !cucuruAlias && !mpConnected && (
+                    {!isLoadingRestaurante && (
                         <div className="space-y-4 pt-4 border-t border-border/50 animate-in fade-in slide-in-from-bottom-2">
                             <Label className="text-base font-bold">¿Cómo vas a pagar el pedido?</Label>
-                            <RadioGroup value={metodoPago || ''} onValueChange={(v: any) => setMetodoPago(v)} className="grid grid-cols-2 gap-4">
+                            <RadioGroup value={metodoPago || ''} onValueChange={(v: any) => setMetodoPago(v)} className="grid grid-cols-2 sm:grid-cols-3 gap-4">
                                 <div className={`relative flex flex-col items-center justify-center p-4 border-2 rounded-2xl cursor-pointer hover:bg-secondary/50 transition-colors ${metodoPago === 'efectivo' ? 'border-emerald-500 bg-emerald-500/5' : 'border-border'}`} onClick={() => setMetodoPago('efectivo')}>
                                     <Label className="cursor-pointer font-semibold">Efectivo</Label>
                                 </div>
-                                <div className={`relative flex flex-col items-center justify-center p-4 border-2 rounded-2xl cursor-pointer hover:bg-secondary/50 transition-colors ${metodoPago === 'transferencia' ? 'border-purple-500 bg-purple-500/5' : 'border-border'}`} onClick={() => setMetodoPago('transferencia')}>
-                                    <Label className="cursor-pointer font-semibold">Transferencia</Label>
-                                </div>
+                                {(cucuruConfigurado || transferenciaAlias) && (
+                                    <div className={`relative flex flex-col items-center justify-center p-4 border-2 rounded-2xl cursor-pointer hover:bg-secondary/50 transition-colors ${metodoPago === 'transferencia' ? 'border-purple-500 bg-purple-500/5' : 'border-border'}`} onClick={() => setMetodoPago('transferencia')}>
+                                        <Label className="cursor-pointer font-semibold">Transferencia</Label>
+                                    </div>
+                                )}
+                                {mpConnected && (
+                                    <div className={`relative flex flex-col items-center justify-center p-4 border-2 rounded-2xl cursor-pointer hover:bg-secondary/50 transition-colors ${metodoPago === 'mercadopago' ? 'border-[#009EE3] bg-[#009EE3]/5' : 'border-border'}`} onClick={() => setMetodoPago('mercadopago')}>
+                                        <Label className="cursor-pointer font-semibold text-[#009EE3]">Mercado Pago</Label>
+                                    </div>
+                                )}
                             </RadioGroup>
                         </div>
                     )}

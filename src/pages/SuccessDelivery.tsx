@@ -38,6 +38,11 @@ const SuccessDelivery = () => {
                     setCucuruAlias(data.data.restaurante.cucuruAlias)
                     setMpConnected(data.data.restaurante.mpConnected)
                     setTransferenciaAlias(data.data.restaurante.transferenciaAlias)
+
+                    const savedInfo = JSON.parse(sessionStorage.getItem('deliveryOrderInfo') || '{}');
+                    if (!data.data.restaurante.cucuruAlias && !data.data.restaurante.mpConnected && savedInfo.metodoPago) {
+                        setStatus('confirmed')
+                    }
                 }
             } catch (err) {
                 console.error('Error fetching restaurante data', err)
@@ -273,6 +278,28 @@ const SuccessDelivery = () => {
                         </div>
 
                         <div className="bg-card border border-border rounded-3xl p-6 shadow-sm shadow-black/5 space-y-6 relative overflow-hidden">
+                            {orderInfo.metodoPago === 'transferencia' && transferenciaAlias && (
+                                <div className="p-4 border-2 border-orange-200 dark:border-orange-900/50 rounded-2xl bg-orange-50 dark:bg-orange-950/20 mb-4">
+                                    <p className="text-sm font-bold text-orange-800 dark:text-orange-400 mb-2">Por favor, transferí el total a este alias:</p>
+                                    <Button
+                                        variant="outline"
+                                        className="w-full h-12 text-base font-bold rounded-xl border-orange-200 hover:bg-orange-100 dark:hover:bg-orange-900/30"
+                                        onClick={() => handleCopyAlias(transferenciaAlias)}
+                                    >
+                                        <Copy className="w-5 h-5 mr-2 text-orange-500" />
+                                        {transferenciaAlias}
+                                    </Button>
+                                    <p className="text-xs mt-3 text-center text-muted-foreground">Tu pedido comenzará a prepararse una vez recibido el pago.</p>
+                                </div>
+                            )}
+
+                            {orderInfo.metodoPago === 'efectivo' && (
+                                <div className="p-4 border-2 border-emerald-200 dark:border-emerald-900/50 rounded-2xl bg-emerald-50 dark:bg-emerald-950/20 mb-4 text-center">
+                                    <p className="text-sm font-bold text-emerald-800 dark:text-emerald-400 mb-1">Pago en Efectivo</p>
+                                    <p className="text-xs mt-1 text-muted-foreground">Aboná el importe exacto al recibir tu pedido.</p>
+                                </div>
+                            )}
+
                             {/* Receipt jagged edge effect */}
                             <div className="absolute top-0 left-0 w-full h-2 bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdib3g9IjAgMCAyMCAyIiBwcmVzZXJ2ZUFzcGVjdFJhdGlvPSJub25lIiBmaWxsPSJjdXJyZW50Q29sb3IiPjxwb2x5Z29uIHBvaW50cz0iMCAwLCAyMCAwLCAxMCAyIg==')] opacity-10" />
 

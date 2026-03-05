@@ -25,6 +25,30 @@ const CheckoutDelivery = () => {
     const hasSavedInfo = !!(localStorage.getItem('cliente_nombre') && localStorage.getItem('cliente_telefono'))
     const [editMode, setEditMode] = useState(!hasSavedInfo)
 
+    const [cucuruAlias, setCucuruAlias] = useState<string | null>(null)
+    const [mpConnected, setMpConnected] = useState<boolean>(false)
+    const [metodoPago, setMetodoPago] = useState<'efectivo' | 'transferencia' | null>(null)
+    const [isLoadingRestaurante, setIsLoadingRestaurante] = useState(true)
+
+    useEffect(() => {
+        const fetchRestaurante = async () => {
+            try {
+                const url = import.meta.env.VITE_API_URL || 'http://localhost:3000/api'
+                const response = await fetch(`${url}/public/restaurante/${username}`)
+                const data = await response.json()
+                if (data.success && data.data.restaurante) {
+                    setCucuruAlias(data.data.restaurante.cucuruAlias)
+                    setMpConnected(data.data.restaurante.mpConnected)
+                }
+            } catch (err) {
+                console.error('Error fetching restaurante data', err)
+            } finally {
+                setIsLoadingRestaurante(false)
+            }
+        }
+        if (username) fetchRestaurante()
+    }, [username])
+
 
     useEffect(() => {
         const savedCart = sessionStorage.getItem('deliveryCart')
@@ -43,6 +67,7 @@ const CheckoutDelivery = () => {
         if (!nombre.trim()) return toast.error('Ingresa tu nombre')
         if (!telefono.trim()) return toast.error('Ingresa tu celular')
         if (tipoPedido === 'delivery' && !direccion.trim()) return toast.error('Ingresa tu dirección')
+        if (!isLoadingRestaurante && !cucuruAlias && !mpConnected && !metodoPago) return toast.error('Selecciona un método de pago')
 
         setLoading(true)
         try {
@@ -60,6 +85,10 @@ const CheckoutDelivery = () => {
                     ingredientesExcluidos: i.ingredientesExcluidos,
                     esCanjePuntos: i.esCanjePuntos || false
                 }))
+            }
+
+            if (!cucuruAlias && !mpConnected && metodoPago) {
+                payload.metodoPago = metodoPago
             }
 
             if (tipoPedido === 'delivery') {
@@ -87,7 +116,8 @@ const CheckoutDelivery = () => {
                     pedidoId: data.data.id,
                     tipoPedido,
                     total: total,
-                    items: cart.items
+                    items: cart.items,
+                    metodoPago: metodoPago
                 }))
                 navigate(`/${username}/success`)
             } else {
@@ -188,6 +218,20 @@ const CheckoutDelivery = () => {
                         <Label htmlFor="notas">Notas adicionales <span className="text-muted-foreground font-normal">(opcional)</span></Label>
                         <Textarea id="notas" placeholder="Ej: El timbre no anda, llamar al llegar..." className="min-h-[100px] rounded-xl resize-none" value={notas} onChange={(e: any) => setNotas(e.target.value)} />
                     </div>
+
+                    {!isLoadingRestaurante && !cucuruAlias && !mpConnected && (
+                        <div className="space-y-4 pt-4 border-t border-border/50 animate-in fade-in slide-in-from-bottom-2">
+                            <Label className="text-base text-orange-600 dark:text-orange-400 font-bold">¿Cómo vas a pagar el pedido?</Label>
+                            <RadioGroup value={metodoPago || ''} onValueChange={(v: any) => setMetodoPago(v)} className="grid grid-cols-2 gap-4">
+                                <div className={`relative flex flex-col items-center justify-center p-4 border-2 rounded-2xl cursor-pointer hover:bg-secondary/50 transition-colors ${metodoPago === 'efectivo' ? 'border-emerald-500 bg-emerald-500/5' : 'border-border'}`} onClick={() => setMetodoPago('efectivo')}>
+                                    <Label className="cursor-pointer font-semibold">Efectivo</Label>
+                                </div>
+                                <div className={`relative flex flex-col items-center justify-center p-4 border-2 rounded-2xl cursor-pointer hover:bg-secondary/50 transition-colors ${metodoPago === 'transferencia' ? 'border-purple-500 bg-purple-500/5' : 'border-border'}`} onClick={() => setMetodoPago('transferencia')}>
+                                    <Label className="cursor-pointer font-semibold">Transferencia</Label>
+                                </div>
+                            </RadioGroup>
+                        </div>
+                    )}
                 </section>
 
                 <section className="bg-secondary/30 rounded-2xl p-4">

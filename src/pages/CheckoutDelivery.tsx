@@ -198,6 +198,17 @@ const CheckoutDelivery = () => {
                 <div className="space-y-2">
                     <h1 className="text-2xl font-bold">Completa tus datos</h1>
                     <p className="text-muted-foreground text-sm">Para enviar tu pedido a preparar</p>
+
+                    {(restauranteData?.direccion && tipoPedido == 'takeaway') && (
+                        <div className="flex items-center gap-2 pt-2 animate-in fade-in slide-in-from-bottom-2 duration-500">
+                            <div className="flex items-center gap-2 px-3 py-1.5 bg-primary/5 rounded-full border border-primary/20 text-muted-foreground shadow-sm max-w-full">
+                                <span className="p-1 bg-background rounded-full shrink-0 shadow-sm border border-border/50">
+                                    <MapPin className="w-3.5 h-3.5 text-primary" />
+                                </span>
+                                <span className="text-sm font-medium truncate text-primary/80">Retira en <strong className="text-primary">{restauranteData.direccion}</strong></span>
+                            </div>
+                        </div>
+                    )}
                 </div>
 
                 <section className="space-y-4">

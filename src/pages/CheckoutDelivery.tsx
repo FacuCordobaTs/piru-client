@@ -7,7 +7,7 @@ import { RadioGroup } from '@/components/ui/radio-group'
 import { Textarea } from '@/components/ui/textarea'
 import { toast } from 'sonner'
 import { ThemeToggle } from '@/components/ThemeToggle'
-import { ArrowLeft, Loader2, MapPin, Store } from 'lucide-react'
+import { ArrowLeft, Loader2, MapPin, Store, Zap } from 'lucide-react'
 
 const CheckoutDelivery = () => {
     const navigate = useNavigate()
@@ -291,7 +291,20 @@ const CheckoutDelivery = () => {
                                 </div>
                                 {(cucuruConfigurado || transferenciaAlias) && (
                                     <div className={`relative flex flex-col items-center justify-center p-4 border-2 rounded-2xl cursor-pointer hover:bg-secondary/50 transition-colors ${metodoPago === 'transferencia' ? 'border-purple-500 bg-purple-500/5' : 'border-border'}`} onClick={() => setMetodoPago('transferencia')}>
-                                        <Label className="cursor-pointer font-semibold">Transferencia</Label>
+                                        {cucuruConfigurado && (
+                                            <div className="absolute -top-2.5 bg-linear-to-r from-purple-600 to-indigo-600 text-white text-[9px] font-extrabold px-2 py-0.5 rounded-full shadow-md flex items-center gap-1">
+                                                <Zap className="w-3 h-3 fill-current" />
+                                                AUTOMÁTICO
+                                            </div>
+                                        )}
+                                        <Label className="cursor-pointer font-semibold text-center mt-1">
+                                            Transferencia
+                                        </Label>
+                                        {cucuruConfigurado && (
+                                            <span className="text-[10px] text-muted-foreground mt-1 text-center font-medium leading-tight">
+                                                CVU / Alias<br />Exclusivo
+                                            </span>
+                                        )}
                                     </div>
                                 )}
                                 {mpConnected && (

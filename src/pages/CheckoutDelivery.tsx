@@ -200,7 +200,8 @@ const CheckoutDelivery = () => {
                     cucuruAlias: data.data.cucuruAlias,
                     cucuruAccountNumber: data.data.cucuruAccountNumber,
                     deliveryFee: data.data.deliveryFee,
-                    zonaNombre: data.data.zonaNombre
+                    zonaNombre: data.data.zonaNombre,
+                    direccion: tipoPedido === 'delivery' ? direccion : null
                 }))
                 navigate(`/${username}/success`)
             } else {

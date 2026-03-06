@@ -143,15 +143,24 @@ const CheckoutDelivery = () => {
                 sessionStorage.setItem('deliveryOrderInfo', JSON.stringify({
                     pedidoId: data.data.id,
                     tipoPedido,
-                    total: total,
+                    total: data.data.total ? parseFloat(data.data.total) : total,
                     items: cart.items,
                     metodoPago: metodoPago,
                     cucuruAlias: data.data.cucuruAlias,
-                    cucuruAccountNumber: data.data.cucuruAccountNumber
+                    cucuruAccountNumber: data.data.cucuruAccountNumber,
+                    deliveryFee: data.data.deliveryFee,
+                    zonaNombre: data.data.zonaNombre
                 }))
                 navigate(`/${username}/success`)
             } else {
-                toast.error(data.message)
+                if (data.code === 'FUERA_DE_ZONA') {
+                    toast.error('Fuera de zona', {
+                        description: 'Tu dirección está fuera del área de delivery de este local. Probá con otra dirección o elegí Take Away.',
+                        duration: 6000
+                    })
+                } else {
+                    toast.error(data.message)
+                }
             }
         } catch (error) {
             toast.error('Ocurrió un error al enviar el pedido')

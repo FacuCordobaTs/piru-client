@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useNavigate, useParams } from 'react-router'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
@@ -8,6 +8,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { toast } from 'sonner'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { ArrowLeft, Loader2, MapPin, Store, Zap } from 'lucide-react'
+import { AddressAutocomplete } from '@/components/AddressAutocomplete'
 
 const CheckoutDelivery = () => {
     const navigate = useNavigate()
@@ -20,6 +21,14 @@ const CheckoutDelivery = () => {
     const [nombre, setNombre] = useState(localStorage.getItem('cliente_nombre') || '')
     const [telefono, setTelefono] = useState(localStorage.getItem('cliente_telefono') || '')
     const [direccion, setDireccion] = useState(localStorage.getItem('cliente_direccion') || '')
+    const [lat, setLat] = useState<number | null>(() => {
+        const saved = localStorage.getItem('cliente_lat')
+        return saved ? parseFloat(saved) : null
+    })
+    const [lng, setLng] = useState<number | null>(() => {
+        const saved = localStorage.getItem('cliente_lng')
+        return saved ? parseFloat(saved) : null
+    })
     const [notas, setNotas] = useState('')
 
     const hasSavedInfo = !!(localStorage.getItem('cliente_nombre') && localStorage.getItem('cliente_telefono'))
@@ -71,10 +80,17 @@ const CheckoutDelivery = () => {
     const itemsTotal = cart?.items?.reduce((sum: number, item: any) => sum + (parseFloat(item.precio) * item.cantidad), 0) || 0
     const total = tipoPedido === 'delivery' ? itemsTotal + deliveryFee : itemsTotal
 
+    const handleAddressChange = useCallback((address: string, newLat: number | null, newLng: number | null) => {
+        setDireccion(address)
+        setLat(newLat)
+        setLng(newLng)
+    }, [])
+
     const handleConfirm = async () => {
         if (!nombre.trim()) return toast.error('Ingresa tu nombre')
         if (!telefono.trim()) return toast.error('Ingresa tu celular')
         if (tipoPedido === 'delivery' && !direccion.trim()) return toast.error('Ingresa tu dirección')
+        if (tipoPedido === 'delivery' && (lat === null || lng === null)) return toast.error('Selecciona una dirección de las sugerencias')
         if (!isLoadingRestaurante && !metodoPago) return toast.error('Selecciona un método de pago')
 
         setLoading(true)
@@ -101,6 +117,8 @@ const CheckoutDelivery = () => {
 
             if (tipoPedido === 'delivery') {
                 payload.direccion = direccion
+                payload.lat = lat
+                payload.lng = lng
             }
 
             const res = await fetch(`${url}${endpoint}`, {
@@ -116,6 +134,8 @@ const CheckoutDelivery = () => {
                 localStorage.setItem('cliente_telefono', telefono)
                 if (tipoPedido === 'delivery') {
                     localStorage.setItem('cliente_direccion', direccion)
+                    if (lat !== null) localStorage.setItem('cliente_lat', lat.toString())
+                    if (lng !== null) localStorage.setItem('cliente_lng', lng.toString())
                 }
 
                 localStorage.removeItem(`deliveryCart_${username}`)
@@ -249,8 +269,12 @@ const CheckoutDelivery = () => {
 
                             {tipoPedido === 'delivery' && (
                                 <div className="space-y-2 animate-in fade-in slide-in-from-top-2">
-                                    <Label htmlFor="direccion">Dirección completa</Label>
-                                    <Input id="direccion" placeholder="Calle, número, piso, depto..." className="h-12 rounded-xl" value={direccion} onChange={e => setDireccion(e.target.value)} />
+                                    <Label htmlFor="direccion">Dirección de entrega</Label>
+                                    <AddressAutocomplete
+                                        value={direccion}
+                                        onChange={handleAddressChange}
+                                        placeholder="Ej: Espora 811, Santa Fe"
+                                    />
                                 </div>
                             )}
                         </div>
@@ -275,7 +299,17 @@ const CheckoutDelivery = () => {
                             {tipoPedido === 'delivery' && (
                                 <div className="animate-in fade-in slide-in-from-top-2 pt-2 border-t border-border/50">
                                     <p className="text-sm text-muted-foreground mb-1">Dirección de entrega</p>
-                                    <p className="font-semibold text-foreground">{direccion || <span className="text-destructive font-medium text-xs">Falta dirección. Presiona Editar.</span>}</p>
+                                    <div className="flex items-start gap-2">
+                                        <p className="font-semibold text-foreground flex-1">
+                                            {direccion || <span className="text-destructive font-medium text-xs">Falta dirección. Presiona Editar.</span>}
+                                        </p>
+                                        {lat !== null && lng !== null && direccion && (
+                                            <div className="flex items-center gap-1 shrink-0 mt-0.5">
+                                                <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                                                <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium">GPS</span>
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
                             )}
                         </div>

@@ -413,6 +413,7 @@ const MenuDelivery = () => {
                                                     key={producto.id}
                                                     producto={producto}
                                                     onClick={() => abrirDetalleProducto(producto)}
+                                                    disenoAlternativo={restaurante?.disenoAlternativo}
                                                 />
                                             ))}
                                             <div className="min-w-1 shrink-0" />
@@ -451,6 +452,7 @@ const MenuDelivery = () => {
                                             producto={producto}
                                             onClick={() => abrirDetalleProducto(producto)}
                                             fullWidth
+                                            disenoAlternativo={restaurante?.disenoAlternativo}
                                         />
                                     ))}
                                 </div>
@@ -611,10 +613,64 @@ const EmptyState = () => (
     </div>
 )
 
-const ProductoCard = ({ producto, onClick, fullWidth }: { producto: any, onClick: () => void, fullWidth?: boolean }) => {
+const ProductoCard = ({ producto, onClick, fullWidth, disenoAlternativo }: { producto: any, onClick: () => void, fullWidth?: boolean, disenoAlternativo?: boolean }) => {
     const tieneDescuento = !!(producto.descuento && producto.descuento > 0)
     const precioOriginal = parseFloat(producto.precio)
     const precioFinal = tieneDescuento ? precioOriginal * (1 - producto.descuento / 100) : precioOriginal
+
+    if (disenoAlternativo) {
+        return (
+            <div
+                className={`group relative flex flex-col ${fullWidth ? 'w-full' : 'w-48 shrink-0'} h-[260px] rounded-[24px] bg-card border border-border/50 shadow-md hover:shadow-xl transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] overflow-hidden ${!fullWidth ? 'snap-start' : ''}`}
+                onClick={onClick}
+            >
+                <div className="w-full h-[130px] shrink-0 bg-zinc-900 relative">
+                    {producto.imagenUrl ? (
+                        <img
+                            src={producto.imagenUrl}
+                            alt={producto.nombre}
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700 ease-out"
+                        />
+                    ) : (
+                        <div className="w-full h-full flex items-center justify-center bg-linear-to-br from-zinc-800 to-zinc-900">
+                            <Utensils className="w-10 h-10 text-primary" />
+                        </div>
+                    )}
+                    {tieneDescuento && (
+                        <div className="absolute top-2.5 left-2.5 z-10">
+                            <span className="bg-emerald-500 text-white text-[10px] font-extrabold px-2 py-0.5 rounded-full shadow-lg uppercase tracking-wide">
+                                {producto.descuento}% OFF
+                            </span>
+                        </div>
+                    )}
+                </div>
+
+                <div className="p-3.5 flex flex-col flex-1 bg-card">
+                    <div className="flex-1">
+                        <h3 className="font-bold text-[14px] line-clamp-2 text-foreground leading-tight">
+                            {producto.nombre}
+                        </h3>
+                        {producto.descripcion && (
+                            <p className="mt-1 text-xs text-muted-foreground line-clamp-2 leading-snug font-medium">
+                                {producto.descripcion}
+                            </p>
+                        )}
+                    </div>
+
+                    <div className="flex items-baseline gap-1.5 mt-2">
+                        <span className={`font-black text-[17px] ${tieneDescuento ? 'text-emerald-600 dark:text-emerald-400' : 'text-primary'}`}>
+                            ${precioFinal.toFixed(0)}
+                        </span>
+                        {tieneDescuento && (
+                            <span className="text-[11px] font-semibold text-muted-foreground line-through opacity-70">
+                                ${precioOriginal.toFixed(0)}
+                            </span>
+                        )}
+                    </div>
+                </div>
+            </div>
+        )
+    }
 
     return (
         <div

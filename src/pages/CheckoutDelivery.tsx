@@ -353,7 +353,7 @@ const CheckoutDelivery = () => {
                                                     <div className="flex items-center gap-2">
                                                         <Truck className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
                                                         <span className="text-xs font-medium text-emerald-700 dark:text-emerald-300">
-                                                            {zonaNombre ? `Zona: ${zonaNombre}` : 'Envío'}
+                                                            Envío
                                                         </span>
                                                     </div>
                                                     <span className="text-sm font-bold text-emerald-700 dark:text-emerald-300">

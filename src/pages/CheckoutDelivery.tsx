@@ -7,7 +7,7 @@ import { RadioGroup } from '@/components/ui/radio-group'
 import { Textarea } from '@/components/ui/textarea'
 import { toast } from 'sonner'
 import { ThemeToggle } from '@/components/ThemeToggle'
-import { ArrowLeft, Loader2, MapPin, Store, Zap } from 'lucide-react'
+import { ArrowLeft, Loader2, MapPin, Store, Zap, Truck, AlertTriangle } from 'lucide-react'
 import { AddressAutocomplete } from '@/components/AddressAutocomplete'
 //
 const CheckoutDelivery = () => {
@@ -30,6 +30,12 @@ const CheckoutDelivery = () => {
         return saved ? parseFloat(saved) : null
     })
     const [notas, setNotas] = useState('')
+
+    // Zona de delivery dinámica
+    const [zonaDeliveryFee, setZonaDeliveryFee] = useState<number | null>(null)
+    const [zonaNombre, setZonaNombre] = useState<string | null>(null)
+    const [isCheckingZona, setIsCheckingZona] = useState(false)
+    const [fueraDeZona, setFueraDeZona] = useState(false)
 
     const hasSavedInfo = !!(localStorage.getItem('cliente_nombre') && localStorage.getItem('cliente_telefono'))
     const [editMode, setEditMode] = useState(!hasSavedInfo)
@@ -76,14 +82,59 @@ const CheckoutDelivery = () => {
         }
     }, [username, navigate])
 
-    const deliveryFee = cart?.deliveryFee ? parseFloat(cart.deliveryFee) : 0
+    const globalDeliveryFee = cart?.deliveryFee ? parseFloat(cart.deliveryFee) : 0
+    const deliveryFee = zonaDeliveryFee !== null ? zonaDeliveryFee : globalDeliveryFee
     const itemsTotal = cart?.items?.reduce((sum: number, item: any) => sum + (parseFloat(item.precio) * item.cantidad), 0) || 0
     const total = tipoPedido === 'delivery' ? itemsTotal + deliveryFee : itemsTotal
+
+    // Check zona when lat/lng change
+    useEffect(() => {
+        if (lat === null || lng === null || !cart?.restauranteId) {
+            setZonaDeliveryFee(null)
+            setZonaNombre(null)
+            setFueraDeZona(false)
+            return
+        }
+
+        const checkZona = async () => {
+            setIsCheckingZona(true)
+            setFueraDeZona(false)
+            try {
+                const url = import.meta.env.VITE_API_URL || 'http://localhost:3000/api'
+                const res = await fetch(`${url}/public/restaurante/${cart.restauranteId}/check-zona?lat=${lat}&lng=${lng}`)
+                const data = await res.json()
+
+                if (data.code === 'FUERA_DE_ZONA') {
+                    setFueraDeZona(true)
+                    setZonaDeliveryFee(null)
+                    setZonaNombre(null)
+                } else if (data.success) {
+                    setFueraDeZona(false)
+                    setZonaDeliveryFee(parseFloat(data.deliveryFee))
+                    setZonaNombre(data.zonaNombre || null)
+                }
+            } catch {
+                // Silently fallback to global fee
+                setZonaDeliveryFee(null)
+                setZonaNombre(null)
+            } finally {
+                setIsCheckingZona(false)
+            }
+        }
+
+        checkZona()
+    }, [lat, lng, cart?.restauranteId])
 
     const handleAddressChange = useCallback((address: string, newLat: number | null, newLng: number | null) => {
         setDireccion(address)
         setLat(newLat)
         setLng(newLng)
+        // Reset zone state when address changes without coordinates
+        if (newLat === null || newLng === null) {
+            setZonaDeliveryFee(null)
+            setZonaNombre(null)
+            setFueraDeZona(false)
+        }
     }, [])
 
     const handleConfirm = async () => {
@@ -277,13 +328,41 @@ const CheckoutDelivery = () => {
                             </div>
 
                             {tipoPedido === 'delivery' && (
-                                <div className="space-y-2 animate-in fade-in slide-in-from-top-2">
+                                <div className="space-y-3 animate-in fade-in slide-in-from-top-2">
                                     <Label htmlFor="direccion">Dirección de entrega</Label>
                                     <AddressAutocomplete
                                         value={direccion}
                                         onChange={handleAddressChange}
                                         placeholder="Ej: Espora 811, Santa Fe"
                                     />
+                                    {/* Zone status after address selection */}
+                                    {lat !== null && lng !== null && direccion && (
+                                        <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
+                                            {isCheckingZona ? (
+                                                <div className="flex items-center gap-2 px-3 py-2 bg-secondary/50 rounded-xl border border-border/50">
+                                                    <Loader2 className="w-3.5 h-3.5 animate-spin text-muted-foreground" />
+                                                    <span className="text-xs text-muted-foreground">Verificando zona de delivery...</span>
+                                                </div>
+                                            ) : fueraDeZona ? (
+                                                <div className="flex items-center gap-2 px-3 py-2 bg-destructive/10 rounded-xl border border-destructive/30">
+                                                    <AlertTriangle className="w-4 h-4 text-destructive shrink-0" />
+                                                    <span className="text-xs text-destructive font-medium">Tu dirección está fuera del área de delivery. Probá otra dirección o Take Away.</span>
+                                                </div>
+                                            ) : zonaDeliveryFee !== null ? (
+                                                <div className="flex items-center justify-between px-3 py-2 bg-emerald-500/10 rounded-xl border border-emerald-500/30">
+                                                    <div className="flex items-center gap-2">
+                                                        <Truck className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                                                        <span className="text-xs font-medium text-emerald-700 dark:text-emerald-300">
+                                                            {zonaNombre ? `Zona: ${zonaNombre}` : 'Envío'}
+                                                        </span>
+                                                    </div>
+                                                    <span className="text-sm font-bold text-emerald-700 dark:text-emerald-300">
+                                                        {deliveryFee === 0 ? 'GRATIS' : `$${deliveryFee.toFixed(0)}`}
+                                                    </span>
+                                                </div>
+                                            ) : null}
+                                        </div>
+                                    )}
                                 </div>
                             )}
                         </div>
@@ -306,7 +385,7 @@ const CheckoutDelivery = () => {
                                 <p className="font-semibold text-foreground">{telefono}</p>
                             </div>
                             {tipoPedido === 'delivery' && (
-                                <div className="animate-in fade-in slide-in-from-top-2 pt-2 border-t border-border/50">
+                                <div className="animate-in fade-in slide-in-from-top-2 pt-2 border-t border-border/50 space-y-2">
                                     <p className="text-sm text-muted-foreground mb-1">Dirección de entrega</p>
                                     <div className="flex items-start gap-2">
                                         <p className="font-semibold text-foreground flex-1">
@@ -319,6 +398,28 @@ const CheckoutDelivery = () => {
                                             </div>
                                         )}
                                     </div>
+                                    {lat !== null && lng !== null && direccion && !isCheckingZona && (
+                                        <div className="animate-in fade-in duration-300">
+                                            {fueraDeZona ? (
+                                                <div className="flex items-center gap-2 px-3 py-1.5 bg-destructive/10 rounded-lg border border-destructive/30">
+                                                    <AlertTriangle className="w-3.5 h-3.5 text-destructive shrink-0" />
+                                                    <span className="text-xs text-destructive font-medium">Fuera del área de delivery</span>
+                                                </div>
+                                            ) : zonaDeliveryFee !== null ? (
+                                                <div className="flex items-center justify-between px-3 py-1.5 bg-emerald-500/10 rounded-lg border border-emerald-500/30">
+                                                    <div className="flex items-center gap-1.5">
+                                                        <Truck className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                                                        <span className="text-xs font-medium text-emerald-700 dark:text-emerald-300">
+                                                            {zonaNombre || 'Envío'}
+                                                        </span>
+                                                    </div>
+                                                    <span className="text-xs font-bold text-emerald-700 dark:text-emerald-300">
+                                                        {deliveryFee === 0 ? 'GRATIS' : `$${deliveryFee.toFixed(0)}`}
+                                                    </span>
+                                                </div>
+                                            ) : null}
+                                        </div>
+                                    )}
                                 </div>
                             )}
                         </div>
@@ -396,8 +497,12 @@ const CheckoutDelivery = () => {
                     })()}
                     {tipoPedido === 'delivery' && (
                         <div className="flex justify-between items-center text-sm mb-2">
-                            <span className="text-muted-foreground">{deliveryFee === 0 ? 'Delivery GRATIS' : 'Delivery'}</span>
-                            <span className="font-medium">${deliveryFee.toFixed(2)}</span>
+                            <span className="text-muted-foreground">
+                                {isCheckingZona ? 'Calculando envío...' : deliveryFee === 0 ? 'Delivery GRATIS' : zonaNombre ? `Delivery (${zonaNombre})` : 'Delivery'}
+                            </span>
+                            <span className="font-medium">
+                                {isCheckingZona ? <Loader2 className="w-3 h-3 animate-spin inline" /> : `$${deliveryFee.toFixed(2)}`}
+                            </span>
                         </div>
                     )}
                     <div className="flex justify-between items-center font-bold text-lg mt-4 pt-4 border-t-2 border-foreground/15">
@@ -409,9 +514,9 @@ const CheckoutDelivery = () => {
                 <Button
                     className="w-full h-14 text-lg font-bold rounded-2xl bg-primary hover:bg-primary/90 shadow-lg"
                     onClick={handleConfirm}
-                    disabled={loading}
+                    disabled={loading || (tipoPedido === 'delivery' && (isCheckingZona || fueraDeZona))}
                 >
-                    {loading ? <Loader2 className="w-6 h-6 animate-spin" /> : 'Confirmar Datos y Pedir'}
+                    {loading ? <Loader2 className="w-6 h-6 animate-spin" /> : fueraDeZona && tipoPedido === 'delivery' ? 'Dirección fuera de zona' : 'Confirmar Datos y Pedir'}
                 </Button>
             </div >
         </div >

@@ -40,6 +40,9 @@ const CheckoutDelivery = () => {
                 const data = await response.json()
                 if (data.success && data.data.restaurante) {
                     setCucuruConfigurado(data.data.restaurante.cucuruConfigurado)
+                    if (data.data.restaurante.cucuruConfigurado) {
+                        setMetodoPago('transferencia')
+                    }
                     setMpConnected(data.data.restaurante.mpConnected)
                     setTransferenciaAlias(data.data.restaurante.transferenciaAlias)
                     setRestauranteData(data.data.restaurante)
@@ -50,6 +53,7 @@ const CheckoutDelivery = () => {
                 setIsLoadingRestaurante(false)
             }
         }
+        console.log(mpConnected)
         if (username) fetchRestaurante()
     }, [username])
 
@@ -282,39 +286,48 @@ const CheckoutDelivery = () => {
                         <Textarea id="notas" placeholder="Ej: El timbre no anda, llamar al llegar..." className="min-h-[100px] rounded-xl resize-none" value={notas} onChange={(e: any) => setNotas(e.target.value)} />
                     </div>
 
-                    {!isLoadingRestaurante && (
-                        <div className="space-y-4 pt-4 border-t border-border/50 animate-in fade-in slide-in-from-bottom-2">
-                            <Label className="text-base font-bold">¿Cómo vas a pagar el pedido?</Label>
-                            <RadioGroup value={metodoPago || ''} onValueChange={(v: any) => setMetodoPago(v)} className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-                                <div className={`relative flex flex-col items-center justify-center p-4 border-2 rounded-2xl cursor-pointer hover:bg-secondary/50 transition-colors ${metodoPago === 'efectivo' ? 'border-emerald-500 bg-emerald-500/5' : 'border-border'}`} onClick={() => setMetodoPago('efectivo')}>
-                                    <Label className="cursor-pointer font-semibold">Efectivo</Label>
+                    {cucuruConfigurado
+                        ? !isLoadingRestaurante && (
+                            <div className="space-y-4 pt-4 border-t border-border/50 animate-in fade-in slide-in-from-bottom-2">
+                                <Label className="text-base font-bold">Metodo de pago</Label>
+                                <div className={`relative flex flex-col items-center justify-center p-4 w-full border-2 rounded-2xl cursor-pointer hover:bg-secondary/50 transition-colors ${metodoPago === 'transferencia' ? 'border-purple-500 bg-purple-500/5' : 'border-border'}`} onClick={() => setMetodoPago('transferencia')}>
+                                    {cucuruConfigurado && (
+                                        <div className="absolute -top-2.5 bg-linear-to-r from-purple-600 to-indigo-600 text-white text-[9px] font-extrabold px-2 py-0.5 rounded-full shadow-md flex items-center gap-1">
+                                            <Zap className="w-3 h-3 fill-current" />
+                                            AUTOMÁTICO
+                                        </div>
+                                    )}
+                                    <Label className="cursor-pointer font-semibold text-center mt-1">
+                                        Transferencia
+                                    </Label>
                                 </div>
-                                {(cucuruConfigurado || transferenciaAlias) && (
-                                    <div className={`relative flex flex-col items-center justify-center p-4 border-2 rounded-2xl cursor-pointer hover:bg-secondary/50 transition-colors ${metodoPago === 'transferencia' ? 'border-purple-500 bg-purple-500/5' : 'border-border'}`} onClick={() => setMetodoPago('transferencia')}>
-                                        {cucuruConfigurado && (
-                                            <div className="absolute -top-2.5 bg-linear-to-r from-purple-600 to-indigo-600 text-white text-[9px] font-extrabold px-2 py-0.5 rounded-full shadow-md flex items-center gap-1">
-                                                <Zap className="w-3 h-3 fill-current" />
-                                                AUTOMÁTICO
-                                            </div>
-                                        )}
-                                        <Label className="cursor-pointer font-semibold text-center mt-1">
-                                            Transferencia
-                                        </Label>
-                                        {cucuruConfigurado && (
-                                            <span className="text-[10px] text-muted-foreground mt-1 text-center font-medium leading-tight">
-                                                CVU / Alias<br />Exclusivo
-                                            </span>
-                                        )}
+                            </div>
+                        )
+                        : (
+                            <div className="space-y-4 pt-4 border-t border-border/50 animate-in fade-in slide-in-from-bottom-2">
+                                <Label className="text-base font-bold">¿Cómo vas a pagar el pedido?</Label>
+                                <RadioGroup value={metodoPago || ''} onValueChange={(v: any) => setMetodoPago(v)} className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                                    <div className={`relative flex flex-col items-center justify-center p-4 border-2 rounded-2xl cursor-pointer hover:bg-secondary/50 transition-colors ${metodoPago === 'efectivo' ? 'border-emerald-500 bg-emerald-500/5' : 'border-border'}`} onClick={() => setMetodoPago('efectivo')}>
+                                        <Label className="cursor-pointer font-semibold">Efectivo</Label>
                                     </div>
-                                )}
-                                {mpConnected && (
-                                    <div className={`relative flex flex-col items-center justify-center p-4 border-2 rounded-2xl cursor-pointer hover:bg-secondary/50 transition-colors ${metodoPago === 'mercadopago' ? 'border-[#009EE3] bg-[#009EE3]/5' : 'border-border'}`} onClick={() => setMetodoPago('mercadopago')}>
-                                        <Label className="cursor-pointer font-semibold text-[#009EE3]">Mercado Pago</Label>
-                                    </div>
-                                )}
-                            </RadioGroup>
-                        </div>
-                    )}
+
+                                    {transferenciaAlias && (
+                                        <div className={`relative flex flex-col items-center justify-center p-4 w-full border-2 rounded-2xl cursor-pointer hover:bg-secondary/50 transition-colors ${metodoPago === 'transferencia' ? 'border-purple-500 bg-purple-500/5' : 'border-border'}`} onClick={() => setMetodoPago('transferencia')}>
+                                            <Label className="cursor-pointer font-semibold text-center mt-1">
+                                                Transferencia
+                                            </Label>
+                                        </div>
+                                    )}
+                                    {/* {mpConnected && (
+                                <div className={`relative flex flex-col items-center justify-center p-4 border-2 rounded-2xl cursor-pointer hover:bg-secondary/50 transition-colors ${metodoPago === 'mercadopago' ? 'border-[#009EE3] bg-[#009EE3]/5' : 'border-border'}`} onClick={() => setMetodoPago('mercadopago')}>
+                                    <Label className="cursor-pointer font-semibold text-[#009EE3]">Mercado Pago</Label>
+                                </div>
+                            )} */}
+                                </RadioGroup>
+                            </div>
+                        )
+                    }
+
                 </section>
 
                 <section className="bg-secondary/50 rounded-2xl p-5 border border-border/50">

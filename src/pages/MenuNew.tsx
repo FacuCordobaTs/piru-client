@@ -45,7 +45,7 @@ const Menu = () => {
     setDrawerOpen(true)
   }
 
-  const agregarAlPedido = (producto: typeof productos[0] | any, cantidad: number = 1, ingredientesExcluidos?: number[], agregados?: any[]) => {
+  const agregarAlPedido = (producto: typeof productos[0] | any, cantidad: number = 1) => {
     if (!clienteNombre) return
 
     addItem({
@@ -324,8 +324,8 @@ const Menu = () => {
                 size="sm"
                 onClick={() => setSelectedCategory(category || 'All')}
                 className={`rounded-full whitespace-nowrap ${selectedCategory === category
-                    ? "bg-primary hover:bg-primary/90"
-                    : "bg-secondary hover:bg-secondary/80"
+                  ? "bg-primary hover:bg-primary/90"
+                  : "bg-secondary hover:bg-secondary/80"
                   }`}
               >
                 {category === 'All' ? 'Todas' : category}

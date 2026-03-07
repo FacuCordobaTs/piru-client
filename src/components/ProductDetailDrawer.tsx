@@ -5,7 +5,14 @@ import {
 } from '@/components/ui/drawer'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
-import { X, Utensils } from 'lucide-react'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog'
+import { Utensils } from 'lucide-react'
 
 interface Ingrediente {
   id: number
@@ -39,14 +46,12 @@ interface ProductDetailDrawerProps {
 
 export function ProductDetailDrawer({ product, open, onClose, onAddToOrder }: ProductDetailDrawerProps) {
   const [quantity, setQuantity] = useState(1)
-  const [mostrarIngredientes, setMostrarIngredientes] = useState(false)
   const [ingredientesExcluidos, setIngredientesExcluidos] = useState<number[]>([])
   const [agregadosSeleccionados, setAgregadosSeleccionados] = useState<Agregado[]>([])
 
   // Resetear estado cuando se abre/cierra el drawer o cambia el producto
   useEffect(() => {
     if (open && product) {
-      setMostrarIngredientes(false)
       setIngredientesExcluidos([])
       setAgregadosSeleccionados([])
       setQuantity(1)
@@ -78,7 +83,6 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder }: Pr
     setQuantity(1)
     setIngredientesExcluidos([])
     setAgregadosSeleccionados([])
-    setMostrarIngredientes(false)
     onClose()
   }
 
@@ -152,86 +156,93 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder }: Pr
                 </p>
               </div>
 
-              {/* Modificar Ingredientes o Cantidad */}
-              {!mostrarIngredientes ? (
-                <div className="space-y-4">
-                  {tieneIngredientes && (
-                    <Button
-                      variant="outline"
-                      className="w-full"
-                      onClick={() => setMostrarIngredientes(true)}
-                    >
-                      Modificar Ingredientes
-                    </Button>
-                  )}
-                  {tieneAgregados && (
-                    <div className="space-y-2 mt-4">
-                      <p className="text-sm font-semibold">Agregados Opcionales</p>
-                      <div className="space-y-2 max-h-48 overflow-y-auto border rounded-lg p-3">
-                        {product.agregados?.map((agregado) => {
-                          const estaSeleccionado = !!agregadosSeleccionados.find(a => a.id === agregado.id)
-                          return (
-                            <div
-                              key={agregado.id}
-                              className={`flex items-center space-x-3 p-2 rounded-lg cursor-pointer transition-colors ${estaSeleccionado
-                                ? 'bg-primary/10 border border-primary/30'
-                                : 'bg-background hover:bg-muted border'
-                                }`}
-                              onClick={() => toggleAgregado(agregado)}
-                            >
-                              <Checkbox checked={estaSeleccionado} />
-                              <span className="text-sm flex-1 font-medium text-foreground">
-                                {agregado.nombre}
-                              </span>
-                              <span className="text-sm text-muted-foreground">+${parseFloat(agregado.precio).toFixed(2)}</span>
-                            </div>
-                          )
-                        })}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <p className="text-sm font-semibold">Confirma los ingredientes incluidos</p>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setMostrarIngredientes(false)}
-                    >
-                      <X className="h-4 w-4" />
-                    </Button>
-                  </div>
-                  <div className="space-y-2 max-h-64 overflow-y-auto border rounded-lg p-3">
-                    {product.ingredientes?.map((ingrediente) => {
-                      const estaIncluido = isIngredienteIncluido(ingrediente.id)
-                      return (
-                        <div
-                          key={ingrediente.id}
-                          className={`flex items-center space-x-3 p-2 rounded-lg cursor-pointer transition-colors ${estaIncluido
-                            ? 'bg-primary/10 border border-primary/30'
-                            : 'bg-destructive/10 border border-destructive/30'
-                            }`}
-                          onClick={() => toggleIngrediente(ingrediente.id)}
-                        >
-                          <Checkbox
-                            checked={estaIncluido}
-                          />
-                          <span className={`text-sm flex-1 ${estaIncluido ? '' : 'line-through text-muted-foreground'}`}>
-                            {ingrediente.nombre}
-                          </span>
+              {/* Botones de Modificación y Extras */}
+              <div className="flex gap-3 pt-2">
+                {tieneIngredientes && (
+                  <Dialog>
+                    <DialogTrigger asChild>
+                      <Button variant="outline" className="flex-1 whitespace-normal h-auto py-2">
+                        Modificar Ingredientes
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent className="max-w-[400px] w-[90vw] rounded-2xl max-h-[85vh] overflow-hidden flex flex-col">
+                      <DialogHeader className="shrink-0">
+                        <DialogTitle className="text-left">Confirma los ingredientes incluidos</DialogTitle>
+                      </DialogHeader>
+                      <div className="flex-1 overflow-y-auto p-1 space-y-3">
+                        <div className="space-y-2 border rounded-lg p-3">
+                          {product.ingredientes?.map((ingrediente) => {
+                            const estaIncluido = isIngredienteIncluido(ingrediente.id)
+                            return (
+                              <div
+                                key={ingrediente.id}
+                                className={`flex items-center space-x-3 p-2 rounded-lg cursor-pointer transition-colors ${estaIncluido
+                                  ? 'bg-primary/10 border border-primary/30'
+                                  : 'bg-destructive/10 border border-destructive/30'
+                                  }`}
+                                onClick={() => toggleIngrediente(ingrediente.id)}
+                              >
+                                <Checkbox checked={estaIncluido} />
+                                <span className={`text-sm flex-1 ${estaIncluido ? '' : 'line-through text-muted-foreground'}`}>
+                                  {ingrediente.nombre}
+                                </span>
+                              </div>
+                            )
+                          })}
                         </div>
-                      )
-                    })}
-                  </div>
-                  {ingredientesExcluidos.length > 0 && (
-                    <p className="text-xs text-primary/80 font-medium">
-                      {ingredientesExcluidos.length} ingrediente{ingredientesExcluidos.length !== 1 ? 's' : ''} excluido{ingredientesExcluidos.length !== 1 ? 's' : ''}
-                    </p>
-                  )}
-                </div>
-              )}
+                        {ingredientesExcluidos.length > 0 && (
+                          <p className="text-xs text-primary/80 font-medium text-center">
+                            {ingredientesExcluidos.length} ingrediente{ingredientesExcluidos.length !== 1 ? 's' : ''} excluido{ingredientesExcluidos.length !== 1 ? 's' : ''}
+                          </p>
+                        )}
+                      </div>
+                    </DialogContent>
+                  </Dialog>
+                )}
+
+                {tieneAgregados && (
+                  <Dialog>
+                    <DialogTrigger asChild>
+                      <Button variant="outline" className="flex-1 whitespace-normal h-auto py-2">
+                        Agregar Extras
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent className="max-w-[400px] w-[90vw] rounded-2xl max-h-[85vh] overflow-hidden flex flex-col">
+                      <DialogHeader className="shrink-0">
+                        <DialogTitle className="text-left">Agregados Opcionales</DialogTitle>
+                      </DialogHeader>
+                      <div className="flex-1 overflow-y-auto p-1 space-y-3">
+                        <div className="space-y-2 border rounded-lg p-3">
+                          {product.agregados?.map((agregado) => {
+                            const estaSeleccionado = !!agregadosSeleccionados.find(a => a.id === agregado.id)
+                            return (
+                              <div
+                                key={agregado.id}
+                                className={`flex items-center space-x-3 p-2 rounded-lg cursor-pointer transition-colors ${estaSeleccionado
+                                  ? 'bg-primary/10 border border-primary/30'
+                                  : 'bg-background hover:bg-muted border'
+                                  }`}
+                                onClick={() => toggleAgregado(agregado)}
+                              >
+                                <Checkbox checked={estaSeleccionado} />
+                                <span className="text-sm flex-1 font-medium text-foreground">
+                                  {agregado.nombre}
+                                </span>
+                                <span className="text-sm text-muted-foreground">+${parseFloat(agregado.precio).toFixed(2)}</span>
+                              </div>
+                            )
+                          })}
+                        </div>
+                        {agregadosSeleccionados.length > 0 && (
+                          <p className="text-xs text-primary/80 font-medium text-center">
+                            {agregadosSeleccionados.length} extra{agregadosSeleccionados.length !== 1 ? 's' : ''} seleccionado{agregadosSeleccionados.length !== 1 ? 's' : ''}
+                          </p>
+                        )}
+                      </div>
+                    </DialogContent>
+                  </Dialog>
+                )}
+              </div>
 
               {/* Total Amount & Add Button */}
               <div className="flex items-center justify-between pt-4 border-t border-border">

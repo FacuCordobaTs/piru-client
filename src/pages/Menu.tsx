@@ -126,7 +126,7 @@ const Menu = () => {
     abrirProductoDrawer()
   }
 
-  const agregarAlPedido = (producto: typeof productos[0] | any, cantidad: number = 1, ingredientesExcluidos?: number[]) => {
+  const agregarAlPedido = (producto: typeof productos[0] | any, cantidad: number = 1, ingredientesExcluidos?: number[], agregados?: any[]) => {
     if (!clienteNombre) return
     sendMessage({
       type: 'AGREGAR_ITEM',
@@ -136,7 +136,8 @@ const Menu = () => {
         cantidad,
         precioUnitario: String(producto.precio),
         imagenUrl: producto.imagenUrl,
-        ingredientesExcluidos: ingredientesExcluidos || []
+        ingredientesExcluidos: ingredientesExcluidos || [],
+        agregados: agregados || []
       },
     })
     // Abrir el carrito automáticamente tras agregar un producto
@@ -503,6 +504,15 @@ const Menu = () => {
                               <p className="text-xs text-orange-600 dark:text-orange-400 font-medium mt-1">
                                 ⚠️ Sin: {(item as any).ingredientesExcluidosNombres.join(', ')}
                               </p>
+                            )}
+                            {(item as any).agregados?.length > 0 && (
+                              <div className="mt-1">
+                                {(item as any).agregados.map((ag: any) => (
+                                  <p key={ag.id} className="text-xs text-muted-foreground font-medium flex items-center gap-1">
+                                    <span>+ {ag.nombre}</span>
+                                  </p>
+                                ))}
+                              </div>
                             )}
                           </div>
                           <p className="font-bold text-base">${(precio * item.cantidad).toFixed(2)}</p>

@@ -70,7 +70,7 @@ const AgregarProducto = () => {
     return a.localeCompare(b)
   })
 
-  const agregarAlPedido = (producto: typeof productos[0] | any, cantidad: number = 1, ingredientesExcluidos?: number[]) => {
+  const agregarAlPedido = (producto: typeof productos[0] | any, cantidad: number = 1, ingredientesExcluidos?: number[], agregados?: any[]) => {
     if (!clienteNombre) return
     sendMessage({
       type: 'AGREGAR_ITEM',
@@ -80,7 +80,8 @@ const AgregarProducto = () => {
         cantidad,
         precioUnitario: String(producto.precio),
         imagenUrl: producto.imagenUrl,
-        ingredientesExcluidos
+        ingredientesExcluidos: ingredientesExcluidos || [],
+        agregados: agregados || []
       },
     })
     toast.success('Agregado a la orden', { description: `${producto.nombre}`, duration: 1500 })
@@ -281,6 +282,15 @@ const AgregarProducto = () => {
                                 ⚠️ Sin: {(item as any).ingredientesExcluidosNombres.join(', ')}
                               </p>
                             )}
+                            {(item as any).agregados?.length > 0 && (
+                              <div className="mt-1">
+                                {(item as any).agregados.map((ag: any) => (
+                                  <p key={ag.id} className="text-xs text-muted-foreground font-medium flex items-center gap-1">
+                                    <span>+ {ag.nombre}</span>
+                                  </p>
+                                ))}
+                              </div>
+                            )}
                           </div>
                           <p className="font-bold text-base">${(precio * item.cantidad).toFixed(2)}</p>
                         </div>
@@ -309,9 +319,9 @@ const AgregarProducto = () => {
                   <span className="text-muted-foreground text-sm">Total a pagar</span>
                   <span className="text-2xl font-black tracking-tight">${totalPedido}</span>
                 </div>
-                <Button 
-                  className="w-full h-14 text-base font-bold rounded-2xl shadow-lg shadow-primary/20" 
-                  size="lg" 
+                <Button
+                  className="w-full h-14 text-base font-bold rounded-2xl shadow-lg shadow-primary/20"
+                  size="lg"
                   onClick={() => navigate('/pedido-confirmado')}
                 >
                   Ver Pedido Completo

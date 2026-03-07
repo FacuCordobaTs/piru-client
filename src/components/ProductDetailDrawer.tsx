@@ -12,6 +12,12 @@ interface Ingrediente {
   nombre: string
 }
 
+interface Agregado {
+  id: number
+  nombre: string
+  precio: string
+}
+
 interface Product {
   id: number
   nombre: string
@@ -20,6 +26,7 @@ interface Product {
   imagenUrl: string | null
   categoria?: string
   ingredientes?: Ingrediente[]
+  agregados?: Agregado[]
   descuento?: number | null
 }
 
@@ -27,19 +34,21 @@ interface ProductDetailDrawerProps {
   product: Product | null
   open: boolean
   onClose: () => void
-  onAddToOrder: (product: Product, quantity: number, ingredientesExcluidos?: number[]) => void
+  onAddToOrder: (product: Product, quantity: number, ingredientesExcluidos?: number[], agregados?: Agregado[]) => void
 }
 
 export function ProductDetailDrawer({ product, open, onClose, onAddToOrder }: ProductDetailDrawerProps) {
   const [quantity, setQuantity] = useState(1)
   const [mostrarIngredientes, setMostrarIngredientes] = useState(false)
   const [ingredientesExcluidos, setIngredientesExcluidos] = useState<number[]>([])
+  const [agregadosSeleccionados, setAgregadosSeleccionados] = useState<Agregado[]>([])
 
   // Resetear estado cuando se abre/cierra el drawer o cambia el producto
   useEffect(() => {
     if (open && product) {
       setMostrarIngredientes(false)
       setIngredientesExcluidos([])
+      setAgregadosSeleccionados([])
       setQuantity(1)
     }
   }, [open, product?.id])
@@ -65,14 +74,26 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder }: Pr
 
   const handleAdd = () => {
     if (!product) return
-    onAddToOrder(product, quantity, ingredientesExcluidos.length > 0 ? ingredientesExcluidos : undefined)
+    onAddToOrder(product, quantity, ingredientesExcluidos.length > 0 ? ingredientesExcluidos : undefined, agregadosSeleccionados.length > 0 ? agregadosSeleccionados : undefined)
     setQuantity(1)
     setIngredientesExcluidos([])
+    setAgregadosSeleccionados([])
     setMostrarIngredientes(false)
     onClose()
   }
 
   const tieneIngredientes = product?.ingredientes && product.ingredientes.length > 0
+  const tieneAgregados = product?.agregados && product.agregados.length > 0
+
+  const toggleAgregado = (agregado: Agregado) => {
+    setAgregadosSeleccionados(prev => {
+      if (prev.find(a => a.id === agregado.id)) {
+        return prev.filter(a => a.id !== agregado.id)
+      } else {
+        return [...prev, agregado]
+      }
+    })
+  }
 
   return (
     <Drawer open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
@@ -133,7 +154,7 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder }: Pr
 
               {/* Modificar Ingredientes o Cantidad */}
               {!mostrarIngredientes ? (
-                <div className="space-y-3">
+                <div className="space-y-4">
                   {tieneIngredientes && (
                     <Button
                       variant="outline"
@@ -142,6 +163,32 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder }: Pr
                     >
                       Modificar Ingredientes
                     </Button>
+                  )}
+                  {tieneAgregados && (
+                    <div className="space-y-2 mt-4">
+                      <p className="text-sm font-semibold">Agregados Opcionales</p>
+                      <div className="space-y-2 max-h-48 overflow-y-auto border rounded-lg p-3">
+                        {product.agregados?.map((agregado) => {
+                          const estaSeleccionado = !!agregadosSeleccionados.find(a => a.id === agregado.id)
+                          return (
+                            <div
+                              key={agregado.id}
+                              className={`flex items-center space-x-3 p-2 rounded-lg cursor-pointer transition-colors ${estaSeleccionado
+                                ? 'bg-primary/10 border border-primary/30'
+                                : 'bg-background hover:bg-muted border'
+                                }`}
+                              onClick={() => toggleAgregado(agregado)}
+                            >
+                              <Checkbox checked={estaSeleccionado} />
+                              <span className="text-sm flex-1 font-medium text-foreground">
+                                {agregado.nombre}
+                              </span>
+                              <span className="text-sm text-muted-foreground">+${parseFloat(agregado.precio).toFixed(2)}</span>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
                   )}
                 </div>
               ) : (

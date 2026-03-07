@@ -19,7 +19,7 @@ const Menu = () => {
   const { mesa, productos, clientes, clienteNombre, qrToken } = useMesaStore()
   const { items, addItem, updateCantidad, removeItem, getTotal, getMisItems } = useCarritoStore()
   const { state: wsState, isConnected, sendMessage } = useClienteWebSocket()
-  
+
   const [carritoAbierto, setCarritoAbierto] = useState(false)
   const [selectedProduct, setSelectedProduct] = useState<typeof productos[0] | null>(null)
   const [drawerOpen, setDrawerOpen] = useState(false)
@@ -36,8 +36,8 @@ const Menu = () => {
 
   // Obtener categorías únicas de los productos
   const categorias = ['All', ...Array.from(new Set(productos.map(p => p.categoria).filter(Boolean)))]
-  const productosFiltrados = selectedCategory === 'All' 
-    ? productos 
+  const productosFiltrados = selectedCategory === 'All'
+    ? productos
     : productos.filter(p => p.categoria === selectedCategory)
 
   const abrirDetalleProducto = (producto: typeof productos[0]) => {
@@ -45,7 +45,7 @@ const Menu = () => {
     setDrawerOpen(true)
   }
 
-  const agregarAlPedido = (producto: typeof productos[0] | { id: number; nombre: string; descripcion: string | null; precio: number | string; imagenUrl: string | null; categoria?: string }, cantidad: number = 1) => {
+  const agregarAlPedido = (producto: typeof productos[0] | any, cantidad: number = 1, ingredientesExcluidos?: number[], agregados?: any[]) => {
     if (!clienteNombre) return
 
     addItem({
@@ -145,9 +145,9 @@ const Menu = () => {
       <div className="sticky top-0 z-20 bg-background/95 backdrop-blur-sm border-b border-border">
         <div className="max-w-2xl mx-auto p-4">
           <div className="flex items-center justify-between mb-4">
-            <Button 
-              variant="ghost" 
-              size="icon" 
+            <Button
+              variant="ghost"
+              size="icon"
               className="rounded-full bg-secondary"
               onClick={() => navigate('/')}
             >
@@ -155,9 +155,9 @@ const Menu = () => {
             </Button>
             <div className="flex items-center gap-2">
               <ThemeToggle />
-              <Button 
-                variant="ghost" 
-                size="icon" 
+              <Button
+                variant="ghost"
+                size="icon"
                 className="rounded-full bg-secondary"
                 onClick={() => setClientesAbierto(true)}
               >
@@ -262,8 +262,8 @@ const Menu = () => {
                           <span>Total:</span>
                           <span className="text-primary">${(wsState?.total || total.toFixed(2))}</span>
                         </div>
-                        <Button 
-                          className="w-full rounded-2xl h-14 bg-primary hover:bg-primary/90" 
+                        <Button
+                          className="w-full rounded-2xl h-14 bg-primary hover:bg-primary/90"
                           size="lg"
                           onClick={confirmarPedido}
                         >
@@ -323,11 +323,10 @@ const Menu = () => {
                 variant={selectedCategory === category ? "default" : "secondary"}
                 size="sm"
                 onClick={() => setSelectedCategory(category || 'All')}
-                className={`rounded-full whitespace-nowrap ${
-                  selectedCategory === category 
-                    ? "bg-primary hover:bg-primary/90" 
+                className={`rounded-full whitespace-nowrap ${selectedCategory === category
+                    ? "bg-primary hover:bg-primary/90"
                     : "bg-secondary hover:bg-secondary/80"
-                }`}
+                  }`}
               >
                 {category === 'All' ? 'Todas' : category}
               </Button>
@@ -360,10 +359,10 @@ const Menu = () => {
                 <div className="flex gap-4 p-3">
                   <div className="w-24 h-24 rounded-xl overflow-hidden shrink-0 bg-secondary">
                     {producto.imagenUrl ? (
-                      <img 
-                        src={producto.imagenUrl} 
-                        alt={producto.nombre} 
-                        className="w-full h-full object-cover" 
+                      <img
+                        src={producto.imagenUrl}
+                        alt={producto.nombre}
+                        className="w-full h-full object-cover"
                       />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center">
@@ -382,8 +381,8 @@ const Menu = () => {
                     </div>
                     <div className="flex items-center justify-between">
                       <p className="text-lg font-bold text-primary">${parseFloat(producto.precio).toFixed(2)}</p>
-                      <Button 
-                        size="sm" 
+                      <Button
+                        size="sm"
                         className="bg-primary hover:bg-primary/90 h-8 px-4 rounded-full text-xs"
                         onClick={(e) => {
                           e.stopPropagation()

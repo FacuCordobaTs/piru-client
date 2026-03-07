@@ -189,7 +189,7 @@ const MenuDelivery = () => {
         abrirProductoDrawer()
     }
 
-    const agregarAlPedido = (producto: any, cantidad: number = 1, ingredientesExcluidos?: number[]) => {
+    const agregarAlPedido = (producto: any, cantidad: number = 1, ingredientesExcluidos?: number[], agregados?: any[]) => {
         let ingExNombres: string[] = []
         if (ingredientesExcluidos && ingredientesExcluidos.length > 0) {
             ingExNombres = producto.ingredientes
@@ -212,17 +212,21 @@ const MenuDelivery = () => {
             precioFinal = (parseFloat(producto.precio) * (1 - producto.descuento / 100)).toFixed(2)
         }
 
+        const precioAgregados = agregados ? agregados.reduce((sum: number, ag: any) => sum + parseFloat(ag.precio || 0), 0) : 0;
+        const precioFinalNumber = esCanje ? 0 : parseFloat(precioFinal) + precioAgregados;
+
         const newItem = {
             id: Math.random().toString(36).substr(2, 9),
             productoId: producto.id,
             nombre: esCanje ? `${producto.nombre} (Canje)` : producto.nombre,
-            precio: esCanje ? '0.00' : precioFinal,
+            precio: precioFinalNumber.toFixed(2),
             precioOriginal: producto.precio,
             descuento: producto.descuento || 0,
             imagenUrl: producto.imagenUrl,
             cantidad,
             ingredientesExcluidos: ingredientesExcluidos || [],
             ingredientesExcluidosNombres: ingExNombres,
+            agregados: agregados || [],
             esCanjePuntos: esCanje,
             puntosNecesarios: esCanje ? producto.puntosNecesarios : 0,
             puntosGanados: esCanje ? 0 : producto.puntosGanados
@@ -534,11 +538,19 @@ const MenuDelivery = () => {
                                                 <div className="flex justify-between items-start gap-2">
                                                     <div className="min-w-0">
                                                         <p className="font-bold text-sm truncate">{item.nombre}</p>
-                                                        {/* item.ingredientesExcluidosNombres */}
                                                         {item.ingredientesExcluidosNombres?.length > 0 && (
                                                             <p className="text-xs text-primary/80 font-medium mt-1">
                                                                 ⚠️ Sin: {item.ingredientesExcluidosNombres.join(', ')}
                                                             </p>
+                                                        )}
+                                                        {item.agregados?.length > 0 && (
+                                                            <div className="mt-1">
+                                                                {item.agregados.map((ag: any) => (
+                                                                    <p key={ag.id} className="text-xs text-muted-foreground font-medium flex items-center gap-1">
+                                                                        <span>+ {ag.nombre}</span>
+                                                                    </p>
+                                                                ))}
+                                                            </div>
                                                         )}
                                                     </div>
                                                     <div className="text-right">

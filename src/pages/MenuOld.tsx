@@ -72,8 +72,8 @@ const Menu = () => {
   const clienteNombre = localStorage.getItem('clienteNombre') || 'Cliente'
 
   const categorias = ['All', 'Pizzas', 'Hamburguesas', 'Bebidas', 'Acompañamientos', 'Ensaladas']
-  const productosFiltrados = selectedCategory === 'All' 
-    ? productosEjemplo 
+  const productosFiltrados = selectedCategory === 'All'
+    ? productosEjemplo
     : productosEjemplo.filter(p => p.categoria === selectedCategory)
 
   const abrirDetalleProducto = (producto: typeof productosEjemplo[0]) => {
@@ -81,7 +81,7 @@ const Menu = () => {
     setDrawerOpen(true)
   }
 
-  const agregarAlPedido = (producto: typeof productosEjemplo[0] | { id: number; nombre: string; descripcion: string | null; precio: number | string; imagenUrl: string | null; categoria?: string }, cantidad: number = 1) => {
+  const agregarAlPedido = (producto: typeof productosEjemplo[0] | any, cantidad: number = 1, ingredientesExcluidos?: number[], agregados?: any[]) => {
     const nuevoItem: ItemPedido = {
       id: producto.id,
       nombre: producto.nombre,
@@ -233,8 +233,8 @@ const Menu = () => {
                           <span>Total:</span>
                           <span className="text-primary">${total.toFixed(2)}</span>
                         </div>
-                        <Button 
-                          className="w-full rounded-2xl h-14 bg-primary hover:bg-primary/90" 
+                        <Button
+                          className="w-full rounded-2xl h-14 bg-primary hover:bg-primary/90"
                           size="lg"
                           onClick={confirmarPedido}
                         >
@@ -276,10 +276,10 @@ const Menu = () => {
               </Button>
             </div>
             <div className="w-24 h-24 relative">
-              <img 
-                src="https://images.unsplash.com/photo-1550547660-d9450f859349?w=200&h=200&fit=crop" 
-                alt="Promo" 
-                className="w-full h-full object-contain rounded-lg" 
+              <img
+                src="https://images.unsplash.com/photo-1550547660-d9450f859349?w=200&h=200&fit=crop"
+                alt="Promo"
+                className="w-full h-full object-contain rounded-lg"
               />
             </div>
           </div>
@@ -298,11 +298,10 @@ const Menu = () => {
               variant={selectedCategory === category ? "default" : "secondary"}
               size="sm"
               onClick={() => setSelectedCategory(category)}
-              className={`rounded-full whitespace-nowrap ${
-                selectedCategory === category 
-                  ? "bg-primary hover:bg-primary/90" 
+              className={`rounded-full whitespace-nowrap ${selectedCategory === category
+                  ? "bg-primary hover:bg-primary/90"
                   : "bg-secondary hover:bg-secondary/80"
-              }`}
+                }`}
             >
               {category === 'All' ? 'Todas' : category}
             </Button>
@@ -325,10 +324,10 @@ const Menu = () => {
             >
               <div className="flex gap-4 p-3">
                 <div className="w-24 h-24 rounded-xl overflow-hidden shrink-0 bg-secondary">
-                  <img 
-                    src={producto.imagenUrl} 
-                    alt={producto.nombre} 
-                    className="w-full h-full object-cover" 
+                  <img
+                    src={producto.imagenUrl}
+                    alt={producto.nombre}
+                    className="w-full h-full object-cover"
                   />
                 </div>
                 <div className="flex-1 min-w-0 flex flex-col justify-between py-1">
@@ -349,8 +348,8 @@ const Menu = () => {
                   </div>
                   <div className="flex items-center justify-between">
                     <p className="text-lg font-bold text-primary">${producto.precio.toFixed(2)}</p>
-                    <Button 
-                      size="sm" 
+                    <Button
+                      size="sm"
                       className="bg-primary hover:bg-primary/90 h-8 px-4 rounded-full text-xs"
                       onClick={(e) => {
                         e.stopPropagation()

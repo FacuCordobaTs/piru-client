@@ -5,10 +5,63 @@ import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet'
 import { toast } from 'sonner'
 import {
     Trash2, ArrowLeft,
-    Package, Receipt, UtensilsCrossed, Utensils
+    Package, Receipt, UtensilsCrossed, Utensils, Clock
 } from 'lucide-react'
 import { ProductDetailDrawer } from '@/components/ProductDetailDrawer'
 import { ThemeToggle } from '@/components/ThemeToggle'
+
+type HorarioTurno = { diaSemana: number; horaApertura: string; horaCierre: string }
+
+function checkIsOpen(horarios: HorarioTurno[]): { abierto: boolean; proximaApertura: string | null } {
+    if (!horarios || horarios.length === 0) return { abierto: true, proximaApertura: null }
+
+    const now = new Date()
+    const diaHoy = now.getDay() // 0=Dom
+    const diaAyer = (diaHoy + 6) % 7
+    const hhmm = now.getHours() * 60 + now.getMinutes()
+
+    for (const h of horarios) {
+        const apertura = parseInt(h.horaApertura.split(':')[0]) * 60 + parseInt(h.horaApertura.split(':')[1])
+        const cierre = parseInt(h.horaCierre.split(':')[0]) * 60 + parseInt(h.horaCierre.split(':')[1])
+
+        if (cierre > apertura) {
+            if (h.diaSemana === diaHoy && hhmm >= apertura && hhmm < cierre) {
+                return { abierto: true, proximaApertura: null }
+            }
+        } else {
+            // Cruza medianoche: ej 20:00-02:00
+            // Parte nocturna (mismo día del turno, después de apertura)
+            if (h.diaSemana === diaHoy && hhmm >= apertura) {
+                return { abierto: true, proximaApertura: null }
+            }
+            // Parte madrugada (día siguiente al turno, antes de cierre)
+            if (h.diaSemana === diaAyer && hhmm < cierre) {
+                return { abierto: true, proximaApertura: null }
+            }
+        }
+    }
+
+    // Encontrar la próxima apertura
+    const DIAS_NOMBRE = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
+    let mejor: { minutos: number; texto: string } | null = null
+
+    for (const h of horarios) {
+        const apertura = parseInt(h.horaApertura.split(':')[0]) * 60 + parseInt(h.horaApertura.split(':')[1])
+        let diasHasta = (h.diaSemana - diaHoy + 7) % 7
+        let minutosHasta = diasHasta * 1440 + (apertura - hhmm)
+        if (minutosHasta <= 0) minutosHasta += 7 * 1440
+
+        if (!mejor || minutosHasta < mejor.minutos) {
+            const esHoy = diasHasta === 0 && apertura > hhmm
+            mejor = {
+                minutos: minutosHasta,
+                texto: esHoy ? `hoy a las ${h.horaApertura}` : `${DIAS_NOMBRE[h.diaSemana]} ${h.horaApertura}`
+            }
+        }
+    }
+
+    return { abierto: false, proximaApertura: mejor?.texto || null }
+}
 
 const MenuDelivery = () => {
     const navigate = useNavigate()
@@ -22,6 +75,8 @@ const MenuDelivery = () => {
     const [restaurante, setRestaurante] = useState<any>(null)
     const [productos, setProductos] = useState<any[]>([])
     const [loading, setLoading] = useState(true)
+    const [horarios, setHorarios] = useState<HorarioTurno[]>([])
+    const [estadoAbierto, setEstadoAbierto] = useState<{ abierto: boolean; proximaApertura: string | null }>({ abierto: true, proximaApertura: null })
 
     const [cartItems, setCartItems] = useState<any[]>(() => {
         const saved = localStorage.getItem(`deliveryCart_${username}`)
@@ -83,6 +138,10 @@ const MenuDelivery = () => {
                 if (data.success) {
                     setRestaurante(data.data.restaurante)
                     setProductos(data.data.productos)
+                    if (data.data.horarios) {
+                        setHorarios(data.data.horarios)
+                        setEstadoAbierto(checkIsOpen(data.data.horarios))
+                    }
                     if (data.data.restaurante.colorPrimario && data.data.restaurante.colorSecundario) {
                         sessionStorage.setItem(`theme_${username}`, JSON.stringify({
                             primario: data.data.restaurante.colorPrimario,
@@ -105,6 +164,14 @@ const MenuDelivery = () => {
             fetchRestaurante()
         }
     }, [username])
+
+    useEffect(() => {
+        if (horarios.length === 0) return
+        const interval = setInterval(() => {
+            setEstadoAbierto(checkIsOpen(horarios))
+        }, 60_000)
+        return () => clearInterval(interval)
+    }, [horarios])
 
     const abrirCarrito = useCallback(() => {
         window.history.pushState({ drawer: 'carrito' }, '')
@@ -242,6 +309,10 @@ const MenuDelivery = () => {
 
     const confirmarPedido = () => {
         if (cartItems.length === 0) return
+        if (!estadoAbierto.abierto) {
+            toast.error('El restaurante está cerrado en este momento')
+            return
+        }
         localStorage.setItem(`deliveryCart_${username}`, JSON.stringify({ items: cartItems, restauranteId: restaurante.id, deliveryFee: restaurante.deliveryFee }))
         navigate(`/${username}/checkout`)
     }
@@ -322,6 +393,17 @@ const MenuDelivery = () => {
                     </div>
                 </div>
             </div>
+
+            {!estadoAbierto.abierto && (
+                <div className="bg-red-600 text-white">
+                    <div className="max-w-2xl mx-auto px-5 py-3 flex items-center justify-center gap-2">
+                        <Clock className="w-4 h-4 shrink-0" />
+                        <p className="text-sm font-semibold text-center">
+                            Estamos cerrados{estadoAbierto.proximaApertura ? `. Abrimos ${estadoAbierto.proximaApertura}` : ''}
+                        </p>
+                    </div>
+                </div>
+            )}
 
             <div className="max-w-2xl mx-auto px-5 pt-4 space-y-6">
                 <section className="space-y-4">
@@ -578,9 +660,14 @@ const MenuDelivery = () => {
                                     <span className="text-muted-foreground text-sm">Total a pagar</span>
                                     <span className="text-2xl font-black tracking-tight">${totalPedido}</span>
                                 </div>
-                                <Button className="w-full h-14 text-base font-bold rounded-2xl shadow-lg shadow-primary/20 bg-primary hover:bg-primary/90 text-primary-foreground" size="lg" onClick={confirmarPedido}>
-                                    Continuar
-                                    <ArrowLeft className="w-5 h-5 ml-2 rotate-180" />
+                                <Button
+                                    className={`w-full h-14 text-base font-bold rounded-2xl shadow-lg ${!estadoAbierto.abierto ? 'bg-muted text-muted-foreground cursor-not-allowed' : 'shadow-primary/20 bg-primary hover:bg-primary/90 text-primary-foreground'}`}
+                                    size="lg"
+                                    onClick={confirmarPedido}
+                                    disabled={!estadoAbierto.abierto}
+                                >
+                                    {!estadoAbierto.abierto ? 'Cerrado' : 'Continuar'}
+                                    {estadoAbierto.abierto && <ArrowLeft className="w-5 h-5 ml-2 rotate-180" />}
                                 </Button>
                             </div>
                         )}

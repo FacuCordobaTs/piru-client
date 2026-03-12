@@ -1,9 +1,10 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router'
 import { Button } from '@/components/ui/button'
-import { CheckCircle2, Copy, Loader2, Store, Truck, Utensils, MapPin, Clock } from 'lucide-react'
+import { CheckCircle2, Copy, Loader2, Store, Truck, Utensils, MapPin, Clock, Package } from 'lucide-react'
 import { toast } from 'sonner'
 import { ThemeToggle } from '@/components/ThemeToggle'
+import { MisPedidosDrawer } from '@/components/MisPedidosDrawer'
 
 const SuccessDelivery = () => {
     const { username } = useParams()
@@ -15,6 +16,9 @@ const SuccessDelivery = () => {
     const [restauranteData, setRestauranteData] = useState<any>(null)
     const [isLoadingRestaurante, setIsLoadingRestaurante] = useState(true)
     const [isCreatingMP, setIsCreatingMP] = useState(false)
+    const [misPedidosOpen, setMisPedidosOpen] = useState(false)
+    const [pedidoEstado, setPedidoEstado] = useState<string | null>(null)
+    const metaPurchaseTracked = useRef(false)
 
     useEffect(() => {
         const savedInfo = sessionStorage.getItem('deliveryOrderInfo')
@@ -51,6 +55,25 @@ const SuccessDelivery = () => {
         }
     }, [username])
 
+    // Fetch current pedido status on mount (handles page reload)
+    useEffect(() => {
+        if (!orderInfo) return
+        const fetchPedidoStatus = async () => {
+            try {
+                const url = import.meta.env.VITE_API_URL || 'http://localhost:3000/api'
+                const res = await fetch(`${url}/public/pedido/${orderInfo.tipoPedido}/${orderInfo.pedidoId}/status`)
+                const data = await res.json()
+                if (data.success) {
+                    if (data.pagado) setStatus('confirmed')
+                    if (data.estado) setPedidoEstado(data.estado)
+                }
+            } catch (err) {
+                console.error('Error fetching pedido status:', err)
+            }
+        }
+        fetchPedidoStatus()
+    }, [orderInfo])
+
     // WebSocket Connection
     useEffect(() => {
         if (!orderInfo) return
@@ -83,6 +106,14 @@ const SuccessDelivery = () => {
                             icon: <CheckCircle2 className="w-5 h-5 text-green-500" />,
                             duration: 6000
                         })
+                    } else if (data.type === 'PEDIDO_ESTADO_ACTUALIZADO') {
+                        setPedidoEstado(data.payload.estado)
+                        if (data.payload.estado === 'dispatched' || data.payload.estado === 'archived') {
+                            toast.success('¡Tu pedido va en camino!', {
+                                icon: <Truck className="w-5 h-5 text-blue-500" />,
+                                duration: 6000
+                            })
+                        }
                     }
                 } catch (e) {
                     console.error('Error parsing WS message', e)
@@ -92,7 +123,7 @@ const SuccessDelivery = () => {
             ws.onclose = () => {
                 isConnecting = false
                 setTimeout(() => {
-                    if (status !== 'confirmed') connectWebSocket()
+                    connectWebSocket()
                 }, 3000)
             }
         }
@@ -102,7 +133,71 @@ const SuccessDelivery = () => {
         return () => {
             if (ws) ws.close()
         }
-    }, [orderInfo, status])
+    }, [orderInfo])
+
+    // Escáner de seguridad: Polling + Visibilidad de pestaña
+    useEffect(() => {
+        // Solo escanear si estamos activamente esperando el pago
+        if (status !== 'verifying' || !orderInfo) return;
+
+        let isChecking = false;
+
+        const checkPaymentStatus = async () => {
+            if (isChecking) return;
+            isChecking = true;
+            try {
+                const url = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
+                const response = await fetch(`${url}/public/pedido/${orderInfo.tipoPedido}/${orderInfo.pedidoId}/status`);
+                const data = await response.json();
+
+                if (data.success && data.pagado) {
+                    setStatus('confirmed');
+                    toast.success('¡Transferencia recibida!', {
+                        icon: <CheckCircle2 className="w-5 h-5 text-green-500" />,
+                        duration: 6000
+                    });
+                }
+            } catch (error) {
+                console.error('Error verificando estado del pago', error);
+            } finally {
+                isChecking = false;
+            }
+        };
+
+        // 1. Polling: Revisar cada 4 segundos por las dudas
+        const pollInterval = setInterval(checkPaymentStatus, 4000);
+
+        // 2. Visibility API: Revisar INMEDIATAMENTE cuando el usuario vuelve a Chrome
+        const handleVisibilityChange = () => {
+            if (document.visibilityState === 'visible') {
+                checkPaymentStatus();
+            }
+        };
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+
+        // Limpiar los listeners al desmontar o si cambia el estado
+        return () => {
+            clearInterval(pollInterval);
+            document.removeEventListener('visibilitychange', handleVisibilityChange);
+        };
+    }, [status, orderInfo]);
+
+    // Meta Pixel: disparar Purchase solo cuando el pago está confirmado (Cucuru/webhook)
+    useEffect(() => {
+        if (status !== 'confirmed' || !orderInfo || metaPurchaseTracked.current) return
+        const total = parseFloat(orderInfo.total)
+        if (isNaN(total) || total <= 0) return
+
+        metaPurchaseTracked.current = true
+        try {
+            const fbq = (window as any).fbq
+            if (typeof fbq === 'function') {
+                fbq('track', 'Purchase', { currency: 'ARS', value: total })
+            }
+        } catch {
+            // No romper la app si Meta Pixel falla
+        }
+    }, [status, orderInfo])
 
     if (!orderInfo) return null
 
@@ -233,7 +328,16 @@ const SuccessDelivery = () => {
             <div className="w-full fixed top-0 z-20 bg-background/80 backdrop-blur-md border-b border-border/50">
                 <div className="max-w-xl mx-auto px-4 py-3 flex items-center justify-between">
                     <span className="font-semibold text-lg bg-linear-to-r from-primary to-primary bg-clip-text text-transparent opacity-80">Piru</span>
-                    <ThemeToggle />
+                    <div className="flex items-center gap-2">
+                        <button
+                            onClick={() => setMisPedidosOpen(true)}
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold text-primary hover:bg-primary/10 transition-colors border border-primary/20"
+                        >
+                            <Package className="w-3.5 h-3.5" />
+                            Mis Pedidos
+                        </button>
+                        <ThemeToggle />
+                    </div>
                 </div>
             </div>
 
@@ -353,61 +457,122 @@ const SuccessDelivery = () => {
 
                 {status === 'confirmed' && (
                     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700 w-full">
-                        {/* Success header */}
-                        <div className="text-center space-y-3">
-                            <div className="mx-auto w-24 h-24 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center mb-2 ring-8 ring-green-50 dark:ring-green-900/10">
-                                <CheckCircle2 className="w-12 h-12 text-green-600 dark:text-green-400" />
+                        {/* Header: changes based on dispatched status */}
+                        {(pedidoEstado === 'dispatched' || pedidoEstado === 'archived') ? (
+                            <div className="text-center space-y-3">
+                                <div className="mx-auto w-24 h-24 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center mb-2 ring-8 ring-blue-50 dark:ring-blue-900/10">
+                                    <Truck className="w-12 h-12 text-blue-600 dark:text-blue-400" />
+                                </div>
+                                <h1 className="text-3xl font-black tracking-tight text-blue-600 dark:text-blue-500">¡En camino!</h1>
+                                <p className="text-base font-medium text-muted-foreground">
+                                    Tu pedido #{pedidoId} ya fue despachado
+                                </p>
                             </div>
-                            <h1 className="text-3xl font-black tracking-tight text-green-600 dark:text-green-500">¡Pedido Confirmado!</h1>
-                            <p className="text-base font-medium text-muted-foreground">
-                                Ya estamos recibiendo tu pedido en cocina
-                            </p>
+                        ) : (
+                            <div className="text-center space-y-3">
+                                <div className="mx-auto w-24 h-24 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center mb-2 ring-8 ring-green-50 dark:ring-green-900/10">
+                                    <CheckCircle2 className="w-12 h-12 text-green-600 dark:text-green-400" />
+                                </div>
+                                <h1 className="text-3xl font-black tracking-tight text-green-600 dark:text-green-500">¡Pedido Confirmado!</h1>
+                                <p className="text-base font-medium text-muted-foreground">
+                                    Ya estamos recibiendo tu pedido en cocina
+                                </p>
+                            </div>
+                        )}
+
+                        {/* Tracker visual */}
+                        <div className="bg-card border-2 border-primary/30 rounded-2xl p-5 shadow-md">
+                            <div className="flex items-center w-full gap-0 py-2">
+                                {(['pending', 'dispatched'] as const).map((step, i) => {
+                                    const effectiveEstado = pedidoEstado || 'pending'
+                                    const normalizedEstado = (['preparing', 'ready'].includes(effectiveEstado)) ? 'pending' : (effectiveEstado === 'archived' ? 'dispatched' : effectiveEstado)
+                                    const stepOrder = ['pending', 'dispatched']
+                                    const currentIdx = stepOrder.indexOf(normalizedEstado)
+                                    const allDone = effectiveEstado === 'delivered' || effectiveEstado === 'dispatched' || effectiveEstado === 'archived'
+                                    const isCompleted = allDone || (currentIdx >= 0 && i < currentIdx)
+                                    const isCurrent = !allDone && step === normalizedEstado
+                                    const label = step === 'pending' ? 'Recibido' : 'En camino'
+
+                                    return (
+                                        <div key={step} className="flex items-center flex-1 min-w-0">
+                                            <div className="flex flex-col items-center gap-1.5 flex-1 min-w-0">
+                                                <div className={`
+                                                    w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold shrink-0 transition-all duration-500
+                                                    ${isCompleted
+                                                        ? 'bg-emerald-500 text-white shadow-md shadow-emerald-500/30'
+                                                        : isCurrent
+                                                            ? 'bg-primary text-primary-foreground shadow-md shadow-primary/30 ring-4 ring-primary/20 animate-pulse'
+                                                            : 'bg-muted text-muted-foreground'}
+                                                `}>
+                                                    {isCompleted
+                                                        ? <CheckCircle2 className="w-5 h-5" />
+                                                        : (i + 1)}
+                                                </div>
+                                                <span className={`text-xs font-semibold text-center leading-tight
+                                                    ${isCurrent ? 'text-primary font-bold' : isCompleted ? 'text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground'}
+                                                `}>
+                                                    {label}
+                                                </span>
+                                            </div>
+                                            {i < 1 && (
+                                                <div className={`h-0.5 flex-1 mx-2 rounded-full -mt-5 transition-all duration-500
+                                                    ${isCompleted ? 'bg-emerald-500' : 'bg-border'}
+                                                `} />
+                                            )}
+                                        </div>
+                                    )
+                                })}
+                            </div>
                         </div>
 
-                        {/* Delivery / Takeaway info card */}
+                        {/* Info card */}
                         <div className="bg-card border border-border rounded-2xl overflow-hidden shadow-sm">
-                            {/* Payment method info */}
-                            {orderInfo.metodoPago === 'transferencia' && (
-                                orderInfo.cucuruAlias ? (
-                                    <div className="p-4 border-b border-border bg-primary/5">
-                                        <div className="flex items-center justify-between mb-2">
-                                            <p className="text-sm font-bold text-primary/80">Alias de transferencia</p>
-                                            <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400">
-                                                Verificación automática
-                                            </span>
-                                        </div>
-                                        <Button
-                                            variant="outline"
-                                            className="w-full h-11 text-base font-bold rounded-xl border-primary/20 hover:bg-primary/10"
-                                            onClick={() => handleCopyAlias(orderInfo.cucuruAlias)}
-                                        >
-                                            <Copy className="w-4 h-4 mr-2 text-primary" />
-                                            {orderInfo.cucuruAlias}
-                                        </Button>
-                                        <p className="text-xs mt-2 text-center text-muted-foreground">Tu pedido comenzará a prepararse una vez recibido el pago.</p>
-                                    </div>
-                                ) : transferenciaAlias ? (
-                                    <div className="p-4 border-b border-border bg-primary/5">
-                                        <p className="text-sm font-bold text-primary/80 mb-2">Transferí a este alias:</p>
-                                        <Button
-                                            variant="outline"
-                                            className="w-full h-11 text-base font-bold rounded-xl border-primary/20 hover:bg-primary/10"
-                                            onClick={() => handleCopyAlias(transferenciaAlias)}
-                                        >
-                                            <Copy className="w-4 h-4 mr-2 text-primary" />
-                                            {transferenciaAlias}
-                                        </Button>
-                                        <p className="text-xs mt-2 text-center text-muted-foreground">Tu pedido comenzará a prepararse una vez recibido el pago.</p>
-                                    </div>
-                                ) : null
-                            )}
+                            {/* Payment info: only show if NOT dispatched yet */}
+                            {!pedidoEstado || !['dispatched', 'delivered', 'archived'].includes(pedidoEstado) ? (
+                                <>
+                                    {orderInfo.metodoPago === 'transferencia' && (
+                                        orderInfo.cucuruAlias ? (
+                                            <div className="p-4 border-b border-border bg-primary/5">
+                                                <div className="flex items-center justify-between mb-2">
+                                                    <p className="text-sm font-bold text-primary/80">Alias de transferencia</p>
+                                                    <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400">
+                                                        Verificación automática
+                                                    </span>
+                                                </div>
+                                                <Button
+                                                    variant="outline"
+                                                    className="w-full h-11 text-base font-bold rounded-xl border-primary/20 hover:bg-primary/10"
+                                                    onClick={() => handleCopyAlias(orderInfo.cucuruAlias)}
+                                                >
+                                                    <Copy className="w-4 h-4 mr-2 text-primary" />
+                                                    {orderInfo.cucuruAlias}
+                                                </Button>
+                                                <p className="text-xs mt-2 text-center text-muted-foreground">Tu pedido comenzará a prepararse una vez recibido el pago.</p>
+                                            </div>
+                                        ) : transferenciaAlias ? (
+                                            <div className="p-4 border-b border-border bg-primary/5">
+                                                <p className="text-sm font-bold text-primary/80 mb-2">Transferí a este alias:</p>
+                                                <Button
+                                                    variant="outline"
+                                                    className="w-full h-11 text-base font-bold rounded-xl border-primary/20 hover:bg-primary/10"
+                                                    onClick={() => handleCopyAlias(transferenciaAlias)}
+                                                >
+                                                    <Copy className="w-4 h-4 mr-2 text-primary" />
+                                                    {transferenciaAlias}
+                                                </Button>
+                                                <p className="text-xs mt-2 text-center text-muted-foreground">Tu pedido comenzará a prepararse una vez recibido el pago.</p>
+                                            </div>
+                                        ) : null
+                                    )}
 
-                            {orderInfo.metodoPago === 'efectivo' && (
-                                <div className="p-4 border-b border-border bg-emerald-50 dark:bg-emerald-950/20 text-center">
-                                    <p className="text-sm font-bold text-emerald-800 dark:text-emerald-400">Pago en Efectivo</p>
-                                    <p className="text-xs mt-1 text-muted-foreground">Aboná el importe exacto al recibir tu pedido.</p>
-                                </div>
-                            )}
+                                    {orderInfo.metodoPago === 'efectivo' && (
+                                        <div className="p-4 border-b border-border bg-emerald-50 dark:bg-emerald-950/20 text-center">
+                                            <p className="text-sm font-bold text-emerald-800 dark:text-emerald-400">Pago en Efectivo</p>
+                                            <p className="text-xs mt-1 text-muted-foreground">Aboná el importe exacto al recibir tu pedido.</p>
+                                        </div>
+                                    )}
+                                </>
+                            ) : null}
 
                             {/* Delivery / Takeaway info */}
                             <div className="p-4">
@@ -417,7 +582,9 @@ const SuccessDelivery = () => {
                                     </div>
                                     <div className="space-y-1.5 min-w-0">
                                         <h3 className="font-bold text-base leading-none">
-                                            {tipoPedido === 'delivery' ? 'Delivery en camino' : 'Retiro en local'}
+                                            {(pedidoEstado === 'dispatched' || pedidoEstado === 'archived')
+                                                ? '¡Tu pedido va en camino!'
+                                                : tipoPedido === 'delivery' ? 'Delivery' : 'Retiro en local'}
                                         </h3>
                                         {tipoPedido === 'delivery' && direccion ? (
                                             <div className="space-y-1">
@@ -426,7 +593,9 @@ const SuccessDelivery = () => {
                                                     <span className="truncate">{direccion}</span>
                                                 </div>
                                                 <p className="text-xs text-muted-foreground leading-snug">
-                                                    Tu pedido será enviado a esta dirección.
+                                                    {(pedidoEstado === 'dispatched' || pedidoEstado === 'archived')
+                                                        ? 'El repartidor se dirige a tu dirección.'
+                                                        : 'Tu pedido será enviado a esta dirección.'}
                                                 </p>
                                             </div>
                                         ) : tipoPedido === 'takeaway' ? (
@@ -468,6 +637,12 @@ const SuccessDelivery = () => {
                     </div>
                 )}
             </div>
+
+            <MisPedidosDrawer
+                open={misPedidosOpen}
+                onOpenChange={setMisPedidosOpen}
+                restauranteId={restauranteData?.id ?? null}
+            />
         </div>
     )
 }

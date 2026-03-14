@@ -133,13 +133,19 @@ const Menu = () => {
 
   const agregarAlPedido = (producto: typeof productos[0] | any, cantidad: number = 1, ingredientesExcluidos?: number[], agregados?: any[]) => {
     if (!clienteNombre) return
+    let precioBase = parseFloat(String(producto.precio))
+    if (producto.descuento && producto.descuento > 0) {
+      precioBase = precioBase * (1 - producto.descuento / 100)
+    }
+    const precioAgregados = (agregados || []).reduce((sum: number, ag: any) => sum + parseFloat(ag.precio || '0'), 0)
+    const precioUnitario = (precioBase + precioAgregados).toFixed(2)
     sendMessage({
       type: 'AGREGAR_ITEM',
       payload: {
         productoId: producto.id,
         clienteNombre,
         cantidad,
-        precioUnitario: String(producto.precio),
+        precioUnitario,
         imagenUrl: producto.imagenUrl,
         ingredientesExcluidos: ingredientesExcluidos || [],
         agregados: agregados || []
@@ -533,7 +539,10 @@ const Menu = () => {
                               <div className="mt-1">
                                 {(item as any).agregados.map((ag: any) => (
                                   <p key={ag.id} className="text-xs text-muted-foreground font-medium flex items-center gap-1">
-                                    <span>+ {ag.nombre}</span>
+                                    <span>+ {ag.nombre || 'Extra'}</span>
+                                    {ag.precio && parseFloat(ag.precio) > 0 && (
+                                      <span className="text-primary/80">(+${parseFloat(ag.precio).toFixed(0)})</span>
+                                    )}
                                   </p>
                                 ))}
                               </div>

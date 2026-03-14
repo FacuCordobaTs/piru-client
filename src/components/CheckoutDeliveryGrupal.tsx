@@ -312,40 +312,58 @@ export function CheckoutDeliveryGrupal({
       )}
 
       {checkoutData && !estoyEditando && !alguienEditando && (
-        <div className="bg-secondary/40 p-4 rounded-2xl border border-border space-y-3">
-          <Button variant="outline" size="sm" onClick={handleIniciarEdicion} className="text-xs h-8">
-            <Pencil className="w-3.5 h-3.5 mr-1" />
-            Editar
-          </Button>
-          <div>
-            <p className="text-xs text-muted-foreground mb-0.5">¿Cómo reciben?</p>
-            <p className="font-semibold text-sm">{checkoutData.tipoPedido === 'delivery' ? 'Delivery' : 'Take Away'}</p>
+        <div className="bg-secondary/40 p-4 rounded-2xl border border-border space-y-4">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-sm font-medium text-muted-foreground">Datos guardados</span>
+            <Button variant="outline" size="sm" onClick={handleIniciarEdicion} className="text-xs h-8 shrink-0">
+              <Pencil className="w-3.5 h-3.5 mr-1" />
+              Editar
+            </Button>
           </div>
-          <div>
-            <p className="text-xs text-muted-foreground mb-0.5">Nombre</p>
-            <p className="font-semibold text-sm">{checkoutData.nombre}</p>
-          </div>
-          <div>
-            <p className="text-xs text-muted-foreground mb-0.5">Celular</p>
-            <p className="font-semibold text-sm">{checkoutData.telefono}</p>
-          </div>
-          {checkoutData.tipoPedido === 'delivery' && (
-            <div>
-              <p className="text-xs text-muted-foreground mb-0.5">Dirección</p>
-              <p className="font-semibold text-sm">{checkoutData.direccion}</p>
-              {checkoutData.deliveryFee > 0 && (
-                <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-1">
-                  Envío: ${checkoutData.deliveryFee.toFixed(0)} {checkoutData.zonaNombre ? `(${checkoutData.zonaNombre})` : ''}
-                </p>
-              )}
+          <div className="space-y-3 opacity-75 pointer-events-none select-none">
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">¿Cómo reciben?</Label>
+              <div className="grid grid-cols-2 gap-2">
+                <div className={`flex items-center justify-center p-2.5 rounded-lg border bg-muted/30 ${checkoutData.tipoPedido === 'delivery' ? 'border-primary/30' : 'border-border'}`}>
+                  <span className="text-xs font-medium text-muted-foreground">Delivery</span>
+                </div>
+                <div className={`flex items-center justify-center p-2.5 rounded-lg border bg-muted/30 ${checkoutData.tipoPedido === 'takeaway' ? 'border-primary/30' : 'border-border'}`}>
+                  <span className="text-xs font-medium text-muted-foreground">Take Away</span>
+                </div>
+              </div>
             </div>
-          )}
-          {checkoutData.notas && (
-            <div>
-              <p className="text-xs text-muted-foreground mb-0.5">Notas</p>
-              <p className="font-medium text-sm">{checkoutData.notas}</p>
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">Nombre</Label>
+              <div className="h-10 rounded-lg border border-border bg-muted/30 px-3 flex items-center">
+                <span className="text-sm text-muted-foreground truncate">{checkoutData.nombre}</span>
+              </div>
             </div>
-          )}
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">Celular</Label>
+              <div className="h-10 rounded-lg border border-border bg-muted/30 px-3 flex items-center">
+                <span className="text-sm text-muted-foreground truncate">{checkoutData.telefono}</span>
+              </div>
+            </div>
+            {checkoutData.tipoPedido === 'delivery' && (
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground">Dirección</Label>
+                <div className="h-10 rounded-lg border border-border bg-muted/30 px-3 flex items-center">
+                  <span className="text-sm text-muted-foreground truncate">{checkoutData.direccion}</span>
+                </div>
+                {checkoutData.deliveryFee > 0 && (
+                  <p className="text-xs text-emerald-600/80 dark:text-emerald-400/80">
+                    Envío: ${checkoutData.deliveryFee.toFixed(0)} {checkoutData.zonaNombre ? `(${checkoutData.zonaNombre})` : ''}
+                  </p>
+                )}
+              </div>
+            )}
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">Notas (opcional)</Label>
+              <div className="min-h-[60px] rounded-lg border border-border bg-muted/30 px-3 py-2 flex items-start">
+                <span className="text-sm text-muted-foreground line-clamp-2">{checkoutData.notas || '—'}</span>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 

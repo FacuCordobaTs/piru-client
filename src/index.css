@@ -121,3 +121,15 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* Google Places Autocomplete dropdown - must appear above Sheet/Drawer/Modal */
+.pac-container {
+  z-index: 99999 !important;
+  pointer-events: auto !important;
+}
+.pac-item {
+  cursor: pointer;
+  min-height: 36px;
+  padding: 8px 12px;
+  -webkit-tap-highlight-color: transparent;
+}

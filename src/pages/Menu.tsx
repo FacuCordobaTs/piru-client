@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge'
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet'
 import { useMesaStore } from '@/store/mesaStore'
 import { useClienteWebSocket } from '@/hooks/useClienteWebSocket'
+import { mesaApi } from '@/lib/api'
 import { toast } from 'sonner'
 import {
   Trash2, ArrowLeft,
@@ -19,7 +20,7 @@ import { CheckoutDeliveryGrupal } from '@/components/CheckoutDeliveryGrupal'
 const Menu = () => {
   const navigate = useNavigate()
   const { qrToken: urlQrToken } = useParams<{ qrToken?: string }>()
-  const { mesa, productos, clientes, clienteNombre, clienteId, qrToken, isHydrated, sessionEnded, restaurante, pedido, checkoutDeliveryData, checkoutEditSemaphore } = useMesaStore()
+  const { mesa, productos, clientes, clienteNombre, clienteId, qrToken, isHydrated, sessionEnded, restaurante, pedido, checkoutDeliveryData, checkoutEditSemaphore, setMesa, setProductos, setPedidoId, setPedido, setRestaurante, setQrToken, setClientes, setCheckoutDeliveryData, setCheckoutEditSemaphore } = useMesaStore()
   const { state: wsState, isConnected, sendMessage, confirmacionGrupal, confirmacionCancelada, clearConfirmacionCancelada } = useClienteWebSocket()
 
   const [carritoAbierto, setCarritoAbierto] = useState(false)
@@ -77,6 +78,31 @@ const Menu = () => {
     window.addEventListener('popstate', handlePopState)
     return () => window.removeEventListener('popstate', handlePopState)
   }, [carritoAbierto, drawerOpen])
+
+  // Sincronizar sala cuando la URL tiene un token distinto al del store (ej: usuario entró por otro link)
+  useEffect(() => {
+    if (!isHydrated || !esSala || !urlQrToken) return
+    if (urlQrToken === qrToken) return
+    const syncSala = async () => {
+      try {
+        const response = await mesaApi.join(urlQrToken) as { success?: boolean; data?: any }
+        if (response.success && response.data) {
+          setQrToken(urlQrToken)
+          setMesa(response.data.mesa)
+          setProductos(response.data.productos || [])
+          setPedidoId(response.data.pedido.id)
+          setPedido(response.data.pedido)
+          setRestaurante(response.data.restaurante || null)
+          setClientes([])
+          setCheckoutDeliveryData(null)
+          setCheckoutEditSemaphore(null)
+        }
+      } catch {
+        toast.error('No se pudo cargar la sala')
+      }
+    }
+    syncSala()
+  }, [isHydrated, esSala, urlQrToken, qrToken])
 
   useEffect(() => {
     if (!isHydrated) return
@@ -235,6 +261,42 @@ const Menu = () => {
   const yaConfirme = confirmacionGrupal?.confirmaciones.find(c => c.clienteId === clienteId)?.confirmado ?? false
   const totalConfirmados = confirmacionGrupal?.confirmaciones.filter(c => c.confirmado).length ?? 0
   const totalClientes = confirmacionGrupal?.confirmaciones.length ?? 0
+  const todosConfirmaron = esSala && totalClientes > 0 && totalConfirmados === totalClientes
+
+  // Fallback: cuando todos confirmaron en sala, poll por el pedido creado (por si el WS no llega)
+  useEffect(() => {
+    if (!todosConfirmaron || !urlQrToken) return
+    const token = urlQrToken
+    const poll = async () => {
+      try {
+        const url = import.meta.env.VITE_API_URL || 'http://localhost:3000/api'
+        const res = await fetch(`${url}/public/sala/${token}/order-created`)
+        const data = await res.json()
+        if (data.success && data.order) {
+          sessionStorage.setItem('salaOrderInfo', JSON.stringify({
+            token: data.order.token,
+            pedidoId: data.order.pedidoId,
+            tipoPedido: data.order.tipoPedido,
+            total: data.order.total,
+            items: data.order.items,
+            cucuruAlias: data.order.cucuruAlias,
+            cucuruAccountNumber: data.order.cucuruAccountNumber,
+            deliveryFee: data.order.deliveryFee,
+            zonaNombre: data.order.zonaNombre,
+            direccion: data.order.direccion,
+            metodoPago: 'transferencia',
+          }))
+          window.location.href = `/sala/${data.order.token}/success`
+        }
+      } catch { /* ignore */ }
+    }
+    const t = setTimeout(poll, 500)
+    const interval = setInterval(poll, 1500)
+    return () => {
+      clearTimeout(t)
+      clearInterval(interval)
+    }
+  }, [todosConfirmaron, urlQrToken])
 
   const todosLosItems = wsState?.items || []
   const totalPedido = wsState?.total || '0.00'
@@ -605,64 +667,65 @@ const Menu = () => {
 
       {/* --- MODAL DE CONFIRMACIÓN GRUPAL --- */}
       <Dialog open={confirmacionGrupalOpen} onOpenChange={() => { }}>
-        <DialogContent className="max-w-sm rounded-3xl p-6 max-h-[90vh] overflow-y-auto" onPointerDownOutside={(e) => e.preventDefault()}>
-          <DialogHeader className="text-center sm:text-center">
-            <div className="mx-auto w-16 h-16 rounded-full bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center mb-4">
-              <Users className="w-8 h-8 text-orange-600 dark:text-orange-400" />
+        <DialogContent className="max-w-sm rounded-2xl p-4 sm:p-5 max-h-[85dvh] flex flex-col" onPointerDownOutside={(e) => e.preventDefault()}>
+          <DialogHeader className="text-center shrink-0">
+            <div className="mx-auto w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center mb-2 sm:mb-3">
+              <Users className="w-6 h-6 sm:w-7 sm:h-7 text-orange-600 dark:text-orange-400" />
             </div>
-            <DialogTitle className="text-xl">Confirmación del Pedido</DialogTitle>
-            <DialogDescription className="text-center pt-2">
+            <DialogTitle className="text-lg sm:text-xl">Confirmación del Pedido</DialogTitle>
+            <DialogDescription className="text-center pt-1 text-sm">
               {confirmacionGrupal?.iniciadaPorNombre === clienteNombre
-                ? 'Esperando que todos confirmen el pedido...'
-                : `${confirmacionGrupal?.iniciadaPorNombre} quiere confirmar el pedido`
+                ? 'Esperando que todos confirmen...'
+                : `${confirmacionGrupal?.iniciadaPorNombre} quiere confirmar`
               }
             </DialogDescription>
           </DialogHeader>
 
-          {/* Resumen del pedido (sala: datos de envío) */}
+          {/* Resumen del pedido (sala: datos de envío) - compacto */}
           {esSala && checkoutDeliveryData && (
-            <div className="mt-4 p-4 rounded-2xl bg-secondary/50 border border-border/50 space-y-2 text-left">
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Resumen del pedido</p>
-              <p className="text-sm"><span className="text-muted-foreground">Nombre:</span> {checkoutDeliveryData.nombre}</p>
-              <p className="text-sm"><span className="text-muted-foreground">Celular:</span> {checkoutDeliveryData.telefono}</p>
+            <div className="mt-2 sm:mt-3 p-3 rounded-xl bg-secondary/50 border border-border/50 space-y-1 text-left shrink-0 overflow-hidden">
+              <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Resumen</p>
+              <p className="text-xs truncate"><span className="text-muted-foreground">Nombre:</span> {checkoutDeliveryData.nombre}</p>
+              <p className="text-xs truncate"><span className="text-muted-foreground">Celular:</span> {checkoutDeliveryData.telefono}</p>
               {checkoutDeliveryData.tipoPedido === 'delivery' && (
-                <p className="text-sm"><span className="text-muted-foreground">Dirección:</span> {checkoutDeliveryData.direccion}</p>
+                <p className="text-xs truncate"><span className="text-muted-foreground">Dirección:</span> {checkoutDeliveryData.direccion}</p>
               )}
               {checkoutDeliveryData.tipoPedido === 'delivery' && checkoutDeliveryData.deliveryFee > 0 && (
-                <p className="text-sm"><span className="text-muted-foreground">Envío:</span> ${checkoutDeliveryData.deliveryFee.toFixed(2)}</p>
+                <p className="text-xs"><span className="text-muted-foreground">Envío:</span> ${checkoutDeliveryData.deliveryFee.toFixed(2)}</p>
               )}
-              <p className="text-base font-bold pt-2 border-t border-border/50">Total: ${checkoutDeliveryData.total}</p>
+              <p className="text-sm font-bold pt-1.5 border-t border-border/50">Total: ${checkoutDeliveryData.total}</p>
             </div>
           )}
 
-          {/* Lista de usuarios con estado de confirmación */}
-          <div className="mt-4 space-y-3">
-            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide text-center">
+          {/* Lista de usuarios - scroll interno si hace falta */}
+          <div className="mt-2 sm:mt-3 min-h-0 flex-1 overflow-y-auto">
+            <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide text-center mb-2">
               {totalConfirmados}/{totalClientes} confirmados
+              {todosConfirmaron && <span className="block text-orange-600 dark:text-orange-400 font-normal normal-case mt-1">Procesando pedido...</span>}
             </p>
 
-            <div className="flex flex-wrap justify-center gap-4 py-4">
+            <div className="flex flex-wrap justify-center gap-2 sm:gap-3 py-2">
               {confirmacionGrupal?.confirmaciones.map((conf) => {
                 const esYo = conf.clienteId === clienteId
                 return (
-                  <div key={conf.clienteId} className="flex flex-col items-center gap-1.5">
-                    <div className={`relative w-14 h-14 rounded-xl border-2 shadow-sm flex items-center justify-center font-bold text-sm transition-all duration-300 ${conf.confirmado
+                  <div key={conf.clienteId} className="flex flex-col items-center gap-1">
+                    <div className={`relative w-11 h-11 sm:w-12 sm:h-12 rounded-lg border-2 shadow-sm flex items-center justify-center font-bold text-xs transition-all duration-300 ${conf.confirmado
                       ? 'bg-orange-500 border-orange-600 text-white ring-2 ring-orange-300 dark:ring-orange-700'
                       : 'bg-zinc-200 dark:bg-zinc-700 border-zinc-300 dark:border-zinc-600 text-zinc-500 dark:text-zinc-400'
                       }`}>
                       {conf.nombre.slice(0, 2).toUpperCase()}
                       {conf.confirmado && (
-                        <div className="absolute -bottom-1 -right-1 w-5 h-5 bg-green-500 rounded-full flex items-center justify-center">
-                          <Check className="w-3 h-3 text-white" />
+                        <div className="absolute -bottom-0.5 -right-0.5 w-4 h-4 bg-green-500 rounded-full flex items-center justify-center">
+                          <Check className="w-2.5 h-2.5 text-white" />
                         </div>
                       )}
                       {!conf.confirmado && (
-                        <div className="absolute -bottom-1 -right-1 w-5 h-5 bg-zinc-400 dark:bg-zinc-500 rounded-full flex items-center justify-center">
-                          <Loader2 className="w-3 h-3 text-white animate-spin" />
+                        <div className="absolute -bottom-0.5 -right-0.5 w-4 h-4 bg-zinc-400 dark:bg-zinc-500 rounded-full flex items-center justify-center">
+                          <Loader2 className="w-2.5 h-2.5 text-white animate-spin" />
                         </div>
                       )}
                     </div>
-                    <span className={`text-xs font-medium truncate max-w-[60px] text-center ${esYo ? 'text-foreground' : 'text-muted-foreground'
+                    <span className={`text-[10px] font-medium truncate max-w-[48px] sm:max-w-[56px] text-center ${esYo ? 'text-foreground' : 'text-muted-foreground'
                       }`}>
                       {esYo ? 'Tú' : conf.nombre}
                     </span>
@@ -672,41 +735,41 @@ const Menu = () => {
             </div>
           </div>
 
-          <DialogFooter className="flex-col gap-2 sm:gap-2 mt-4">
+          <DialogFooter className="flex-col gap-2 shrink-0 mt-3 pt-3 border-t border-border/50">
             {!yaConfirme ? (
               <>
                 <Button
-                  size="lg"
+                  size="sm"
                   onClick={confirmarMiParte}
-                  className="w-full rounded-2xl font-semibold bg-orange-500 hover:bg-orange-600"
+                  className="w-full h-11 rounded-xl font-semibold bg-orange-500 hover:bg-orange-600"
                 >
-                  <Check className="w-5 h-5 mr-2" />
+                  <Check className="w-4 h-4 mr-2" />
                   Confirmar mi pedido
                 </Button>
                 <Button
                   variant="ghost"
-                  size="lg"
+                  size="sm"
                   onClick={cancelarConfirmacion}
-                  className="w-full rounded-2xl text-destructive hover:text-destructive hover:bg-destructive/10"
+                  className="w-full h-10 rounded-xl text-destructive hover:bg-destructive/10"
                 >
-                  <X className="w-5 h-5 mr-2" />
+                  <X className="w-4 h-4 mr-2" />
                   Cancelar
                 </Button>
               </>
             ) : (
               <>
-                <div className="w-full py-3 px-4 rounded-2xl bg-orange-100 dark:bg-orange-900/30 text-center">
-                  <p className="text-sm font-medium text-orange-700 dark:text-orange-300">
+                <div className="w-full py-2 px-3 rounded-xl bg-orange-100 dark:bg-orange-900/30 text-center">
+                  <p className="text-xs font-medium text-orange-700 dark:text-orange-300">
                     ✓ Ya confirmaste. Esperando a los demás...
                   </p>
                 </div>
                 <Button
                   variant="ghost"
-                  size="lg"
+                  size="sm"
                   onClick={cancelarConfirmacion}
-                  className="w-full rounded-2xl text-destructive hover:text-destructive hover:bg-destructive/10"
+                  className="w-full h-10 rounded-xl text-destructive hover:bg-destructive/10"
                 >
-                  <X className="w-5 h-5 mr-2" />
+                  <X className="w-4 h-4 mr-2" />
                   Cancelar para todos
                 </Button>
               </>

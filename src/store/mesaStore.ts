@@ -17,6 +17,7 @@ interface Restaurante {
   splitPayment: boolean | null
   soloCartaDigital: boolean
   disenoAlternativo?: boolean | null
+  direccion?: string | null
 }
 
 interface Ingrediente {

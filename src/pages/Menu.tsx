@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { useNavigate } from 'react-router'
+import { useNavigate, useParams } from 'react-router'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet'
@@ -17,6 +17,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 
 const Menu = () => {
   const navigate = useNavigate()
+  const { qrToken: urlQrToken } = useParams<{ qrToken?: string }>()
   const { mesa, productos, clientes, clienteNombre, clienteId, qrToken, isHydrated, sessionEnded, restaurante, pedido } = useMesaStore()
   const { state: wsState, isConnected, sendMessage, confirmacionGrupal, confirmacionCancelada, clearConfirmacionCancelada } = useClienteWebSocket()
 
@@ -79,9 +80,11 @@ const Menu = () => {
     if (!isHydrated) return
     if (sessionEnded) return
 
-    if (!clienteNombre || !qrToken) {
+    if (!clienteNombre || (!qrToken && !urlQrToken)) {
       toast.error('Debes ingresar tu nombre primero')
-      navigate(`/mesa/${qrToken || 'invalid'}`)
+      const isSala = window.location.pathname.includes('/sala/')
+      const token = urlQrToken || qrToken || 'invalid'
+      navigate(isSala ? `/sala/${token}/nombre` : `/mesa/${token}`)
       return
     }
 

@@ -64,10 +64,17 @@ const Nombre = () => {
     // Si es un nuevo QR diferente al guardado, o la sesión terminó, limpiar datos
     if (urlQrToken && (urlQrToken !== storedQrToken || sessionEnded)) {
       console.log('Nuevo QR o sesión terminada, limpiando datos anteriores', { urlQrToken, storedQrToken, sessionEnded })
+      const storedLocalName = localStorage.getItem('cliente_nombre')
       reset()
       clearPedidoCerrado()
       setDataLoaded(false) // Marcar que necesitamos recargar datos
-      setShouldAskName(true)
+      
+      if (storedLocalName) {
+        const clienteId = `cliente-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+        setClienteInfo(clienteId, storedLocalName)
+      } else {
+        setShouldAskName(true)
+      }
       return // Importante: retornar para no seguir con la redirección
     }
 
@@ -189,6 +196,7 @@ const Nombre = () => {
       // Generar ID único para el cliente
       const clienteId = `cliente-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
       setClienteInfo(clienteId, nombre.trim())
+      localStorage.setItem('cliente_nombre', nombre.trim())
 
       // Redirigir según el estado del pedido del SERVIDOR (no del localStorage viejo)
       // El pedido ya se actualizó desde el servidor en el useEffect de carga

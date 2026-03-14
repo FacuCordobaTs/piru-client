@@ -328,37 +328,42 @@ const MenuDelivery = () => {
     const totalPedido = cartItems.reduce((sum, item) => sum + (parseFloat(item.precio) * item.cantidad), 0).toFixed(2)
     const puntosEnCarrito = () => cartItems.reduce((sum, item) => sum + (item.esCanjePuntos ? item.puntosNecesarios * item.cantidad : 0), 0)
     const puntosGanadosCarrito = () => cartItems.reduce((sum, item) => sum + (!item.esCanjePuntos && item.puntosGanados ? item.puntosGanados * item.cantidad : 0), 0)
-
-    const handleCrearSala = async (e: React.FormEvent) => {
-        e.preventDefault()
-        if (!nombreSala.trim() || !restaurante?.id) return
-
+    const crearSala = async (nombreParaSala: string) => {
+        if (!nombreParaSala.trim() || !restaurante?.id) return
         setCreandoSala(true)
         try {
             const url = import.meta.env.VITE_API_URL || 'http://localhost:3000/api'
             const res = await fetch(`${url}/public/sala/create`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    restauranteId: restaurante.id,
-                    nombreCliente: nombreSala.trim()
-                })
+                body: JSON.stringify({ restauranteId: restaurante.id, nombreCliente: nombreParaSala.trim() })
             })
-            
-            if (!res.ok) throw new Error('Error al crear sala')
-            
             const data = await res.json()
             if (data.success && data.data?.token) {
-                // Redirect user to the new sala onboarding
+                localStorage.setItem('cliente_nombre', nombreParaSala.trim())
                 navigate(`/sala/${data.data.token}/nombre`)
             } else {
-                toast.error(data.message || 'Error al crear la sala')
+                toast.error('Error al crear el pedido entre amigos')
             }
-        } catch (error) {
-            console.error('Error creando sala:', error)
-            toast.error('Ocurrió un error de conexión')
+        } catch (e) {
+            toast.error('Error al conectar con el servidor')
         } finally {
             setCreandoSala(false)
+            setModalSalaOpen(false)
+        }
+    }
+
+    const handleCrearSala = async (e: React.FormEvent) => {
+        e.preventDefault()
+        await crearSala(nombreSala)
+    }
+
+    const onArmarPedidoClick = () => {
+        const storedName = localStorage.getItem('cliente_nombre')
+        if (storedName) {
+            crearSala(storedName)
+        } else {
+            setModalSalaOpen(true)
         }
     }
 
@@ -480,7 +485,7 @@ const MenuDelivery = () => {
                 </section>
 
                 {/* BOTON ARMAR PEDIDO ENTRE AMIGOS */}
-                <section className="bg-primary/5 hover:bg-primary/10 transition-colors border border-primary/20 p-4 rounded-2xl flex items-center justify-between shadow-sm cursor-pointer" onClick={() => setModalSalaOpen(true)}>
+                <section className="bg-primary/5 hover:bg-primary/10 transition-colors border border-primary/20 p-4 rounded-2xl flex items-center justify-between shadow-sm cursor-pointer" onClick={onArmarPedidoClick}>
                     <div className="flex items-center gap-3">
                         <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center">
                             <UtensilsCrossed className="w-5 h-5 text-primary" />

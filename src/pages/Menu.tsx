@@ -14,11 +14,12 @@ import {
 import { ProductDetailDrawer } from '@/components/ProductDetailDrawer'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { CheckoutDeliveryGrupal } from '@/components/CheckoutDeliveryGrupal'
 
 const Menu = () => {
   const navigate = useNavigate()
   const { qrToken: urlQrToken } = useParams<{ qrToken?: string }>()
-  const { mesa, productos, clientes, clienteNombre, clienteId, qrToken, isHydrated, sessionEnded, restaurante, pedido } = useMesaStore()
+  const { mesa, productos, clientes, clienteNombre, clienteId, qrToken, isHydrated, sessionEnded, restaurante, pedido, checkoutDeliveryData, checkoutEditSemaphore } = useMesaStore()
   const { state: wsState, isConnected, sendMessage, confirmacionGrupal, confirmacionCancelada, clearConfirmacionCancelada } = useClienteWebSocket()
 
   const [carritoAbierto, setCarritoAbierto] = useState(false)
@@ -29,6 +30,10 @@ const Menu = () => {
   // ESTADO PARA EL MODAL DE CONFIRMACIÓN GRUPAL
   const [confirmacionGrupalOpen, setConfirmacionGrupalOpen] = useState(false)
 
+  // Para sala: mostrar checkout en lugar de ir directo a confirmación
+  const esSala = typeof window !== 'undefined' && window.location.pathname.includes('/sala/')
+  const [mostrarCheckoutEnCarrito, setMostrarCheckoutEnCarrito] = useState(false)
+
   const abrirCarrito = useCallback(() => {
     window.history.pushState({ drawer: 'carrito' }, '')
     setCarritoAbierto(true)
@@ -36,6 +41,7 @@ const Menu = () => {
 
   const cerrarCarrito = useCallback(() => {
     setCarritoAbierto(false)
+    setMostrarCheckoutEnCarrito(false)
     if (window.history.state?.drawer === 'carrito') {
       window.history.back()
     }
@@ -149,7 +155,21 @@ const Menu = () => {
 
   // --- LÓGICA DE CONFIRMACIÓN GRUPAL ---
 
-  // Iniciar el proceso de confirmación grupal
+  // Botón principal del carrito: "Continuar" (sala) o "Confirmar Pedido" (mesa)
+  const handleBotonPrincipalCarrito = () => {
+    if (!clienteNombre || !clienteId) return
+
+    if (esSala) {
+      // Sala: mostrar checkout de delivery/takeaway
+      setMostrarCheckoutEnCarrito(true)
+      return
+    }
+
+    // Mesa: flujo original de confirmación grupal
+    iniciarConfirmacionPedido()
+  }
+
+  // Iniciar el proceso de confirmación grupal (votación)
   const iniciarConfirmacionPedido = () => {
     if (!clienteNombre || !clienteId) return
 
@@ -447,7 +467,26 @@ const Menu = () => {
             </div>
 
             <div className="flex-1 overflow-y-auto px-5 py-6 space-y-4">
-              {todosLosItems.length === 0 ? (
+              {mostrarCheckoutEnCarrito && esSala ? (
+                <div className="space-y-4">
+                  <Button variant="ghost" size="sm" className="-ml-2 -mt-2" onClick={() => setMostrarCheckoutEnCarrito(false)}>
+                    <ArrowLeft className="w-4 h-4 mr-1" />
+                    Volver al pedido
+                  </Button>
+                  <CheckoutDeliveryGrupal
+                    restauranteId={restaurante?.id ?? 0}
+                    itemsTotal={totalPedido}
+                    totalItems={todosLosItems.length}
+                    onConfirmarClick={iniciarConfirmacionPedido}
+                    sendMessage={sendMessage}
+                    clienteId={clienteId ?? ''}
+                    clienteNombre={clienteNombre ?? ''}
+                    checkoutData={checkoutDeliveryData}
+                    editSemaphore={checkoutEditSemaphore}
+                    restauranteDireccion={restaurante?.direccion ?? undefined}
+                  />
+                </div>
+              ) : todosLosItems.length === 0 ? (
                 <div className="h-full flex flex-col items-center justify-center text-center space-y-4 opacity-60">
                   <div className="bg-secondary p-6 rounded-full">
                     <UtensilsCrossed className="w-10 h-10" />
@@ -456,7 +495,8 @@ const Menu = () => {
                   <Button variant="link" onClick={cerrarCarrito}>Ir al menú</Button>
                 </div>
               ) : (
-                todosLosItems.map((item) => {
+                <>
+                {todosLosItems.map((item) => {
                   const esMio = item.clienteNombre === clienteNombre;
                   const prodOriginal = productos.find(p => p.id === (item.productoId || item.id));
                   const imagen = item.imagenUrl || prodOriginal?.imagenUrl;
@@ -518,19 +558,20 @@ const Menu = () => {
                       </div>
                     </div>
                   )
-                })
+                })}
+                </>
               )}
             </div>
 
-            {todosLosItems.length > 0 && (
+            {(todosLosItems.length > 0 && !mostrarCheckoutEnCarrito) && (
               <div className="p-5 bg-background border-t border-border shadow-[0_-5px_20px_rgba(0,0,0,0.05)] z-20">
                 <div className="flex justify-between items-center mb-4">
                   <span className="text-muted-foreground text-sm">Total a pagar</span>
                   <span className="text-2xl font-black tracking-tight">${totalPedido}</span>
                 </div>
                 {!restaurante?.soloCartaDigital && (
-                  <Button className="w-full h-14 text-base font-bold rounded-2xl shadow-lg shadow-primary/20" size="lg" onClick={iniciarConfirmacionPedido}>
-                    Confirmar Pedido
+                  <Button className="w-full h-14 text-base font-bold rounded-2xl shadow-lg shadow-primary/20" size="lg" onClick={handleBotonPrincipalCarrito}>
+                    {esSala ? 'Continuar' : 'Confirmar Pedido'}
                     <ArrowLeft className="w-5 h-5 ml-2 rotate-180" />
                   </Button>
                 )}
@@ -555,7 +596,7 @@ const Menu = () => {
 
       {/* --- MODAL DE CONFIRMACIÓN GRUPAL --- */}
       <Dialog open={confirmacionGrupalOpen} onOpenChange={() => { }}>
-        <DialogContent className="max-w-sm rounded-3xl p-6" onPointerDownOutside={(e) => e.preventDefault()}>
+        <DialogContent className="max-w-sm rounded-3xl p-6 max-h-[90vh] overflow-y-auto" onPointerDownOutside={(e) => e.preventDefault()}>
           <DialogHeader className="text-center sm:text-center">
             <div className="mx-auto w-16 h-16 rounded-full bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center mb-4">
               <Users className="w-8 h-8 text-orange-600 dark:text-orange-400" />
@@ -568,6 +609,22 @@ const Menu = () => {
               }
             </DialogDescription>
           </DialogHeader>
+
+          {/* Resumen del pedido (sala: datos de envío) */}
+          {esSala && checkoutDeliveryData && (
+            <div className="mt-4 p-4 rounded-2xl bg-secondary/50 border border-border/50 space-y-2 text-left">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Resumen del pedido</p>
+              <p className="text-sm"><span className="text-muted-foreground">Nombre:</span> {checkoutDeliveryData.nombre}</p>
+              <p className="text-sm"><span className="text-muted-foreground">Celular:</span> {checkoutDeliveryData.telefono}</p>
+              {checkoutDeliveryData.tipoPedido === 'delivery' && (
+                <p className="text-sm"><span className="text-muted-foreground">Dirección:</span> {checkoutDeliveryData.direccion}</p>
+              )}
+              {checkoutDeliveryData.tipoPedido === 'delivery' && checkoutDeliveryData.deliveryFee > 0 && (
+                <p className="text-sm"><span className="text-muted-foreground">Envío:</span> ${checkoutDeliveryData.deliveryFee.toFixed(2)}</p>
+              )}
+              <p className="text-base font-bold pt-2 border-t border-border/50">Total: ${checkoutDeliveryData.total}</p>
+            </div>
+          )}
 
           {/* Lista de usuarios con estado de confirmación */}
           <div className="mt-4 space-y-3">

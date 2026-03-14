@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input'
 import { useMesaStore } from '@/store/mesaStore'
 import { mesaApi, ApiError } from '@/lib/api'
 import { toast } from 'sonner'
-import { Loader2, Utensils, ChevronRight, Menu, ShoppingBag, Bell, Users, ShoppingCart } from 'lucide-react'
+import { Loader2, Utensils, ChevronRight, Menu, ShoppingBag, Bell, ShoppingCart } from 'lucide-react'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 
 // Features para el carrusel
@@ -24,12 +24,7 @@ const features = [
     icon: Bell,
     title: 'Sigan el pedido',
     description: 'Vean en tiempo real lo que otros van agregando',
-  },
-  {
-    icon: Users,
-    title: 'Dividí la cuenta',
-    description: 'Cada uno paga lo suyo, sin complicaciones',
-  },
+  }
 ]
 
 const Nombre = () => {
@@ -68,7 +63,7 @@ const Nombre = () => {
       reset()
       clearPedidoCerrado()
       setDataLoaded(false) // Marcar que necesitamos recargar datos
-      
+
       if (storedLocalName) {
         const clienteId = `cliente-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
         setClienteInfo(clienteId, storedLocalName)

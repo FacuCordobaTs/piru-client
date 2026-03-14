@@ -9,7 +9,7 @@ import { toast } from 'sonner'
 import {
   Trash2, ArrowLeft,
   Wifi, WifiOff, Package, ChefHat, UtensilsCrossed, Receipt, Utensils,
-  BellRing, HandPlatter, Check, X, Users, Loader2, Link as LinkIcon
+  Check, X, Users, Loader2, Link as LinkIcon
 } from 'lucide-react'
 import { ProductDetailDrawer } from '@/components/ProductDetailDrawer'
 import { ThemeToggle } from '@/components/ThemeToggle'
@@ -25,10 +25,6 @@ const Menu = () => {
   const [selectedProduct, setSelectedProduct] = useState<typeof productos[0] | null>(null)
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [selectedCategory, setSelectedCategory] = useState<string>('All')
-
-  // ESTADOS PARA EL FLUJO DE LLAMAR AL MOZO
-  const [confirmarMozoOpen, setConfirmarMozoOpen] = useState(false) // Paso 1: Confirmación
-  const [mozoNotificadoOpen, setMozoNotificadoOpen] = useState(false) // Paso 2: Éxito
 
   // ESTADO PARA EL MODAL DE CONFIRMACIÓN GRUPAL
   const [confirmacionGrupalOpen, setConfirmacionGrupalOpen] = useState(false)
@@ -214,26 +210,6 @@ const Menu = () => {
   const totalConfirmados = confirmacionGrupal?.confirmaciones.filter(c => c.confirmado).length ?? 0
   const totalClientes = confirmacionGrupal?.confirmaciones.length ?? 0
 
-  // --- LÓGICA REDISEÑADA PARA LLAMAR AL MOZO ---
-
-  // 1. Solo abre el diálogo de confirmación
-  const iniciarLlamadaMozo = () => {
-    setConfirmarMozoOpen(true)
-  }
-
-  // 2. Ejecuta la llamada real
-  const confirmarLlamada = () => {
-    if (!clienteNombre) return
-
-    sendMessage({
-      type: 'LLAMAR_MOZO',
-      payload: { clienteNombre }
-    })
-
-    setConfirmarMozoOpen(false)
-    setMozoNotificadoOpen(true) // Muestra el éxito
-  }
-
   const todosLosItems = wsState?.items || []
   const totalPedido = wsState?.total || '0.00'
 
@@ -251,18 +227,6 @@ const Menu = () => {
             </div>
 
             <div className="flex items-center gap-2">
-              {/* BOTÓN REDISEÑADO: Píldora explicita */}
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={iniciarLlamadaMozo}
-                className="rounded-full h-9 px-4 gap-2 bg-primary/5 hover:bg-primary/10 text-primary border border-primary/10 transition-all active:scale-95"
-              >
-                <HandPlatter className="w-4 h-4" />
-                <span className="text-xs font-semibold hidden xs:inline-block">Asistencia</span>
-                <span className="text-xs font-semibold inline-block xs:hidden">LLamar Mozo</span>
-              </Button>
-
               <ThemeToggle />
             </div>
           </div>
@@ -288,7 +252,7 @@ const Menu = () => {
                 </>
               ) : (
                 <>
-                  <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block">Mesa</span>
+                  <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block">Pedido</span>
                   <span className="text-sm font-medium">{mesa?.nombre}</span>
                 </>
               )}
@@ -299,7 +263,7 @@ const Menu = () => {
           <div>
             <div className="flex items-center gap-2 mb-2 px-1">
               <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                En la mesa:
+                En el pedido:
               </p>
             </div>
 
@@ -356,8 +320,8 @@ const Menu = () => {
         <section className="space-y-3 py-4 px-4 bg-secondary/50 rounded-lg">
           <p className="text-sm font-medium">
             {restaurante?.soloCartaDigital
-              ? 'Arma tu pedido aquí para leerle fácilmente al mozo lo que elegiste cuando se acerque a tu mesa.'
-              : 'Selecciona los productos y confirma el pedido para que el mozo pueda atender tu mesa.'}
+              ? 'Arma tu pedido aquí para leerle fácilmente a la caja o al mozo lo que elegiste cuando vayas a pedir.'
+              : 'Selecciona los productos y confirma el pedido para enviarlo a la caja/cocina.'}
           </p>
         </section>
 
@@ -402,6 +366,7 @@ const Menu = () => {
                           key={producto.id}
                           producto={producto}
                           onClick={() => abrirDetalleProducto(producto)}
+                          disenoAlternativo={restaurante?.disenoAlternativo!}
                         />
                       ))}
                       {/* Spacer for last item padding */}
@@ -425,6 +390,7 @@ const Menu = () => {
                       key={producto.id}
                       producto={producto}
                       onClick={() => abrirDetalleProducto(producto)}
+                      disenoAlternativo={restaurante?.disenoAlternativo!}
                       fullWidth
                     />
                   ))}
@@ -476,7 +442,7 @@ const Menu = () => {
               </Button>
               <div>
                 <SheetTitle className="text-xl">Tu Pedido</SheetTitle>
-                <p className="text-xs text-muted-foreground mt-0.5">Mesa {mesa?.nombre} • {todosLosItems.length} items</p>
+                <p className="text-xs text-muted-foreground mt-0.5">Pedido {mesa?.nombre} • {todosLosItems.length} items</p>
               </div>
             </div>
 
@@ -570,7 +536,7 @@ const Menu = () => {
                 )}
                 {restaurante?.soloCartaDigital && (
                   <div className="text-center text-sm font-medium text-orange-600 dark:text-orange-400 py-3 bg-orange-100/50 dark:bg-orange-900/20 rounded-xl">
-                    Léele tu pedido al mozo cuando pase 😊
+                    Léele tu pedido al mozo o a la caja 😊
                   </div>
                 )}
               </div>
@@ -586,59 +552,6 @@ const Menu = () => {
         onAddToOrder={agregarAlPedido}
       />
 
-      {/* --- DIÁLOGO DE CONFIRMACIÓN (NUEVO) --- */}
-      <Dialog open={confirmarMozoOpen} onOpenChange={setConfirmarMozoOpen}>
-        <DialogContent className="max-w-sm rounded-3xl p-6">
-          <DialogHeader className="text-center sm:text-center">
-            <div className="mx-auto w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mb-4">
-              <HandPlatter className="w-8 h-8 text-primary" />
-            </div>
-            <DialogTitle className="text-xl">¿Necesitas asistencia?</DialogTitle>
-            <DialogDescription className="text-center pt-2">
-              ¿Quieres que el mozo se acerque a tu mesa?
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter className="flex-col gap-2 sm:gap-2 mt-4">
-            <Button
-              size="lg"
-              onClick={confirmarLlamada}
-              className="w-full rounded-2xl font-semibold"
-            >
-              Sí, llamar al mozo
-            </Button>
-            <Button
-              variant="ghost"
-              size="lg"
-              onClick={() => setConfirmarMozoOpen(false)}
-              className="w-full rounded-2xl"
-            >
-              Cancelar
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* --- DIÁLOGO DE ÉXITO (MODIFICADO) --- */}
-      <Dialog open={mozoNotificadoOpen} onOpenChange={setMozoNotificadoOpen}>
-        <DialogContent className="max-w-sm rounded-3xl p-6">
-          <DialogHeader className="text-center sm:text-center">
-            <div className="mx-auto w-16 h-16 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center mb-4">
-              <BellRing className="w-8 h-8 text-green-600 dark:text-green-400" />
-            </div>
-            <DialogTitle className="text-xl text-green-600 dark:text-green-400">¡Aviso enviado!</DialogTitle>
-            <DialogDescription className="text-center pt-2">
-              El mozo ha sido notificado y se acercará a la mesa <strong>{mesa?.nombre}</strong> en breve.
-            </DialogDescription>
-          </DialogHeader>
-          <Button
-            onClick={() => setMozoNotificadoOpen(false)}
-            variant="outline"
-            className="w-full h-12 mt-6 rounded-2xl border-green-200 hover:bg-green-50 text-green-700 dark:border-green-800 dark:hover:bg-green-900/20 dark:text-green-300"
-          >
-            Entendido
-          </Button>
-        </DialogContent>
-      </Dialog>
 
       {/* --- MODAL DE CONFIRMACIÓN GRUPAL --- */}
       <Dialog open={confirmacionGrupalOpen} onOpenChange={() => { }}>
@@ -748,49 +661,110 @@ const EmptyState = () => (
   </div>
 )
 
-const ProductoCard = ({ producto, onClick, fullWidth }: { producto: any, onClick: () => void, fullWidth?: boolean }) => (
-  <div
-    className={`group relative ${fullWidth ? 'w-full' : 'w-44 shrink-0'} h-52 rounded-3xl overflow-hidden cursor-pointer ${!fullWidth ? 'snap-start' : ''} shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-[1.02] active:scale-[0.98]`}
-    onClick={onClick}
-  >
-    {/* Background Image */}
-    <div className="absolute inset-0 bg-zinc-900">
-      {producto.imagenUrl ? (
-        <img
-          src={producto.imagenUrl}
-          alt={producto.nombre}
-          className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700 ease-out"
-        />
-      ) : (
-        <div className="w-full h-full flex items-center justify-center bg-linear-to-br from-zinc-800 to-zinc-900">
-          <Utensils className="w-12 h-12 text-orange-500" />
-        </div>
-      )}
-    </div>
+const ProductoCard = ({ producto, onClick, fullWidth, disenoAlternativo }: { producto: any, onClick: () => void, fullWidth?: boolean, disenoAlternativo?: boolean }) => {
+  const tieneDescuento = !!(producto.descuento && producto.descuento > 0)
+  const precioOriginal = parseFloat(producto.precio)
+  const precioFinal = tieneDescuento ? precioOriginal * (1 - producto.descuento / 100) : precioOriginal
 
-    {/* Gradient overlay for better text readability */}
-    <div className="absolute inset-0 bg-linear-to-t from-black/90 via-transparent to-transparent" />
+  if (disenoAlternativo) {
+      return (
+          <div
+              className={`group relative flex flex-col ${fullWidth ? 'w-full' : 'w-48 shrink-0'} h-[260px] rounded-[24px] bg-card border border-border/50 shadow-md hover:shadow-xl transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] overflow-hidden ${!fullWidth ? 'snap-start' : ''}`}
+              onClick={onClick}
+          >
+              <div className="w-full h-[130px] shrink-0 bg-zinc-900 relative">
+                  {producto.imagenUrl ? (
+                      <img
+                          src={producto.imagenUrl}
+                          alt={producto.nombre}
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700 ease-out"
+                      />
+                  ) : (
+                      <div className="w-full h-full flex items-center justify-center bg-linear-to-br from-zinc-800 to-zinc-900">
+                          <Utensils className="w-10 h-10 text-primary" />
+                      </div>
+                  )}
+                  {tieneDescuento && (
+                      <div className="absolute top-2.5 left-2.5 z-10">
+                          <span className="bg-emerald-500 text-white text-[10px] font-extrabold px-2 py-0.5 rounded-full shadow-lg uppercase tracking-wide">
+                              {producto.descuento}% OFF
+                          </span>
+                      </div>
+                  )}
+              </div>
 
-    {/* Glassmorphism overlay for name and price */}
-    <div className="absolute bottom-0 left-0 right-0 p-3.5">
+              <div className="p-3.5 flex flex-col flex-1 bg-card">
+                  <div className="flex-1">
+                      <h3 className="font-bold text-[14px] line-clamp-2 text-foreground leading-tight">
+                          {producto.nombre}
+                      </h3>
+                      {producto.descripcion && (
+                          <p className="mt-1 text-xs text-muted-foreground line-clamp-2 leading-snug font-medium">
+                              {producto.descripcion}
+                          </p>
+                      )}
+                  </div>
+
+                  <div className="flex items-baseline gap-1.5 mt-2">
+                      <span className={`font-black text-[17px] ${tieneDescuento ? 'text-emerald-600 dark:text-emerald-400' : 'text-primary'}`}>
+                          ${precioFinal.toFixed(0)}
+                      </span>
+                      {tieneDescuento && (
+                          <span className="text-[11px] font-semibold text-muted-foreground line-through opacity-70">
+                              ${precioOriginal.toFixed(0)}
+                          </span>
+                      )}
+                  </div>
+              </div>
+          </div>
+      )
+  }
+
+  return (
       <div
-        className="
-          rounded-2xl p-3 
-          bg-white/70 dark:bg-white/10
-          backdrop-blur-md backdrop-saturate-150
-          border border-white/30 dark:border-white/10
-          shadow-[0_4px_30px_rgba(0,0,0,0.1)]
-        "
+          className={`group relative ${fullWidth ? 'w-full' : 'w-44 shrink-0'} h-52 rounded-3xl overflow-hidden cursor-pointer ${!fullWidth ? 'snap-start' : ''} shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-[1.02] active:scale-[0.98]`}
+          onClick={onClick}
       >
-        <h3 className="font-semibold text-sm text-zinc-900 dark:text-white truncate leading-tight">
-          {producto.nombre}
-        </h3>
-        <span className="font-bold text-lg text-zinc-800 dark:text-white/90 mt-0.5 block">
-          ${parseFloat(producto.precio).toFixed(2)}
-        </span>
+          <div className="absolute inset-0 bg-zinc-900">
+              {producto.imagenUrl ? (
+                  <img
+                      src={producto.imagenUrl}
+                      alt={producto.nombre}
+                      className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700 ease-out"
+                  />
+              ) : (
+                  <div className="w-full h-full flex items-center justify-center bg-linear-to-br from-zinc-800 to-zinc-900">
+                      <Utensils className="w-12 h-12 text-primary" />
+                  </div>
+              )}
+          </div>
+          <div className="absolute inset-0 bg-linear-to-t from-black/90 via-transparent to-transparent" />
+          {tieneDescuento && (
+              <div className="absolute top-2.5 left-2.5 z-10">
+                  <span className="bg-emerald-500 text-white text-[10px] font-extrabold px-2 py-0.5 rounded-full shadow-lg uppercase tracking-wide">
+                      {producto.descuento}% OFF
+                  </span>
+              </div>
+          )}
+          <div className="absolute bottom-0 left-0 right-0 p-3.5">
+              <div className="rounded-2xl p-3 bg-white/70 dark:bg-white/10 backdrop-blur-md border border-white/30 dark:border-white/10 shadow-[0_4px_30px_rgba(0,0,0,0.1)]">
+                  <h3 className="font-semibold text-sm text-zinc-900 dark:text-white truncate leading-tight">
+                      {producto.nombre}
+                  </h3>
+                  <div className="flex items-baseline gap-2 mt-0.5">
+                      <span className={`font-bold text-lg ${tieneDescuento ? 'text-emerald-600 dark:text-emerald-400' : 'text-zinc-800 dark:text-white/90'}`}>
+                          ${precioFinal.toFixed(0)}
+                      </span>
+                      {tieneDescuento && (
+                          <span className="text-xs text-zinc-500 dark:text-white/40 line-through">
+                              ${precioOriginal.toFixed(0)}
+                          </span>
+                      )}
+                  </div>
+              </div>
+          </div>
       </div>
-    </div>
-  </div>
-)
+  )
+}
 
 export default Menu

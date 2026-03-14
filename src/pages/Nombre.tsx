@@ -17,13 +17,13 @@ const features = [
   },
   {
     icon: ShoppingBag,
-    title: 'Pedí desde tu mesa',
-    description: 'Agregá productos al pedido sin esperar al mozo',
+    title: 'Pedí en grupo',
+    description: 'Agregá productos al pedido compartido fácilmente',
   },
   {
     icon: Bell,
-    title: 'Recibilo en tu mesa',
-    description: 'Tu pedido llega directo a donde estás sentado',
+    title: 'Sigan el pedido',
+    description: 'Vean en tiempo real lo que otros van agregando',
   },
   {
     icon: Users,
@@ -254,7 +254,7 @@ const Nombre = () => {
           )}
           <div className="h-8 w-px bg-neutral-200 dark:bg-neutral-700" />
           <span className="text-sm font-medium text-neutral-600 dark:text-neutral-400">
-            {location.pathname.includes('/sala/') ? 'Pedido Grupal' : (mesa?.nombre || 'Tu mesa')}
+            {location.pathname.includes('/sala/') ? 'Pedido Grupal' : (mesa?.nombre && !mesa.nombre.toLowerCase().includes('mesa') ? mesa.nombre : 'Pedido Grupal')}
           </span>
         </div>
 

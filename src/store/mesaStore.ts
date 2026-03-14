@@ -16,6 +16,7 @@ interface Restaurante {
   esCarrito: boolean | null
   splitPayment: boolean | null
   soloCartaDigital: boolean
+  disenoAlternativo?: boolean | null
 }
 
 interface Ingrediente {
@@ -31,6 +32,7 @@ interface Producto {
   imagenUrl: string | null
   categoriaId: number | null
   categoria: string | null
+  descuento?: number | null
   ingredientes?: Ingrediente[]
 }
 

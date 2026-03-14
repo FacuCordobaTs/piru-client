@@ -426,6 +426,24 @@ export const useClienteWebSocket = (): UseClienteWebSocketReturn => {
                 setCheckoutDeliveryData(data.payload.checkoutData || null)
                 setCheckoutEditSemaphore(data.payload.editandoPor || null)
                 break
+
+              case 'SALA_PEDIDO_CREADO':
+                const payload = data.payload
+                sessionStorage.setItem('salaOrderInfo', JSON.stringify({
+                  token: payload.token,
+                  pedidoId: payload.pedidoId,
+                  tipoPedido: payload.tipoPedido,
+                  total: payload.total,
+                  items: payload.items,
+                  cucuruAlias: payload.cucuruAlias,
+                  cucuruAccountNumber: payload.cucuruAccountNumber,
+                  deliveryFee: payload.deliveryFee,
+                  zonaNombre: payload.zonaNombre,
+                  direccion: payload.direccion,
+                  metodoPago: 'transferencia',
+                }))
+                window.location.href = `/sala/${payload.token}/success`
+                break
             }
           } catch (err) {
             console.error('Error parseando mensaje WebSocket:', err)

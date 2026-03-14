@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useNavigate, useParams } from 'react-router'
+import { useNavigate, useParams, useLocation } from 'react-router'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useMesaStore } from '@/store/mesaStore'
@@ -34,6 +34,7 @@ const features = [
 
 const Nombre = () => {
   const navigate = useNavigate()
+  const location = useLocation()
   const { qrToken: urlQrToken } = useParams<{ qrToken: string }>()
   const [nombre, setNombre] = useState('')
   const [isLoading, setIsLoading] = useState(true)
@@ -80,7 +81,8 @@ const Nombre = () => {
       } else if (estadoPedido === 'closed') {
         navigate('/pedido-cerrado')
       } else {
-        navigate('/menu')
+        const isSala = location.pathname.includes('/sala/');
+        navigate(isSala ? `/sala/${urlQrToken}` : '/menu')
       }
     } else if (!clienteNombre) {
       // Si no hay nombre, mostrar formulario
@@ -199,8 +201,9 @@ const Nombre = () => {
         // Si el pedido está cerrado, ir directamente a la pantalla de pago
         navigate('/pedido-cerrado')
       } else {
-        // pending o cualquier otro estado -> ir al menú
-        navigate('/menu')
+        // pending o cualquier otro estado -> ir al menú o sala
+        const isSala = location.pathname.includes('/sala/');
+        navigate(isSala ? `/sala/${urlQrToken}` : '/menu')
       }
     }
   }
@@ -243,7 +246,7 @@ const Nombre = () => {
           )}
           <div className="h-8 w-px bg-neutral-200 dark:bg-neutral-700" />
           <span className="text-sm font-medium text-neutral-600 dark:text-neutral-400">
-            {mesa?.nombre || 'Tu mesa'}
+            {location.pathname.includes('/sala/') ? 'Pedido Grupal' : (mesa?.nombre || 'Tu mesa')}
           </span>
         </div>
 

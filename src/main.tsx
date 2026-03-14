@@ -29,6 +29,14 @@ const router = createBrowserRouter([
     element: <Nombre />,
   },
   {
+    path: "/sala/:qrToken/nombre",
+    element: <Nombre />,
+  },
+  {
+    path: "/sala/:qrToken",
+    element: <Menu />,
+  },
+  {
     path: "/menu",
     element: <Menu />,
   },

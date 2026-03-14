@@ -9,7 +9,7 @@ import { toast } from 'sonner'
 import {
   Trash2, ArrowLeft,
   Wifi, WifiOff, Package, ChefHat, UtensilsCrossed, Receipt, Utensils,
-  BellRing, HandPlatter, Check, X, Users, Loader2
+  BellRing, HandPlatter, Check, X, Users, Loader2, Link as LinkIcon
 } from 'lucide-react'
 import { ProductDetailDrawer } from '@/components/ProductDetailDrawer'
 import { ThemeToggle } from '@/components/ThemeToggle'
@@ -310,6 +310,21 @@ const Menu = () => {
                 </div>
                 <span className="text-xs font-medium truncate max-w-[60px] text-center">Tú</span>
               </div>
+
+              {/* Botón compartir si es sala */}
+              {window.location.pathname.includes('/sala/') && (
+                <div className="flex flex-col items-center gap-1.5 min-w-[56px] snap-start" onClick={() => {
+                  navigator.clipboard.writeText(window.location.href);
+                  toast.success('¡Link copiado al portapapeles!');
+                }}>
+                  <div className="relative cursor-pointer hover:scale-105 transition-transform">
+                    <div className="w-12 h-12 rounded-xl border-2 shadow-sm border-orange-200 bg-orange-50 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 flex items-center justify-center">
+                      <LinkIcon className="w-5 h-5" />
+                    </div>
+                  </div>
+                  <span className="text-xs font-medium text-orange-600 dark:text-orange-400 text-center cursor-pointer">Compartir</span>
+                </div>
+              )}
 
               {/* Otros usuarios */}
               {clientes.filter(c => c.nombre !== clienteNombre).map((cliente) => (

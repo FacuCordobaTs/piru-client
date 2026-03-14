@@ -1,7 +1,7 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router'
 import { Button } from '@/components/ui/button'
-import { CheckCircle2, Copy, Loader2, Store, Truck, Utensils, MapPin, Clock, Users } from 'lucide-react'
+import { CheckCircle2, Copy, Loader2, Store, Truck,  MapPin, Clock, Users } from 'lucide-react'
 import { toast } from 'sonner'
 import { ThemeToggle } from '@/components/ThemeToggle'
 
@@ -22,6 +22,8 @@ const SuccessGrupal = () => {
     } else if (qrToken) {
       navigate(`/sala/${qrToken}`)
     }
+
+    console.log(isLoadingRestaurante)
   }, [qrToken, navigate])
 
   useEffect(() => {

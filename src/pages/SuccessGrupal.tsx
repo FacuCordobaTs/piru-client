@@ -11,7 +11,6 @@ const SuccessGrupal = () => {
   const [orderInfo, setOrderInfo] = useState<any>(null)
   const [status, setStatus] = useState<'pending_payment' | 'verifying' | 'confirmed'>('pending_payment')
   const [restauranteData, setRestauranteData] = useState<any>(null)
-  const [isLoadingRestaurante, setIsLoadingRestaurante] = useState(true)
   const [pedidoEstado, setPedidoEstado] = useState<string | null>(null)
   const [rapiboyTrackingUrl, setRapiboyTrackingUrl] = useState<string | null>(null)
 
@@ -22,8 +21,6 @@ const SuccessGrupal = () => {
     } else if (qrToken) {
       navigate(`/sala/${qrToken}`)
     }
-
-    console.log(isLoadingRestaurante)
   }, [qrToken, navigate])
 
   useEffect(() => {
@@ -45,14 +42,10 @@ const SuccessGrupal = () => {
         }
       } catch (err) {
         console.error('Error fetching restaurante:', err)
-      } finally {
-        setIsLoadingRestaurante(false)
       }
     }
     if (orderInfo?.token) {
       fetchRestaurante()
-    } else {
-      setIsLoadingRestaurante(false)
     }
   }, [orderInfo?.token])
 

@@ -484,7 +484,8 @@ const MenuDelivery = () => {
                     </div>
                 </section>
 
-                {/* BOTON ARMAR PEDIDO ENTRE AMIGOS */}
+                {/* BOTON ARMAR PEDIDO ENTRE AMIGOS (solo si orderGroupEnabled) */}
+                {restaurante?.orderGroupEnabled !== false && (
                 <section className="bg-primary/5 hover:bg-primary/10 transition-colors border border-primary/20 p-4 rounded-2xl flex items-center justify-between shadow-sm cursor-pointer" onClick={onArmarPedidoClick}>
                     <div className="flex items-center gap-3">
                         <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center">
@@ -496,6 +497,7 @@ const MenuDelivery = () => {
                         </div>
                     </div>
                 </section>
+                )}
 
                 {restaurante?.sistemaPuntos && (
                     <section className="bg-primary/10 border border-primary/20 p-4 rounded-xl flex items-center justify-between shadow-sm">

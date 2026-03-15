@@ -18,6 +18,9 @@ interface Restaurante {
   soloCartaDigital: boolean
   disenoAlternativo?: boolean | null
   direccion?: string | null
+  colorPrimario?: string | null
+  colorSecundario?: string | null
+  username?: string | null
 }
 
 interface Ingrediente {

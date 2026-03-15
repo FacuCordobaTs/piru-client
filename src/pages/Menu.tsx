@@ -96,6 +96,14 @@ const Menu = () => {
           setClientes([])
           setCheckoutDeliveryData(null)
           setCheckoutEditSemaphore(null)
+          // Guardar tema para sala (colores del restaurante)
+          const rest = response.data.restaurante
+          if (rest?.colorPrimario && rest?.colorSecundario) {
+            sessionStorage.setItem(`theme_sala_${urlQrToken}`, JSON.stringify({
+              primario: rest.colorPrimario,
+              secundario: rest.colorSecundario
+            }))
+          }
         }
       } catch {
         toast.error('No se pudo cargar la sala')
@@ -301,8 +309,101 @@ const Menu = () => {
   const todosLosItems = wsState?.items || []
   const totalPedido = wsState?.total || '0.00'
 
+  // Guardar tema cuando el restaurante tiene colores propios
+  const token = urlQrToken || qrToken
+  useEffect(() => {
+    if (!restaurante?.colorPrimario || !restaurante?.colorSecundario || !token) return
+    const key = esSala ? `theme_sala_${token}` : `theme_mesa_${token}`
+    sessionStorage.setItem(key, JSON.stringify({
+      primario: restaurante.colorPrimario,
+      secundario: restaurante.colorSecundario
+    }))
+    // También guardar con username para que MenuDelivery y Menu compartan tema
+    if (restaurante.username) {
+      sessionStorage.setItem(`theme_${restaurante.username}`, JSON.stringify({
+        primario: restaurante.colorPrimario,
+        secundario: restaurante.colorSecundario
+      }))
+    }
+  }, [restaurante?.colorPrimario, restaurante?.colorSecundario, restaurante?.username, token, esSala])
+
+  // Si tenemos token pero no tema (ej: llegó por link compartido sin pasar por Nombre), fetchear para obtener colores
+  useEffect(() => {
+    if (!token || !isHydrated) return
+    const hasTheme = (restaurante?.colorPrimario && restaurante?.colorSecundario) ||
+      sessionStorage.getItem(esSala ? `theme_sala_${token}` : `theme_mesa_${token}`) ||
+      (restaurante?.username && sessionStorage.getItem(`theme_${restaurante.username}`))
+    if (hasTheme) return
+
+    const fetchTheme = async () => {
+      try {
+        const response = await mesaApi.join(token) as { success?: boolean; data?: any }
+        if (response.success && response.data?.restaurante) {
+          const rest = response.data.restaurante
+          setRestaurante(rest)
+          if (rest.colorPrimario && rest.colorSecundario) {
+            const key = esSala ? `theme_sala_${token}` : `theme_mesa_${token}`
+            sessionStorage.setItem(key, JSON.stringify({ primario: rest.colorPrimario, secundario: rest.colorSecundario }))
+            if (rest.username) {
+              sessionStorage.setItem(`theme_${rest.username}`, JSON.stringify({ primario: rest.colorPrimario, secundario: rest.colorSecundario }))
+            }
+          }
+        }
+      } catch { /* ignore */ }
+    }
+    fetchTheme()
+  }, [token, isHydrated, esSala])
+
+  // Claves de tema: sala/mesa primero; fallback a theme_${username} (como MenuDelivery) por si vino de /alfajor
+  const themeKeySalaMesa = token ? (esSala ? `theme_sala_${token}` : `theme_mesa_${token}`) : null
+  const themeKeyUsername = restaurante?.username ? `theme_${restaurante.username}` : null
+  const cachedThemeStr = themeKeySalaMesa ? sessionStorage.getItem(themeKeySalaMesa) : null
+  const cachedThemeUsername = themeKeyUsername ? sessionStorage.getItem(themeKeyUsername) : null
+  const cachedTheme = cachedThemeStr ? JSON.parse(cachedThemeStr) : (cachedThemeUsername ? JSON.parse(cachedThemeUsername) : null)
+  const primario = restaurante?.colorPrimario || cachedTheme?.primario
+  const secundario = restaurante?.colorSecundario || cachedTheme?.secundario
+
+  const themeStyles = (primario && secundario) ? (
+    <style dangerouslySetInnerHTML={{
+      __html: `
+      :root {
+        --background: ${secundario};
+        --foreground: ${primario};
+        --card: ${secundario};
+        --card-foreground: ${primario};
+        --popover: ${secundario};
+        --popover-foreground: ${primario};
+        --primary: ${primario};
+        --primary-foreground: ${secundario};
+        --secondary: ${primario}18;
+        --secondary-foreground: ${primario};
+        --muted: ${primario}15;
+        --muted-foreground: ${primario}99;
+        --border: ${primario}30;
+        --input: ${primario}30;
+      }
+      .dark {
+        --background: ${primario};
+        --foreground: ${secundario};
+        --card: ${primario};
+        --card-foreground: ${secundario};
+        --popover: ${primario};
+        --popover-foreground: ${secundario};
+        --primary: ${secundario};
+        --primary-foreground: ${primario};
+        --secondary: ${secundario}18;
+        --secondary-foreground: ${secundario};
+        --muted: ${secundario}15;
+        --muted-foreground: ${secundario}b3;
+        --border: ${secundario}30;
+        --input: ${secundario}30;
+      }
+    `}} />
+  ) : null
+
   return (
     <div className="min-h-screen pb-32 bg-background font-sans selection:bg-primary/20">
+      {themeStyles}
 
       {/* --- HEADER --- */}
       <div className="sticky top-0 z-20 bg-background/80 backdrop-blur-md border-b border-border/50 supports-backdrop-filter:bg-background/60">
@@ -328,14 +429,14 @@ const Menu = () => {
           <div className="flex items-end justify-between px-1">
             <div>
               <p className="text-sm text-muted-foreground font-medium mb-0.5">Bienvenido,</p>
-              <h1 className="text-3xl font-extrabold tracking-tight bg-linear-to-r from-orange-800 to-orange-400 bg-clip-text text-transparent dark:from-orange-400 dark:to-orange-200">
+              <h1 className="text-3xl font-extrabold tracking-tight text-primary">
                 {clienteNombre}
               </h1>
             </div>
             <div className="text-right">
               {restaurante?.esCarrito && pedido?.nombrePedido ? (
                 <>
-                  <span className="text-xs font-semibold text-orange-600 dark:text-orange-400 uppercase tracking-wider block">Pedido</span>
+                  <span className="text-xs font-semibold text-primary uppercase tracking-wider block">Pedido</span>
                   <span className="text-sm font-medium">de {pedido.nombrePedido}</span>
                 </>
               ) : (
@@ -373,11 +474,11 @@ const Menu = () => {
                   toast.success('¡Link copiado al portapapeles!');
                 }}>
                   <div className="relative cursor-pointer hover:scale-105 transition-transform">
-                    <div className="w-12 h-12 rounded-xl border-2 shadow-sm border-orange-200 bg-orange-50 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 flex items-center justify-center">
+                    <div className="w-12 h-12 rounded-xl border-2 shadow-sm border-primary/30 bg-primary/10 text-primary flex items-center justify-center">
                       <LinkIcon className="w-5 h-5" />
                     </div>
                   </div>
-                  <span className="text-xs font-medium text-orange-600 dark:text-orange-400 text-center cursor-pointer">Compartir</span>
+                  <span className="text-xs font-medium text-primary text-center cursor-pointer">Compartir</span>
                 </div>
               )}
 
@@ -578,7 +679,7 @@ const Menu = () => {
                           <img src={imagen} alt="img" className="w-full h-full object-cover" />
                         ) : (
                           <div className="w-full h-full flex items-center justify-center text-muted-foreground">
-                            <Utensils className="w-6 h-6 text-orange-500" />
+                            <Utensils className="w-6 h-6 text-primary" />
                           </div>
                         )}
                       </div>
@@ -593,7 +694,7 @@ const Menu = () => {
                               </Badge>
                             </div>
                             {(item as any).ingredientesExcluidosNombres?.length > 0 && (
-                              <p className="text-xs text-orange-600 dark:text-orange-400 font-medium mt-1">
+                              <p className="text-xs text-primary font-medium mt-1">
                                 ⚠️ Sin: {(item as any).ingredientesExcluidosNombres.join(', ')}
                               </p>
                             )}
@@ -647,7 +748,7 @@ const Menu = () => {
                   </Button>
                 )}
                 {restaurante?.soloCartaDigital && (
-                  <div className="text-center text-sm font-medium text-orange-600 dark:text-orange-400 py-3 bg-orange-100/50 dark:bg-orange-900/20 rounded-xl">
+                  <div className="text-center text-sm font-medium text-primary py-3 bg-primary/10 rounded-xl">
                     Léele tu pedido al mozo o a la caja 😊
                   </div>
                 )}
@@ -669,8 +770,8 @@ const Menu = () => {
       <Dialog open={confirmacionGrupalOpen} onOpenChange={() => { }}>
         <DialogContent className="max-w-sm rounded-2xl p-4 sm:p-5 max-h-[85dvh] flex flex-col" onPointerDownOutside={(e) => e.preventDefault()}>
           <DialogHeader className="text-center shrink-0">
-            <div className="mx-auto w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center mb-2 sm:mb-3">
-              <Users className="w-6 h-6 sm:w-7 sm:h-7 text-orange-600 dark:text-orange-400" />
+            <div className="mx-auto w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-primary/10 flex items-center justify-center mb-2 sm:mb-3">
+              <Users className="w-6 h-6 sm:w-7 sm:h-7 text-primary" />
             </div>
             <DialogTitle className="text-lg sm:text-xl">Confirmación del Pedido</DialogTitle>
             <DialogDescription className="text-center pt-1 text-sm">
@@ -701,7 +802,7 @@ const Menu = () => {
           <div className="mt-2 sm:mt-3 min-h-0 flex-1 overflow-y-auto">
             <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide text-center mb-2">
               {totalConfirmados}/{totalClientes} confirmados
-              {todosConfirmaron && <span className="block text-orange-600 dark:text-orange-400 font-normal normal-case mt-1">Procesando pedido...</span>}
+              {todosConfirmaron && <span className="block text-primary font-normal normal-case mt-1">Procesando pedido...</span>}
             </p>
 
             <div className="flex flex-wrap justify-center gap-2 sm:gap-3 py-2">
@@ -710,7 +811,7 @@ const Menu = () => {
                 return (
                   <div key={conf.clienteId} className="flex flex-col items-center gap-1">
                     <div className={`relative w-11 h-11 sm:w-12 sm:h-12 rounded-lg border-2 shadow-sm flex items-center justify-center font-bold text-xs transition-all duration-300 ${conf.confirmado
-                      ? 'bg-orange-500 border-orange-600 text-white ring-2 ring-orange-300 dark:ring-orange-700'
+                      ? 'bg-primary border-primary text-primary-foreground ring-2 ring-primary/30'
                       : 'bg-zinc-200 dark:bg-zinc-700 border-zinc-300 dark:border-zinc-600 text-zinc-500 dark:text-zinc-400'
                       }`}>
                       {conf.nombre.slice(0, 2).toUpperCase()}
@@ -741,7 +842,7 @@ const Menu = () => {
                 <Button
                   size="sm"
                   onClick={confirmarMiParte}
-                  className="w-full h-11 rounded-xl font-semibold bg-orange-500 hover:bg-orange-600"
+                  className="w-full h-11 rounded-xl font-semibold bg-primary hover:bg-primary/90"
                 >
                   <Check className="w-4 h-4 mr-2" />
                   Confirmar mi pedido
@@ -758,8 +859,8 @@ const Menu = () => {
               </>
             ) : (
               <>
-                <div className="w-full py-2 px-3 rounded-xl bg-orange-100 dark:bg-orange-900/30 text-center">
-                  <p className="text-xs font-medium text-orange-700 dark:text-orange-300">
+                <div className="w-full py-2 px-3 rounded-xl bg-primary/10 text-center">
+                  <p className="text-xs font-medium text-primary">
                     ✓ Ya confirmaste. Esperando a los demás...
                   </p>
                 </div>

@@ -144,6 +144,8 @@ const Nombre = () => {
               esCarrito: boolean | null
               splitPayment: boolean | null
               soloCartaDigital: boolean
+              colorPrimario?: string | null
+              colorSecundario?: string | null
             } | null
           }
         }
@@ -157,6 +159,17 @@ const Nombre = () => {
           setPedido(response.data.pedido)
           setRestaurante(response.data.restaurante || null)
           setDataLoaded(true) // Marcar que los datos del servidor ya se cargaron
+
+          // Guardar tema cuando el restaurante tiene colores propios
+          const rest = response.data.restaurante
+          if (rest?.colorPrimario && rest?.colorSecundario) {
+            const isSala = location.pathname.includes('/sala/')
+            const key = isSala ? `theme_sala_${urlQrToken}` : `theme_mesa_${urlQrToken}`
+            sessionStorage.setItem(key, JSON.stringify({
+              primario: rest.colorPrimario,
+              secundario: rest.colorSecundario
+            }))
+          }
 
           // Si es carrito y ya tiene nombrePedido, mostrar modal de bienvenida
           if (response.data.restaurante?.esCarrito && response.data.pedido.nombrePedido) {
@@ -211,10 +224,56 @@ const Nombre = () => {
     }
   }
 
+  const isSala = location.pathname.includes('/sala/')
+  const themeKey = urlQrToken ? (isSala ? `theme_sala_${urlQrToken}` : `theme_mesa_${urlQrToken}`) : null
+  const cachedThemeStr = themeKey ? sessionStorage.getItem(themeKey) : null
+  const cachedTheme = cachedThemeStr ? JSON.parse(cachedThemeStr) : null
+  const primario = restaurante?.colorPrimario || cachedTheme?.primario
+  const secundario = restaurante?.colorSecundario || cachedTheme?.secundario
+
+  const themeStyles = (primario && secundario) ? (
+    <style dangerouslySetInnerHTML={{
+      __html: `
+      :root {
+        --background: ${secundario};
+        --foreground: ${primario};
+        --card: ${secundario};
+        --card-foreground: ${primario};
+        --popover: ${secundario};
+        --popover-foreground: ${primario};
+        --primary: ${primario};
+        --primary-foreground: ${secundario};
+        --secondary: ${primario}18;
+        --secondary-foreground: ${primario};
+        --muted: ${primario}15;
+        --muted-foreground: ${primario}99;
+        --border: ${primario}30;
+        --input: ${primario}30;
+      }
+      .dark {
+        --background: ${primario};
+        --foreground: ${secundario};
+        --card: ${primario};
+        --card-foreground: ${secundario};
+        --popover: ${primario};
+        --popover-foreground: ${secundario};
+        --primary: ${secundario};
+        --primary-foreground: ${primario};
+        --secondary: ${secundario}18;
+        --secondary-foreground: ${secundario};
+        --muted: ${secundario}15;
+        --muted-foreground: ${secundario}b3;
+        --border: ${secundario}30;
+        --input: ${secundario}30;
+      }
+    `}} />
+  ) : null
+
   // Mostrar cargando mientras se hidrata el store o se carga la mesa
   if (isLoading || !isHydrated || !shouldAskName) {
     return (
       <div className="min-h-screen bg-linear-to-b from-neutral-50 to-neutral-100 dark:from-neutral-950 dark:to-neutral-900 flex items-center justify-center p-6">
+        {themeStyles}
         <div className="flex flex-col items-center gap-4">
           <div className="w-16 h-16 rounded-2xl bg-neutral-900 dark:bg-white flex items-center justify-center animate-pulse">
             <Utensils className="h-8 w-8 text-white dark:text-neutral-900" />
@@ -230,6 +289,7 @@ const Nombre = () => {
 
   return (
     <div className="min-h-screen bg-linear-to-b from-neutral-50 to-neutral-100 dark:from-neutral-950 dark:to-neutral-900 flex flex-col">
+      {themeStyles}
       {/* Header con logo pequeño del restaurante */}
       <div className="flex-1 flex flex-col items-center justify-center px-6 py-8">
         {/* Logo pequeño del restaurante + mesa */}

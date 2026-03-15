@@ -441,6 +441,7 @@ export const useClienteWebSocket = (): UseClienteWebSocketReturn => {
                   zonaNombre: payload.zonaNombre,
                   direccion: payload.direccion,
                   metodoPago: 'transferencia',
+                  montoDescuento: payload.montoDescuento ? parseFloat(payload.montoDescuento) : undefined,
                 }))
                 window.location.href = `/sala/${payload.token}/success`
                 break

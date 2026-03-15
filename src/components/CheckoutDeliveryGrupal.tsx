@@ -4,7 +4,7 @@ import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { toast } from 'sonner'
-import { MapPin, Store, Truck, AlertTriangle, Loader2, Pencil, Check, X } from 'lucide-react'
+import { MapPin, Store, Truck, AlertTriangle, Loader2, Pencil, Check, X, Tag } from 'lucide-react'
 import { AddressAutocomplete } from '@/components/AddressAutocomplete'
 import type { CheckoutDeliveryData, CheckoutEditSemaphore } from '@/store/mesaStore'
 
@@ -45,13 +45,19 @@ export function CheckoutDeliveryGrupal({
   const [zonaNombre, setZonaNombre] = useState<string | null>(checkoutData?.zonaNombre ?? null)
   const [isCheckingZona, setIsCheckingZona] = useState(false)
   const [fueraDeZona, setFueraDeZona] = useState(false)
+  const [codigoInput, setCodigoInput] = useState('')
+  const [codigoDescuentoId, setCodigoDescuentoId] = useState<number | null>(checkoutData?.codigoDescuentoId ?? null)
+  const [montoDescuento, setMontoDescuento] = useState(checkoutData?.montoDescuento ?? 0)
+  const [validandoCodigo, setValidandoCodigo] = useState(false)
+  const [codigoError, setCodigoError] = useState<string | null>(null)
 
   const estoyEditando = editSemaphore?.clienteId === clienteId
   const alguienEditando = editSemaphore && !estoyEditando
 
   const deliveryFee = zonaDeliveryFee !== null ? zonaDeliveryFee : 0
   const itemsTotalNum = parseFloat(itemsTotal)
-  const total = tipoPedido === 'delivery' ? itemsTotalNum + deliveryFee : itemsTotalNum
+  const subtotalConEnvio = tipoPedido === 'delivery' ? itemsTotalNum + deliveryFee : itemsTotalNum
+  const total = Math.max(0, subtotalConEnvio - montoDescuento)
 
   useEffect(() => {
     if (checkoutData) {
@@ -64,8 +70,10 @@ export function CheckoutDeliveryGrupal({
       setNotas(checkoutData.notas)
       setZonaDeliveryFee(checkoutData.deliveryFee)
       setZonaNombre(checkoutData.zonaNombre)
+      setCodigoDescuentoId(checkoutData.codigoDescuentoId ?? null)
+      setMontoDescuento(checkoutData.montoDescuento ?? 0)
     }
-  }, [checkoutData?.nombre, checkoutData?.telefono, checkoutData?.direccion, checkoutData?.tipoPedido, checkoutData?.notas, checkoutData?.deliveryFee, checkoutData?.zonaNombre])
+  }, [checkoutData?.nombre, checkoutData?.telefono, checkoutData?.direccion, checkoutData?.tipoPedido, checkoutData?.notas, checkoutData?.deliveryFee, checkoutData?.zonaNombre, checkoutData?.codigoDescuentoId, checkoutData?.montoDescuento])
 
   useEffect(() => {
     if (lat === null || lng === null || !restauranteId) {
@@ -130,6 +138,47 @@ export function CheckoutDeliveryGrupal({
     })
   }
 
+  const handleValidarCodigo = async () => {
+    if (!codigoInput.trim() || !restauranteId) return
+    setValidandoCodigo(true)
+    setCodigoError(null)
+    try {
+      const url = import.meta.env.VITE_API_URL || 'http://localhost:3000/api'
+      const res = await fetch(`${url}/public/descuentos/validar`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          restauranteId,
+          codigo: codigoInput.trim().toUpperCase(),
+          totalCarrito: subtotalConEnvio,
+        }),
+      })
+      const data = await res.json()
+      if (data.success && data.data) {
+        setCodigoDescuentoId(data.data.codigoDescuentoId)
+        setMontoDescuento(parseFloat(data.data.montoDescuento))
+        toast.success(`Código aplicado: -$${parseFloat(data.data.montoDescuento).toFixed(0)}`)
+      } else {
+        setCodigoError(data.message || 'Código no válido')
+        setCodigoDescuentoId(null)
+        setMontoDescuento(0)
+      }
+    } catch {
+      setCodigoError('Error al validar')
+      setCodigoDescuentoId(null)
+      setMontoDescuento(0)
+    } finally {
+      setValidandoCodigo(false)
+    }
+  }
+
+  const quitarCodigo = () => {
+    setCodigoInput('')
+    setCodigoDescuentoId(null)
+    setMontoDescuento(0)
+    setCodigoError(null)
+  }
+
   const handleGuardarEdicion = () => {
     if (tipoPedido === 'delivery' && (!nombre.trim() || !telefono.trim() || !direccion.trim())) {
       toast.error('Completa nombre, celular y dirección')
@@ -148,23 +197,27 @@ export function CheckoutDeliveryGrupal({
       return
     }
 
+    const updates: Record<string, unknown> = {
+      tipoPedido,
+      nombre: nombre.trim(),
+      telefono: telefono.trim(),
+      direccion: direccion.trim(),
+      lat,
+      lng,
+      notas: notas.trim(),
+      deliveryFee,
+      zonaNombre,
+      itemsTotal,
+      total: total.toFixed(2),
+      codigoDescuentoId: codigoDescuentoId ?? null,
+      montoDescuento,
+    }
+
     sendMessage({
       type: 'MODIFICAR_CHECKOUT',
       payload: {
         clienteId,
-        updates: {
-          tipoPedido,
-          nombre: nombre.trim(),
-          telefono: telefono.trim(),
-          direccion: direccion.trim(),
-          lat,
-          lng,
-          notas: notas.trim(),
-          deliveryFee,
-          zonaNombre,
-          itemsTotal,
-          total: total.toFixed(2)
-        }
+        updates,
       }
     })
 
@@ -291,6 +344,36 @@ export function CheckoutDeliveryGrupal({
             )}
 
             <div className="space-y-1.5">
+              <Label htmlFor="codigo-grupal">Código de descuento (opcional)</Label>
+              {codigoDescuentoId ? (
+                <div className="flex items-center justify-between px-3 py-2 rounded-xl bg-emerald-500/10 border border-emerald-500/30">
+                  <div className="flex items-center gap-2">
+                    <Tag className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                    <span className="text-sm font-medium text-emerald-700 dark:text-emerald-300">Descuento: -${montoDescuento.toFixed(0)}</span>
+                  </div>
+                  <button type="button" onClick={quitarCodigo} className="p-1 rounded hover:bg-emerald-500/20 text-muted-foreground hover:text-destructive">
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              ) : (
+                <div className="flex gap-2">
+                  <Input
+                    id="codigo-grupal"
+                    placeholder="Ej: ALFAJOROPEN"
+                    className="h-10 rounded-xl font-mono uppercase text-sm"
+                    value={codigoInput}
+                    onChange={(e) => { setCodigoInput(e.target.value.toUpperCase()); setCodigoError(null) }}
+                    onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleValidarCodigo())}
+                  />
+                  <Button type="button" variant="outline" size="sm" className="rounded-xl shrink-0 h-10" onClick={handleValidarCodigo} disabled={validandoCodigo || !codigoInput.trim()}>
+                    {validandoCodigo ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : 'Aplicar'}
+                  </Button>
+                </div>
+              )}
+              {codigoError && <p className="text-xs text-destructive font-medium">{codigoError}</p>}
+            </div>
+
+            <div className="space-y-1.5">
               <Label htmlFor="notas-grupal">Notas adicionales (opcional)</Label>
               <Textarea id="notas-grupal" placeholder="Ej: El timbre no anda..." className="min-h-[80px] rounded-xl resize-none text-sm" value={notas} onChange={(e: any) => setNotas(e.target.value)} />
             </div>
@@ -355,6 +438,11 @@ export function CheckoutDeliveryGrupal({
                     Envío: ${checkoutData.deliveryFee.toFixed(0)} {checkoutData.zonaNombre ? `(${checkoutData.zonaNombre})` : ''}
                   </p>
                 )}
+                {(checkoutData.montoDescuento ?? 0) > 0 && (
+                  <p className="text-xs text-emerald-600/80 dark:text-emerald-400/80">
+                    Descuento: -${(checkoutData.montoDescuento ?? 0).toFixed(0)}
+                  </p>
+                )}
               </div>
             )}
             <div className="space-y-1.5">
@@ -376,6 +464,12 @@ export function CheckoutDeliveryGrupal({
           <div className="flex justify-between text-sm">
             <span className="text-muted-foreground">Delivery</span>
             <span className="font-medium">${checkoutData.deliveryFee.toFixed(2)}</span>
+          </div>
+        )}
+        {(checkoutData?.montoDescuento ?? montoDescuento) > 0 && (
+          <div className="flex justify-between text-sm">
+            <span className="text-emerald-600 dark:text-emerald-400 font-medium">Descuento</span>
+            <span className="text-emerald-600 dark:text-emerald-400 font-medium">-${(checkoutData?.montoDescuento ?? montoDescuento).toFixed(2)}</span>
           </div>
         )}
         <div className="flex justify-between font-bold text-base pt-2 border-t border-border/50">

@@ -320,6 +320,12 @@ const SuccessDelivery = () => {
                     </span>
                 </div>
             )}
+            {orderInfo?.montoDescuento != null && parseFloat(String(orderInfo.montoDescuento)) > 0 && (
+                <div className="flex justify-between items-center pt-2 border-t border-border/50">
+                    <span className="text-sm text-emerald-600 dark:text-emerald-400 font-medium">Código de descuento</span>
+                    <span className="text-sm text-emerald-600 dark:text-emerald-400 font-medium">-${parseFloat(String(orderInfo.montoDescuento)).toFixed(2)}</span>
+                </div>
+            )}
             <div className="flex justify-between items-center pt-2 border-t-2 border-foreground/15">
                 <span className="font-bold">Total</span>
                 <span className="text-lg font-black">${total?.toFixed(2)}</span>

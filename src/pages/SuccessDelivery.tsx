@@ -21,6 +21,24 @@ const SuccessDelivery = () => {
     const [rapiboyTrackingUrl, setRapiboyTrackingUrl] = useState<string | null>(null)
     const metaPurchaseTracked = useRef(false)
 
+    // Minimal, reusable alias notice that matches the design (minimalist, full design language)
+    const AliasNotice = ({ children }: { children?: React.ReactNode }) => (
+        <div
+            role="status"
+            className="flex items-start gap-3 p-3 rounded-lg border border-primary/20 bg-primary/5 max-w-sm mx-auto w-full"
+        >
+            <div className="mt-0.5">
+                <Copy className="w-4 h-4 text-primary" />
+            </div>
+            <div className="min-w-0">
+                <p className="text-sm font-semibold text-primary/90 leading-tight">Importante</p>
+                <p className="text-xs text-muted-foreground mt-0.5 leading-snug">
+                    {children ?? 'Cada pedido genera un alias único. Copialo antes de hacer la transferencia.'}
+                </p>
+            </div>
+        </div>
+    )
+
     useEffect(() => {
         const savedInfo = sessionStorage.getItem('deliveryOrderInfo')
         if (savedInfo) {
@@ -187,7 +205,7 @@ const SuccessDelivery = () => {
         };
     }, [status, orderInfo]);
 
-    // Meta Pixel: disparar Purchase solo cuando el pago está confirmado (Cucuru/webhook)
+    // Meta Pixel: disparar Purchase solo cuando el pago está confirmado (webhook)
     useEffect(() => {
         if (status !== 'confirmed' || !orderInfo || metaPurchaseTracked.current) return
         const total = parseFloat(orderInfo.total)
@@ -241,7 +259,7 @@ const SuccessDelivery = () => {
         }
     }
 
-    const { items, tipoPedido, total, pedidoId, deliveryFee, direccion } = orderInfo
+    const { items, tipoPedido, total, pedidoId, deliveryFee, direccion, aliasDinamico, cvuDinamico } = orderInfo
 
     const cachedThemeStr = sessionStorage.getItem(`theme_${username}`)
     const cachedTheme = cachedThemeStr ? JSON.parse(cachedThemeStr) : null
@@ -378,27 +396,36 @@ const SuccessDelivery = () => {
                                     </Button>
                                 ) : orderInfo.metodoPago === 'transferencia' ? (
                                     <>
-                                        {orderInfo.cucuruAlias ? (
+                                        {(aliasDinamico || cvuDinamico) ? (
                                             <>
+                                                {/* Minimalist notice above copy action */}
+                                                <AliasNotice>
+                                                    Cada pedido genera un alias único. Es importante que copies este alias antes de realizar la transferencia.
+                                                </AliasNotice>
+
                                                 <Button
-                                                    className="w-full h-14 text-lg font-bold rounded-xl shadow-md gap-3 bg-purple-600 hover:bg-purple-700 text-white"
+                                                    className="w-full h-14 text-lg font-bold rounded-xl shadow-md gap-3 bg-purple-600 hover:bg-purple-700 text-white mt-3"
                                                     onClick={() => {
-                                                        handleCopyAlias(orderInfo.cucuruAlias)
+                                                        handleCopyAlias(aliasDinamico || cvuDinamico!)
                                                         setStatus('verifying')
                                                     }}
                                                 >
                                                     <Copy className="w-5 h-5" />
-                                                    Copiar Alias: {orderInfo.cucuruAlias}
+                                                    Copiar Alias: {aliasDinamico || cvuDinamico}
                                                 </Button>
-                                                <p className="text-xs text-center text-muted-foreground mt-3 font-medium">
+                                                <p className="text-xs text-center text-muted-foreground mt-2 font-medium">
                                                     Haz clic para copiar y transferir desde tu app bancaria
                                                 </p>
                                             </>
                                         ) : (
                                             <>
+                                                <AliasNotice>
+                                                    Este alias es generado por el local para pagos vía transferencia. Copialo antes de transferir.
+                                                </AliasNotice>
+
                                                 <Button
                                                     variant="outline"
-                                                    className="w-full h-14 text-lg font-bold rounded-xl border-2 border-slate-200"
+                                                    className="w-full h-14 text-lg font-bold rounded-xl border-2 border-slate-200 mt-3"
                                                     onClick={() => {
                                                         handleCopyAlias(transferenciaAlias!)
                                                         setStatus('confirmed')
@@ -445,18 +472,23 @@ const SuccessDelivery = () => {
                             </div>
                         </div>
 
-                        {/* Alias to copy (always accessible while waiting) */}
-                        {orderInfo.cucuruAlias && (
+                        {/* Alias/CBU to copy (always accessible while waiting) */}
+                        {(aliasDinamico || cvuDinamico) && (
                             <div className="bg-primary/5 border border-primary/20 rounded-2xl p-5 space-y-3 max-w-sm mx-auto w-full">
+                                {/* Minimalist notice */}
+                                <AliasNotice>
+                                    Recordá: el alias es único por pedido. Copialo para evitar errores y que la verificación sea automática.
+                                </AliasNotice>
+
                                 <p className="text-xs font-bold text-primary/80 text-center">Transferí este monto exacto:</p>
                                 <p className="text-3xl font-black text-center">${total?.toFixed(2)}</p>
                                 <Button
                                     variant="outline"
-                                    className="w-full h-12 text-base font-bold rounded-xl border-primary/20 hover:bg-primary/10"
-                                    onClick={() => handleCopyAlias(orderInfo.cucuruAlias)}
+                                    className="w-full h-12 text-base font-bold rounded-xl border-primary/20 hover:bg-primary/10 mt-2"
+                                    onClick={() => handleCopyAlias(aliasDinamico || cvuDinamico!)}
                                 >
                                     <Copy className="w-5 h-5 mr-2 text-primary" />
-                                    {orderInfo.cucuruAlias}
+                                    {aliasDinamico || cvuDinamico}
                                 </Button>
                             </div>
                         )}
@@ -542,30 +574,41 @@ const SuccessDelivery = () => {
                             {!pedidoEstado || !['dispatched', 'delivered', 'archived'].includes(pedidoEstado) ? (
                                 <>
                                     {orderInfo.metodoPago === 'transferencia' && (
-                                        orderInfo.cucuruAlias ? (
+                                        (aliasDinamico || cvuDinamico) ? (
                                             <div className="p-4 border-b border-border bg-primary/5">
                                                 <div className="flex items-center justify-between mb-2">
-                                                    <p className="text-sm font-bold text-primary/80">Alias de transferencia</p>
+                                                    <p className="text-sm font-bold text-primary/80">Alias / CBU de transferencia</p>
                                                     <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400">
                                                         Verificación automática
                                                     </span>
                                                 </div>
+
+                                                {/* Minimalist notice */}
+                                                <AliasNotice>
+                                                    Cada pedido genera un alias único. Copialo para que la verificación automática detecte tu pago.
+                                                </AliasNotice>
+
                                                 <Button
                                                     variant="outline"
-                                                    className="w-full h-11 text-base font-bold rounded-xl border-primary/20 hover:bg-primary/10"
-                                                    onClick={() => handleCopyAlias(orderInfo.cucuruAlias)}
+                                                    className="w-full h-11 text-base font-bold rounded-xl border-primary/20 hover:bg-primary/10 mt-3"
+                                                    onClick={() => handleCopyAlias(aliasDinamico || cvuDinamico!)}
                                                 >
                                                     <Copy className="w-4 h-4 mr-2 text-primary" />
-                                                    {orderInfo.cucuruAlias}
+                                                    {aliasDinamico || cvuDinamico}
                                                 </Button>
                                                 <p className="text-xs mt-2 text-center text-muted-foreground">Tu pedido comenzará a prepararse una vez recibido el pago.</p>
                                             </div>
                                         ) : transferenciaAlias ? (
                                             <div className="p-4 border-b border-border bg-primary/5">
                                                 <p className="text-sm font-bold text-primary/80 mb-2">Transferí a este alias:</p>
+
+                                                <AliasNotice>
+                                                    Este alias es generado por el local. Copialo antes de realizar la transferencia.
+                                                </AliasNotice>
+
                                                 <Button
                                                     variant="outline"
-                                                    className="w-full h-11 text-base font-bold rounded-xl border-primary/20 hover:bg-primary/10"
+                                                    className="w-full h-11 text-base font-bold rounded-xl border-primary/20 hover:bg-primary/10 mt-3"
                                                     onClick={() => handleCopyAlias(transferenciaAlias)}
                                                 >
                                                     <Copy className="w-4 h-4 mr-2 text-primary" />

@@ -52,6 +52,7 @@ const CheckoutDelivery = () => {
     const [restauranteData, setRestauranteData] = useState<any>(null)
     const [isLoadingRestaurante, setIsLoadingRestaurante] = useState(true)
     const [misPedidosOpen, setMisPedidosOpen] = useState(false)
+    const codigoDescuentoEnabled = restauranteData?.codigoDescuentoEnabled === true
 
     useEffect(() => {
         const fetchRestaurante = async () => {
@@ -134,6 +135,12 @@ const CheckoutDelivery = () => {
         setMontoDescuento(0)
         setCodigoError(null)
     }
+
+    useEffect(() => {
+        if (!codigoDescuentoEnabled) {
+            quitarCodigo()
+        }
+    }, [codigoDescuentoEnabled])
 
     // Check zona when lat/lng change
     useEffect(() => {
@@ -493,35 +500,37 @@ const CheckoutDelivery = () => {
                         <Textarea id="notas" placeholder="Ej: El timbre no anda, llamar al llegar..." className="min-h-[100px] rounded-xl resize-none" value={notas} onChange={(e: any) => setNotas(e.target.value)} />
                     </div>
 
-                    <div className="space-y-2 pt-4 border-t border-border/50">
-                        <Label htmlFor="codigo">Código de descuento <span className="text-muted-foreground font-normal">(opcional)</span></Label>
-                        {codigoDescuentoId ? (
-                            <div className="flex items-center justify-between px-4 py-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30">
-                                <div className="flex items-center gap-2">
-                                    <Tag className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-                                    <span className="font-medium text-emerald-700 dark:text-emerald-300">Descuento aplicado: -${montoDescuento.toFixed(0)}</span>
+                    {codigoDescuentoEnabled && (
+                        <div className="space-y-2 pt-4 border-t border-border/50">
+                            <Label htmlFor="codigo">Código de descuento <span className="text-muted-foreground font-normal">(opcional)</span></Label>
+                            {codigoDescuentoId ? (
+                                <div className="flex items-center justify-between px-4 py-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30">
+                                    <div className="flex items-center gap-2">
+                                        <Tag className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                                        <span className="font-medium text-emerald-700 dark:text-emerald-300">Descuento aplicado: -${montoDescuento.toFixed(0)}</span>
+                                    </div>
+                                    <Button variant="ghost" size="sm" onClick={quitarCodigo} className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive">
+                                        <X className="w-4 h-4" />
+                                    </Button>
                                 </div>
-                                <Button variant="ghost" size="sm" onClick={quitarCodigo} className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive">
-                                    <X className="w-4 h-4" />
-                                </Button>
-                            </div>
-                        ) : (
-                            <div className="flex gap-2">
-                                <Input
-                                    id="codigo"
-                                    placeholder="Ej: ALFAJOROPEN"
-                                    className="h-11 rounded-xl font-mono uppercase"
-                                    value={codigoInput}
-                                    onChange={(e) => { setCodigoInput(e.target.value.toUpperCase()); setCodigoError(null) }}
-                                    onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleValidarCodigo())}
-                                />
-                                <Button variant="outline" className="rounded-xl shrink-0" onClick={handleValidarCodigo} disabled={validandoCodigo || !codigoInput.trim()}>
-                                    {validandoCodigo ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Aplicar'}
-                                </Button>
-                            </div>
-                        )}
-                        {codigoError && <p className="text-xs text-destructive font-medium">{codigoError}</p>}
-                    </div>
+                            ) : (
+                                <div className="flex gap-2">
+                                    <Input
+                                        id="codigo"
+                                        placeholder="Ej: ALFAJOROPEN"
+                                        className="h-11 rounded-xl font-mono uppercase"
+                                        value={codigoInput}
+                                        onChange={(e) => { setCodigoInput(e.target.value.toUpperCase()); setCodigoError(null) }}
+                                        onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleValidarCodigo())}
+                                    />
+                                    <Button variant="outline" className="rounded-xl shrink-0" onClick={handleValidarCodigo} disabled={validandoCodigo || !codigoInput.trim()}>
+                                        {validandoCodigo ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Aplicar'}
+                                    </Button>
+                                </div>
+                            )}
+                            {codigoError && <p className="text-xs text-destructive font-medium">{codigoError}</p>}
+                        </div>
+                    )}
 
                     {cucuruConfigurado
                         ? !isLoadingRestaurante && (

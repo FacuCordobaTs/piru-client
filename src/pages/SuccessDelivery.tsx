@@ -400,19 +400,47 @@ const SuccessDelivery = () => {
                                             <>
                                                 {/* Minimalist notice above copy action */}
                                                 <AliasNotice>
-                                                    Cada pedido genera un alias único. Es importante que copies este alias antes de realizar la transferencia.
+                                                    {aliasDinamico
+                                                        ? 'Cada pedido genera un alias único. Es importante que copies este alias antes de realizar la transferencia.'
+                                                        : 'Cada pedido genera un CBU para realizar la transferencia. Copialo antes de transferir.'}
                                                 </AliasNotice>
 
-                                                <Button
-                                                    className="w-full h-14 text-lg font-bold rounded-xl shadow-md gap-3 bg-purple-600 hover:bg-purple-700 text-white mt-3"
-                                                    onClick={() => {
-                                                        handleCopyAlias(aliasDinamico || cvuDinamico!)
-                                                        setStatus('verifying')
-                                                    }}
-                                                >
-                                                    <Copy className="w-5 h-5" />
-                                                    Copiar Alias: {aliasDinamico || cvuDinamico}
-                                                </Button>
+                                                {aliasDinamico && (
+                                                    <Button
+                                                        className="w-full h-14 text-lg font-bold rounded-xl shadow-md gap-3 bg-purple-600 hover:bg-purple-700 text-white mt-3"
+                                                        onClick={() => {
+                                                            handleCopyAlias(aliasDinamico)
+                                                            setStatus('verifying')
+                                                        }}
+                                                    >
+                                                        <Copy className="w-5 h-5" />
+                                                        Copiar Alias: {aliasDinamico}
+                                                    </Button>
+                                                )}
+
+                                                {!aliasDinamico && cvuDinamico && (
+                                                    <Button
+                                                        className="w-full h-14 text-lg font-bold rounded-xl shadow-md gap-3 bg-purple-600 hover:bg-purple-700 text-white mt-3"
+                                                        onClick={() => {
+                                                            handleCopyAlias(cvuDinamico)
+                                                            setStatus('verifying')
+                                                        }}
+                                                    >
+                                                        <Copy className="w-5 h-5" />
+                                                        Copiar CBU: {cvuDinamico}
+                                                    </Button>
+                                                )}
+
+                                                {cvuDinamico && aliasDinamico && (
+                                                    <Button
+                                                        variant="outline"
+                                                        className="w-full h-11 text-sm font-mono rounded-xl border-2 border-slate-200 mt-2"
+                                                        onClick={() => handleCopyAlias(cvuDinamico)}
+                                                    >
+                                                        <Copy className="w-4 h-4 mr-2" />
+                                                        CBU: {cvuDinamico}
+                                                    </Button>
+                                                )}
                                                 <p className="text-xs text-center text-muted-foreground mt-2 font-medium">
                                                     Haz clic para copiar y transferir desde tu app bancaria
                                                 </p>
@@ -477,19 +505,46 @@ const SuccessDelivery = () => {
                             <div className="bg-primary/5 border border-primary/20 rounded-2xl p-5 space-y-3 max-w-sm mx-auto w-full">
                                 {/* Minimalist notice */}
                                 <AliasNotice>
-                                    Recordá: el alias es único por pedido. Copialo para evitar errores y que la verificación sea automática.
+                                    {aliasDinamico
+                                        ? 'Recordá: el alias es único por pedido. Copialo para evitar errores y que la verificación sea automática.'
+                                        : 'Recordá: copialo para evitar errores en la transferencia.'}
                                 </AliasNotice>
 
                                 <p className="text-xs font-bold text-primary/80 text-center">Transferí este monto exacto:</p>
                                 <p className="text-3xl font-black text-center">${total?.toFixed(2)}</p>
-                                <Button
-                                    variant="outline"
-                                    className="w-full h-12 text-base font-bold rounded-xl border-primary/20 hover:bg-primary/10 mt-2"
-                                    onClick={() => handleCopyAlias(aliasDinamico || cvuDinamico!)}
-                                >
-                                    <Copy className="w-5 h-5 mr-2 text-primary" />
-                                    {aliasDinamico || cvuDinamico}
-                                </Button>
+
+                                {aliasDinamico && (
+                                    <Button
+                                        variant="outline"
+                                        className="w-full h-12 text-base font-bold rounded-xl border-primary/20 hover:bg-primary/10 mt-2"
+                                        onClick={() => handleCopyAlias(aliasDinamico)}
+                                    >
+                                        <Copy className="w-5 h-5 mr-2 text-primary" />
+                                        {aliasDinamico}
+                                    </Button>
+                                )}
+
+                                {!aliasDinamico && cvuDinamico && (
+                                    <Button
+                                        variant="outline"
+                                        className="w-full h-12 text-base font-bold rounded-xl border-primary/20 hover:bg-primary/10 mt-2"
+                                        onClick={() => handleCopyAlias(cvuDinamico)}
+                                    >
+                                        <Copy className="w-5 h-5 mr-2 text-primary" />
+                                        CBU: {cvuDinamico}
+                                    </Button>
+                                )}
+
+                                {cvuDinamico && aliasDinamico && (
+                                    <Button
+                                        variant="outline"
+                                        className="w-full h-10 text-xs font-mono rounded-xl border-primary/20 hover:bg-primary/10 mt-2"
+                                        onClick={() => handleCopyAlias(cvuDinamico)}
+                                    >
+                                        <Copy className="w-4 h-4 mr-2 text-primary" />
+                                        CBU: {cvuDinamico}
+                                    </Button>
+                                )}
                             </div>
                         )}
 

@@ -1,11 +1,14 @@
-import { useState, useEffect, useLayoutEffect, useRef } from 'react'
-import { useParams, useNavigate } from 'react-router'
+import { useState, useEffect, useLayoutEffect, useRef, useMemo } from 'react'
+import { useParams, useNavigate, useSearchParams } from 'react-router'
 import { Button } from '@/components/ui/button'
 import { CheckCircle2, Copy, Loader2, Store, Truck, Utensils, MapPin, Clock, Package } from 'lucide-react'
 import { toast } from 'sonner'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { MisPedidosDrawer } from '@/components/MisPedidosDrawer'
 import { initMercadoPago, CardPayment } from '@mercadopago/sdk-react'
+
+/** Session flag: user clicked pay and was sent to Mercado Pago Checkout (survives redirect back). */
+const MP_CHECKOUT_LAUNCHED_KEY = 'mpCheckoutLaunchedPedidoId'
 
 /** Canonical id for UI, including legacy session payloads. */
 function getEffectiveMetodo(orderInfo: { metodoPago?: string; aliasDinamico?: string; cvuDinamico?: string } | null): string {
@@ -19,6 +22,16 @@ function getEffectiveMetodo(orderInfo: { metodoPago?: string; aliasDinamico?: st
     return raw
 }
 
+function shouldAwaitMercadoPagoCheckout(
+    orderInfo: { pedidoId?: number; metodoPago?: string; aliasDinamico?: string; cvuDinamico?: string } | null,
+    mpReturnParamsPresent: boolean
+): boolean {
+    if (!orderInfo?.pedidoId) return false
+    if (getEffectiveMetodo(orderInfo) !== 'mercadopago_checkout') return false
+    const launched = sessionStorage.getItem(MP_CHECKOUT_LAUNCHED_KEY)
+    return mpReturnParamsPresent || launched === String(orderInfo.pedidoId)
+}
+
 function waMeDigits(phone: string | null | undefined): string | null {
     if (!phone?.trim()) return null
     const d = phone.replace(/\D/g, '')
@@ -28,6 +41,18 @@ function waMeDigits(phone: string | null | undefined): string | null {
 const SuccessDelivery = () => {
     const { username } = useParams()
     const navigate = useNavigate()
+    const [searchParams] = useSearchParams()
+    const mpCheckoutReturnParams = useMemo(
+        () =>
+            !!(
+                searchParams.get('collection_id') ||
+                searchParams.get('payment_id') ||
+                searchParams.get('collection_status') ||
+                searchParams.get('preference_id') ||
+                searchParams.get('status')
+            ),
+        [searchParams]
+    )
     const [orderInfo, setOrderInfo] = useState<any>(null)
     const [status, setStatus] = useState<'pending_payment' | 'verifying' | 'confirmed'>('pending_payment')
 
@@ -111,7 +136,8 @@ const SuccessDelivery = () => {
                 if (data.success) {
                     if (data.pagado) {
                         setStatus('confirmed')
-                    } else if (getEffectiveMetodo(orderInfo) === 'mercadopago_checkout') {
+                        sessionStorage.removeItem(MP_CHECKOUT_LAUNCHED_KEY)
+                    } else if (shouldAwaitMercadoPagoCheckout(orderInfo, mpCheckoutReturnParams)) {
                         setStatus('verifying')
                     }
                     if (data.estado) setPedidoEstado(data.estado)
@@ -122,7 +148,7 @@ const SuccessDelivery = () => {
             }
         }
         fetchPedidoStatus()
-    }, [orderInfo])
+    }, [orderInfo, mpCheckoutReturnParams])
 
     // WebSocket Connection
     useEffect(() => {
@@ -152,15 +178,22 @@ const SuccessDelivery = () => {
                     const data = JSON.parse(event.data)
                     if (data.type === 'PAGO_ACREDITADO') {
                         setStatus('confirmed')
+                        sessionStorage.removeItem(MP_CHECKOUT_LAUNCHED_KEY)
                         const m = getEffectiveMetodo(orderInfo)
-                        const isCard =
-                            m === 'mercadopago_bricks' ||
-                            m === 'mercadopago_checkout' ||
-                            m === 'mercadopago'
-                        toast.success(isCard ? '¡Pago confirmado!' : '¡Transferencia recibida!', {
-                            icon: <CheckCircle2 className="w-5 h-5 text-green-500" />,
-                            duration: 6000
-                        })
+                        const isMpCheckout = m === 'mercadopago_checkout'
+                        const isMpCard =
+                            m === 'mercadopago_bricks' || m === 'mercadopago'
+                        toast.success(
+                            isMpCheckout
+                                ? '¡Pago confirmado en Mercado Pago!'
+                                : isMpCard
+                                  ? '¡Pago con tarjeta confirmado!'
+                                  : '¡Transferencia recibida!',
+                            {
+                                icon: <CheckCircle2 className="w-5 h-5 text-green-500" />,
+                                duration: 6000,
+                            }
+                        )
                     } else if (data.type === 'PEDIDO_ESTADO_ACTUALIZADO') {
                         setPedidoEstado(data.payload.estado)
                         if (data.payload.trackingUrl) {
@@ -209,16 +242,22 @@ const SuccessDelivery = () => {
                 const data = await response.json();
 
                 if (data.success && data.pagado) {
-                    setStatus('confirmed');
+                    setStatus('confirmed')
+                    sessionStorage.removeItem(MP_CHECKOUT_LAUNCHED_KEY)
                     const m = getEffectiveMetodo(orderInfo)
-                    const isCard =
-                        m === 'mercadopago_bricks' ||
-                        m === 'mercadopago_checkout' ||
-                        m === 'mercadopago'
-                    toast.success(isCard ? '¡Pago confirmado!' : '¡Transferencia recibida!', {
-                        icon: <CheckCircle2 className="w-5 h-5 text-green-500" />,
-                        duration: 6000
-                    });
+                    const isMpCheckout = m === 'mercadopago_checkout'
+                    const isMpCard = m === 'mercadopago_bricks' || m === 'mercadopago'
+                    toast.success(
+                        isMpCheckout
+                            ? '¡Pago confirmado en Mercado Pago!'
+                            : isMpCard
+                              ? '¡Pago con tarjeta confirmado!'
+                              : '¡Transferencia recibida!',
+                        {
+                            icon: <CheckCircle2 className="w-5 h-5 text-green-500" />,
+                            duration: 6000,
+                        }
+                    )
                 }
             } catch (error) {
                 console.error('Error verificando estado del pago', error);
@@ -352,6 +391,7 @@ const SuccessDelivery = () => {
             })
             const data = await response.json()
             if (data.success && data.url_pago) {
+                sessionStorage.setItem(MP_CHECKOUT_LAUNCHED_KEY, String(orderInfo.pedidoId))
                 window.location.href = data.url_pago
                 return
             }
@@ -645,8 +685,8 @@ const SuccessDelivery = () => {
                                     )
                                 ) : isMpCheckoutMetodo ? (
                                     <div className="space-y-3">
-                                        <p className="text-xs text-center text-muted-foreground">
-                                            Vas a completar el pago en el sitio seguro de Mercado Pago.
+                                        <p className="text-xs text-center text-muted-foreground leading-snug">
+                                            Te redirigimos a Mercado Pago para abonar con dinero en cuenta, tarjeta u otros medios que ofrezca MP.
                                         </p>
                                         <Button
                                             className="w-full h-14 text-lg font-bold rounded-xl bg-[#009EE3] hover:bg-[#008ed4] text-white"
@@ -656,7 +696,7 @@ const SuccessDelivery = () => {
                                             {isCreatingMP ? (
                                                 <Loader2 className="w-6 h-6 animate-spin" />
                                             ) : (
-                                                'Pagar con Mercado Pago'
+                                                'Ir a Mercado Pago'
                                             )}
                                         </Button>
                                     </div>
@@ -678,14 +718,18 @@ const SuccessDelivery = () => {
                             </div>
                             <div className="space-y-1">
                                 <h2 className="text-xl font-bold">
-                                    {isMpBricksMetodo || isMpCheckoutMetodo
-                                        ? 'Confirmando pago con tarjeta...'
-                                        : 'Aguardando transferencia...'}
+                                    {isMpCheckoutMetodo
+                                        ? 'Confirmando pago en Mercado Pago...'
+                                        : isMpBricksMetodo
+                                          ? 'Confirmando pago con tarjeta...'
+                                          : 'Aguardando transferencia...'}
                                 </h2>
                                 <p className="text-muted-foreground text-sm animate-pulse">
-                                    {isMpBricksMetodo || isMpCheckoutMetodo
-                                        ? 'Mercado Pago puede tardar unos segundos. No cierres esta pantalla.'
-                                        : 'Realizá el pago y no cierres esta pantalla'}
+                                    {isMpCheckoutMetodo
+                                        ? 'Si ya pagaste en Mercado Pago, la acreditación puede tardar unos segundos. No cierres esta pantalla.'
+                                        : isMpBricksMetodo
+                                          ? 'Mercado Pago puede tardar unos segundos. No cierres esta pantalla.'
+                                          : 'Realizá el pago y no cierres esta pantalla'}
                                 </p>
                             </div>
                         </div>
@@ -867,10 +911,18 @@ const SuccessDelivery = () => {
                                         </div>
                                     )}
 
-                                    {(isMpBricksMetodo || isMpCheckoutMetodo) && (
+                                    {isMpCheckoutMetodo && (
+                                        <div className="p-4 border-b border-border bg-primary/5 text-center">
+                                            <p className="text-sm font-bold text-primary/80">Pago vía Mercado Pago Checkout</p>
+                                            <p className="text-xs mt-1 text-muted-foreground">
+                                                Abonaste en el sitio de Mercado Pago (dinero en cuenta, tarjeta u otros medios).
+                                            </p>
+                                        </div>
+                                    )}
+                                    {isMpBricksMetodo && (
                                         <div className="p-4 border-b border-border bg-primary/5 text-center">
                                             <p className="text-sm font-bold text-primary/80">Pago con tarjeta</p>
-                                            <p className="text-xs mt-1 text-muted-foreground">El cobro fue procesado por Mercado Pago.</p>
+                                            <p className="text-xs mt-1 text-muted-foreground">El cobro con tarjeta fue procesado por Mercado Pago.</p>
                                         </div>
                                     )}
 
@@ -954,6 +1006,7 @@ const SuccessDelivery = () => {
                             className="w-full h-12 rounded-xl font-semibold"
                             onClick={() => {
                                 sessionStorage.removeItem('deliveryOrderInfo')
+                                sessionStorage.removeItem(MP_CHECKOUT_LAUNCHED_KEY)
                                 navigate(`/${username}`)
                             }}
                         >

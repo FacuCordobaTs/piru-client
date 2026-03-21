@@ -7,7 +7,7 @@ import { RadioGroup } from '@/components/ui/radio-group'
 import { Textarea } from '@/components/ui/textarea'
 import { toast } from 'sonner'
 import { ThemeToggle } from '@/components/ThemeToggle'
-import { ArrowLeft, Loader2, MapPin, Store, Zap, Truck, AlertTriangle, Package, Tag, X, CreditCard } from 'lucide-react'
+import { ArrowLeft, Loader2, MapPin, Store, Zap, Truck, AlertTriangle, Package, Tag, X, CreditCard, Wallet } from 'lucide-react'
 import { AddressAutocomplete } from '@/components/AddressAutocomplete'
 import { MisPedidosDrawer } from '@/components/MisPedidosDrawer'
 
@@ -108,9 +108,10 @@ const CheckoutDelivery = () => {
             case 'transferencia_automatica_cucuru':
             case 'transferencia_automatica_talo':
                 return 'Transferencia automática'
-            case 'mercadopago_bricks':
             case 'mercadopago_checkout':
-                return 'Tarjeta / Mercado Pago'
+                return 'Mercado Pago Checkout'
+            case 'mercadopago_bricks':
+                return 'Tarjeta (Bricks)'
             default:
                 return m.label
         }
@@ -603,7 +604,12 @@ const CheckoutDelivery = () => {
                                                         AUTOMÁTICO
                                                     </div>
                                                 )}
-                                                {(m.id === 'mercadopago_bricks' || m.id === 'mercadopago_checkout') && (
+                                                {m.id === 'mercadopago_checkout' && (
+                                                    <Wallet
+                                                        className={`w-6 h-6 mt-1 ${selected ? 'text-[#009EE3]' : 'text-muted-foreground'}`}
+                                                    />
+                                                )}
+                                                {m.id === 'mercadopago_bricks' && (
                                                     <CreditCard
                                                         className={`w-6 h-6 mt-1 ${selected ? 'text-[#009EE3]' : 'text-muted-foreground'}`}
                                                     />
@@ -611,6 +617,11 @@ const CheckoutDelivery = () => {
                                                 <Label className="cursor-pointer font-semibold text-center text-sm leading-tight px-1">
                                                     {paymentTitle(m)}
                                                 </Label>
+                                                {m.id === 'mercadopago_checkout' && (
+                                                    <span className="text-[10px] text-muted-foreground text-center leading-tight px-1">
+                                                        Te lleva a Mercado Pago (dinero en cuenta, tarjeta, etc.)
+                                                    </span>
+                                                )}
                                             </div>
                                         )
                                     })}

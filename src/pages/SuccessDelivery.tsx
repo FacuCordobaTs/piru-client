@@ -7,6 +7,24 @@ import { ThemeToggle } from '@/components/ThemeToggle'
 import { MisPedidosDrawer } from '@/components/MisPedidosDrawer'
 import { initMercadoPago, CardPayment } from '@mercadopago/sdk-react'
 
+/** Canonical id for UI, including legacy session payloads. */
+function getEffectiveMetodo(orderInfo: { metodoPago?: string; aliasDinamico?: string; cvuDinamico?: string } | null): string {
+    if (!orderInfo) return ''
+    const raw = orderInfo.metodoPago || ''
+    if (raw === 'efectivo') return 'cash'
+    if (raw === 'mercadopago') return 'mercadopago_bricks'
+    if (raw === 'transferencia') {
+        return orderInfo.aliasDinamico || orderInfo.cvuDinamico ? 'transferencia_automatica_cucuru' : 'manual_transfer'
+    }
+    return raw
+}
+
+function waMeDigits(phone: string | null | undefined): string | null {
+    if (!phone?.trim()) return null
+    const d = phone.replace(/\D/g, '')
+    return d.length >= 8 ? d : null
+}
+
 const SuccessDelivery = () => {
     const { username } = useParams()
     const navigate = useNavigate()
@@ -60,7 +78,8 @@ const SuccessDelivery = () => {
                     setRestauranteData(data.data.restaurante)
 
                     const savedInfo = JSON.parse(sessionStorage.getItem('deliveryOrderInfo') || '{}')
-                    if (savedInfo.metodoPago === 'efectivo') {
+                    const m = getEffectiveMetodo(savedInfo)
+                    if (m === 'cash') {
                         setStatus('confirmed')
                     }
                 }
@@ -76,9 +95,10 @@ const SuccessDelivery = () => {
     }, [username])
 
     useLayoutEffect(() => {
-        if (!orderInfo || orderInfo.metodoPago !== 'mercadopago' || !restauranteData?.mpPublicKey) return
+        const m = getEffectiveMetodo(orderInfo)
+        if (!orderInfo || (m !== 'mercadopago_bricks' && m !== 'mercadopago') || !restauranteData?.mpPublicKey) return
         initMercadoPago(restauranteData.mpPublicKey, { locale: 'es-AR' })
-    }, [orderInfo?.metodoPago, orderInfo?.pedidoId, restauranteData?.mpPublicKey])
+    }, [orderInfo, restauranteData?.mpPublicKey])
 
     // Fetch current pedido status on mount (handles page reload)
     useEffect(() => {
@@ -89,7 +109,11 @@ const SuccessDelivery = () => {
                 const res = await fetch(`${url}/public/pedido/${orderInfo.tipoPedido}/${orderInfo.pedidoId}/status`)
                 const data = await res.json()
                 if (data.success) {
-                    if (data.pagado) setStatus('confirmed')
+                    if (data.pagado) {
+                        setStatus('confirmed')
+                    } else if (getEffectiveMetodo(orderInfo) === 'mercadopago_checkout') {
+                        setStatus('verifying')
+                    }
                     if (data.estado) setPedidoEstado(data.estado)
                     if (data.rapiboyTrackingUrl) setRapiboyTrackingUrl(data.rapiboyTrackingUrl)
                 }
@@ -128,7 +152,11 @@ const SuccessDelivery = () => {
                     const data = JSON.parse(event.data)
                     if (data.type === 'PAGO_ACREDITADO') {
                         setStatus('confirmed')
-                        const isCard = orderInfo?.metodoPago === 'mercadopago'
+                        const m = getEffectiveMetodo(orderInfo)
+                        const isCard =
+                            m === 'mercadopago_bricks' ||
+                            m === 'mercadopago_checkout' ||
+                            m === 'mercadopago'
                         toast.success(isCard ? '¡Pago confirmado!' : '¡Transferencia recibida!', {
                             icon: <CheckCircle2 className="w-5 h-5 text-green-500" />,
                             duration: 6000
@@ -182,7 +210,11 @@ const SuccessDelivery = () => {
 
                 if (data.success && data.pagado) {
                     setStatus('confirmed');
-                    const isCard = orderInfo?.metodoPago === 'mercadopago'
+                    const m = getEffectiveMetodo(orderInfo)
+                    const isCard =
+                        m === 'mercadopago_bricks' ||
+                        m === 'mercadopago_checkout' ||
+                        m === 'mercadopago'
                     toast.success(isCard ? '¡Pago confirmado!' : '¡Transferencia recibida!', {
                         icon: <CheckCircle2 className="w-5 h-5 text-green-500" />,
                         duration: 6000
@@ -309,7 +341,48 @@ const SuccessDelivery = () => {
         }
     }
 
-    const { items, tipoPedido, total, pedidoId, deliveryFee, direccion, aliasDinamico, cvuDinamico } = orderInfo
+    const handleMercadoPagoCheckoutRedirect = async () => {
+        setIsCreatingMP(true)
+        try {
+            const url = import.meta.env.VITE_API_URL || 'http://localhost:3000/api'
+            const response = await fetch(`${url}/mp/crear-preferencia-externo`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ pedidoId: orderInfo.pedidoId }),
+            })
+            const data = await response.json()
+            if (data.success && data.url_pago) {
+                window.location.href = data.url_pago
+                return
+            }
+            toast.error('No se pudo iniciar el pago', { description: data.error || 'Intentá de nuevo.' })
+        } catch {
+            toast.error('Error de conexión al iniciar Mercado Pago')
+        } finally {
+            setIsCreatingMP(false)
+        }
+    }
+
+    const { items, tipoPedido, total, pedidoId, deliveryFee, direccion, aliasDinamico, cvuDinamico, nombreCliente } =
+        orderInfo
+
+    const effectiveMetodo = getEffectiveMetodo(orderInfo)
+    const isManualTransferMetodo = effectiveMetodo === 'manual_transfer'
+    const isAutoTransferMetodo =
+        effectiveMetodo === 'transferencia_automatica_cucuru' || effectiveMetodo === 'transferencia_automatica_talo'
+    const isMpBricksMetodo = effectiveMetodo === 'mercadopago_bricks' || effectiveMetodo === 'mercadopago'
+    const isMpCheckoutMetodo = effectiveMetodo === 'mercadopago_checkout'
+    const clienteNombreWhatsapp = (nombreCliente && String(nombreCliente).trim()) || 'Cliente'
+    const comprobantesRaw =
+        (restauranteData?.comprobantesWhatsapp && String(restauranteData.comprobantesWhatsapp).trim()) ||
+        (restauranteData?.telefono && String(restauranteData.telefono).trim()) ||
+        ''
+    const whatsappDigits = waMeDigits(comprobantesRaw)
+    const whatsappHref = whatsappDigits
+        ? `https://wa.me/${whatsappDigits}?text=${encodeURIComponent(
+              `Hola, te paso el comprobante de mi pedido #${pedidoId} a nombre de ${clienteNombreWhatsapp}.`,
+          )}`
+        : null
 
     const cachedThemeStr = sessionStorage.getItem(`theme_${username}`)
     const cachedTheme = cachedThemeStr ? JSON.parse(cachedThemeStr) : null
@@ -437,7 +510,7 @@ const SuccessDelivery = () => {
                         {/* Payment action */}
                         <div className="bg-primary/5 border border-primary/20 rounded-2xl p-6 shadow-sm mx-auto max-w-sm w-full space-y-4">
                             <p className="font-medium text-primary/80 text-center">
-                                {orderInfo.metodoPago === 'mercadopago' ? 'Total a pagar' : 'Total a transferir'}
+                                {isMpBricksMetodo || isMpCheckoutMetodo ? 'Total a pagar' : 'Total a transferir'}
                             </p>
                             <p className="text-4xl font-black text-center">${total?.toFixed(2)}</p>
 
@@ -446,11 +519,46 @@ const SuccessDelivery = () => {
                                     <Button className="w-full h-14" disabled>
                                         <Loader2 className="w-5 h-5 animate-spin" />
                                     </Button>
-                                ) : orderInfo.metodoPago === 'transferencia' ? (
+                                ) : isManualTransferMetodo ? (
+                                    <>
+                                        <AliasNotice>
+                                            Transferí el monto exacto al alias del local y envianos el comprobante para acelerar la verificación.
+                                        </AliasNotice>
+                                        {transferenciaAlias ? (
+                                            <>
+                                                <Button
+                                                    variant="outline"
+                                                    className="w-full h-14 text-base font-bold rounded-xl border-2 border-primary/30 mt-3 gap-2"
+                                                    onClick={() => handleCopyAlias(transferenciaAlias)}
+                                                >
+                                                    <Copy className="w-5 h-5 shrink-0" />
+                                                    <span className="truncate">Copiar alias: {transferenciaAlias}</span>
+                                                </Button>
+                                                {whatsappHref ? (
+                                                    <Button
+                                                        asChild
+                                                        className="w-full h-14 text-lg font-bold rounded-xl shadow-md mt-4 bg-[#25D366] hover:bg-[#20BD5A] text-white border-0"
+                                                    >
+                                                        <a href={whatsappHref} target="_blank" rel="noopener noreferrer">
+                                                            Enviar comprobante por WhatsApp
+                                                        </a>
+                                                    </Button>
+                                                ) : (
+                                                    <p className="text-sm text-center text-muted-foreground mt-4 leading-snug">
+                                                        Por favor envía el comprobante a las redes del local o presentalo al retirar.
+                                                    </p>
+                                                )}
+                                            </>
+                                        ) : (
+                                            <p className="text-sm text-center text-muted-foreground mt-2">
+                                                Este local aún no indicó un alias para transferencias. Contactalos para coordinar el pago.
+                                            </p>
+                                        )}
+                                    </>
+                                ) : isAutoTransferMetodo ? (
                                     <>
                                         {(aliasDinamico || cvuDinamico) ? (
                                             <>
-                                                {/* Minimalist notice above copy action */}
                                                 <AliasNotice>
                                                     {aliasDinamico
                                                         ? 'Cada pedido genera un alias único. Es importante que copies este alias antes de realizar la transferencia.'
@@ -498,29 +606,12 @@ const SuccessDelivery = () => {
                                                 </p>
                                             </>
                                         ) : (
-                                            <>
-                                                <AliasNotice>
-                                                    Este alias es generado por el local para pagos vía transferencia. Copialo antes de transferir.
-                                                </AliasNotice>
-
-                                                <Button
-                                                    variant="outline"
-                                                    className="w-full h-14 text-lg font-bold rounded-xl border-2 border-slate-200 mt-3"
-                                                    onClick={() => {
-                                                        handleCopyAlias(transferenciaAlias!)
-                                                        setStatus('confirmed')
-                                                    }}
-                                                >
-                                                    <Copy className="w-5 h-5 mr-2" />
-                                                    Transferir a {transferenciaAlias}
-                                                </Button>
-                                                <p className="text-xs text-center text-muted-foreground mt-3 font-medium">
-                                                    Aguardando a que el local confirme tu transferencia.
-                                                </p>
-                                            </>
+                                            <p className="text-sm text-center text-muted-foreground">
+                                                No se pudo obtener el alias de transferencia automática. Actualizá la página o contactá al local.
+                                            </p>
                                         )}
                                     </>
-                                ) : orderInfo.metodoPago === 'mercadopago' ? (
+                                ) : isMpBricksMetodo ? (
                                     restauranteData?.mpPublicKey ? (
                                         <div className="w-full relative mt-1 space-y-2">
                                             {isCreatingMP && (
@@ -549,9 +640,26 @@ const SuccessDelivery = () => {
                                         </div>
                                     ) : (
                                         <p className="text-sm text-center text-muted-foreground">
-                                            Este local no tiene habilitado el pago con tarjeta. Elegí transferencia al hacer el pedido o contactá al restaurante.
+                                            Este local no tiene habilitado el pago con tarjeta. Elegí otro método al hacer el pedido o contactá al restaurante.
                                         </p>
                                     )
+                                ) : isMpCheckoutMetodo ? (
+                                    <div className="space-y-3">
+                                        <p className="text-xs text-center text-muted-foreground">
+                                            Vas a completar el pago en el sitio seguro de Mercado Pago.
+                                        </p>
+                                        <Button
+                                            className="w-full h-14 text-lg font-bold rounded-xl bg-[#009EE3] hover:bg-[#008ed4] text-white"
+                                            onClick={handleMercadoPagoCheckoutRedirect}
+                                            disabled={isCreatingMP}
+                                        >
+                                            {isCreatingMP ? (
+                                                <Loader2 className="w-6 h-6 animate-spin" />
+                                            ) : (
+                                                'Pagar con Mercado Pago'
+                                            )}
+                                        </Button>
+                                    </div>
                                 ) : null}
                             </div>
                         </div>
@@ -570,19 +678,19 @@ const SuccessDelivery = () => {
                             </div>
                             <div className="space-y-1">
                                 <h2 className="text-xl font-bold">
-                                    {orderInfo.metodoPago === 'mercadopago'
+                                    {isMpBricksMetodo || isMpCheckoutMetodo
                                         ? 'Confirmando pago con tarjeta...'
                                         : 'Aguardando transferencia...'}
                                 </h2>
                                 <p className="text-muted-foreground text-sm animate-pulse">
-                                    {orderInfo.metodoPago === 'mercadopago'
+                                    {isMpBricksMetodo || isMpCheckoutMetodo
                                         ? 'Mercado Pago puede tardar unos segundos. No cierres esta pantalla.'
                                         : 'Realizá el pago y no cierres esta pantalla'}
                                 </p>
                             </div>
                         </div>
 
-                        {orderInfo.metodoPago === 'mercadopago' && (
+                        {(isMpBricksMetodo || isMpCheckoutMetodo) && (
                             <div className="bg-primary/5 border border-primary/20 rounded-2xl p-5 max-w-sm mx-auto w-full text-center">
                                 <p className="text-xs font-semibold text-primary/80">Monto del pedido</p>
                                 <p className="text-3xl font-black mt-1">${total?.toFixed(2)}</p>
@@ -590,7 +698,7 @@ const SuccessDelivery = () => {
                         )}
 
                         {/* Alias/CBU to copy (always accessible while waiting) */}
-                        {orderInfo.metodoPago !== 'mercadopago' && (aliasDinamico || cvuDinamico) && (
+                        {!isMpBricksMetodo && !isMpCheckoutMetodo && (aliasDinamico || cvuDinamico) && (
                             <div className="bg-primary/5 border border-primary/20 rounded-2xl p-5 space-y-3 max-w-sm mx-auto w-full">
                                 {/* Minimalist notice */}
                                 <AliasNotice>
@@ -717,53 +825,56 @@ const SuccessDelivery = () => {
                             {/* Payment info: only show if NOT dispatched yet */}
                             {!pedidoEstado || !['dispatched', 'delivered', 'archived'].includes(pedidoEstado) ? (
                                 <>
-                                    {orderInfo.metodoPago === 'transferencia' && (
-                                        (aliasDinamico || cvuDinamico) ? (
-                                            <div className="p-4 border-b border-border bg-primary/5">
-                                                <div className="flex items-center justify-between mb-2">
-                                                    <p className="text-sm font-bold text-primary/80">Alias / CBU de transferencia</p>
-                                                    <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400">
-                                                        Verificación automática
-                                                    </span>
-                                                </div>
-
-                                                {/* Minimalist notice */}
-                                                <AliasNotice>
-                                                    Cada pedido genera un alias único. Copialo para que la verificación automática detecte tu pago.
-                                                </AliasNotice>
-
-                                                <Button
-                                                    variant="outline"
-                                                    className="w-full h-11 text-base font-bold rounded-xl border-primary/20 hover:bg-primary/10 mt-3"
-                                                    onClick={() => handleCopyAlias(aliasDinamico || cvuDinamico!)}
-                                                >
-                                                    <Copy className="w-4 h-4 mr-2 text-primary" />
-                                                    {aliasDinamico || cvuDinamico}
-                                                </Button>
-                                                <p className="text-xs mt-2 text-center text-muted-foreground">Tu pedido comenzará a prepararse una vez recibido el pago.</p>
+                                    {isAutoTransferMetodo && (aliasDinamico || cvuDinamico) && (
+                                        <div className="p-4 border-b border-border bg-primary/5">
+                                            <div className="flex items-center justify-between mb-2">
+                                                <p className="text-sm font-bold text-primary/80">Alias / CBU de transferencia</p>
+                                                <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400">
+                                                    Verificación automática
+                                                </span>
                                             </div>
-                                        ) : transferenciaAlias ? (
-                                            <div className="p-4 border-b border-border bg-primary/5">
-                                                <p className="text-sm font-bold text-primary/80 mb-2">Transferí a este alias:</p>
 
-                                                <AliasNotice>
-                                                    Este alias es generado por el local. Copialo antes de realizar la transferencia.
-                                                </AliasNotice>
+                                            <AliasNotice>
+                                                Cada pedido genera un alias único. Copialo para que la verificación automática detecte tu pago.
+                                            </AliasNotice>
 
-                                                <Button
-                                                    variant="outline"
-                                                    className="w-full h-11 text-base font-bold rounded-xl border-primary/20 hover:bg-primary/10 mt-3"
-                                                    onClick={() => handleCopyAlias(transferenciaAlias)}
-                                                >
-                                                    <Copy className="w-4 h-4 mr-2 text-primary" />
-                                                    {transferenciaAlias}
-                                                </Button>
-                                                <p className="text-xs mt-2 text-center text-muted-foreground">Tu pedido comenzará a prepararse una vez recibido el pago.</p>
-                                            </div>
-                                        ) : null
+                                            <Button
+                                                variant="outline"
+                                                className="w-full h-11 text-base font-bold rounded-xl border-primary/20 hover:bg-primary/10 mt-3"
+                                                onClick={() => handleCopyAlias(aliasDinamico || cvuDinamico!)}
+                                            >
+                                                <Copy className="w-4 h-4 mr-2 text-primary" />
+                                                {aliasDinamico || cvuDinamico}
+                                            </Button>
+                                            <p className="text-xs mt-2 text-center text-muted-foreground">Tu pedido comenzará a prepararse una vez recibido el pago.</p>
+                                        </div>
                                     )}
 
-                                    {orderInfo.metodoPago === 'efectivo' && (
+                                    {isManualTransferMetodo && transferenciaAlias && (
+                                        <div className="p-4 border-b border-border bg-primary/5">
+                                            <p className="text-sm font-bold text-primary/80 mb-2">Transferencia manual</p>
+                                            <p className="text-xs text-muted-foreground mb-3">
+                                                Pago acreditado. Si el local necesita el comprobante, podés reenviarlo por WhatsApp o al retirar.
+                                            </p>
+                                            <Button
+                                                variant="outline"
+                                                className="w-full h-11 text-base font-bold rounded-xl border-primary/20 hover:bg-primary/10"
+                                                onClick={() => handleCopyAlias(transferenciaAlias)}
+                                            >
+                                                <Copy className="w-4 h-4 mr-2 text-primary" />
+                                                {transferenciaAlias}
+                                            </Button>
+                                        </div>
+                                    )}
+
+                                    {(isMpBricksMetodo || isMpCheckoutMetodo) && (
+                                        <div className="p-4 border-b border-border bg-primary/5 text-center">
+                                            <p className="text-sm font-bold text-primary/80">Pago con tarjeta</p>
+                                            <p className="text-xs mt-1 text-muted-foreground">El cobro fue procesado por Mercado Pago.</p>
+                                        </div>
+                                    )}
+
+                                    {(effectiveMetodo === 'cash' || orderInfo.metodoPago === 'efectivo') && (
                                         <div className="p-4 border-b border-border bg-emerald-50 dark:bg-emerald-950/20 text-center">
                                             <p className="text-sm font-bold text-emerald-800 dark:text-emerald-400">Pago en Efectivo</p>
                                             <p className="text-xs mt-1 text-muted-foreground">Aboná el importe exacto al recibir tu pedido.</p>

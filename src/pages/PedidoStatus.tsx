@@ -20,15 +20,6 @@ function getEffectiveMetodo(orderInfo: { metodoPago?: string; aliasDinamico?: st
     return raw
 }
 
-function shouldAwaitMercadoPagoCheckout(
-    orderInfo: { pedidoId?: number; metodoPago?: string } | null,
-    mpReturnParamsPresent: boolean
-): boolean {
-    if (!orderInfo?.pedidoId) return false
-    if (getEffectiveMetodo(orderInfo) !== 'mercadopago_checkout') return false
-    const launched = sessionStorage.getItem(MP_CHECKOUT_LAUNCHED_KEY)
-    return mpReturnParamsPresent || launched === String(orderInfo.pedidoId)
-}
 
 function waMeDigits(phone: string | null | undefined): string | null {
     if (!phone?.trim()) return null
@@ -349,8 +340,6 @@ const PedidoStatus = () => {
 
     const effectiveMetodo = getEffectiveMetodo(orderInfo)
     const isManualTransferMetodo = effectiveMetodo === 'manual_transfer'
-    const isAutoTransferMetodo =
-        effectiveMetodo === 'transferencia_automatica_cucuru' || effectiveMetodo === 'transferencia_automatica_talo'
     const isMpBricksMetodo = effectiveMetodo === 'mercadopago_bricks' || effectiveMetodo === 'mercadopago'
     const isMpCheckoutMetodo = effectiveMetodo === 'mercadopago_checkout'
 

@@ -19,6 +19,7 @@ import MenuDelivery from './pages/MenuDelivery'
 import CheckoutDelivery from './pages/CheckoutDelivery'
 import SuccessDelivery from './pages/SuccessDelivery'
 import SuccessGrupal from './pages/SuccessGrupal'
+import PedidoStatus from './pages/PedidoStatus'
 
 const router = createBrowserRouter([
   {
@@ -94,6 +95,10 @@ const router = createBrowserRouter([
   {
     path: "/mesa/:qrToken/pago-pendiente",
     element: <PagoPendiente />,
+  },
+  {
+    path: "/pedido/:id",
+    element: <PedidoStatus />,
   },
   {
     path: "/:username",

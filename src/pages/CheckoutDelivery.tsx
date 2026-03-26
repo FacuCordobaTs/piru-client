@@ -500,6 +500,18 @@ const CheckoutDelivery = () => {
                             <div>
                                 <p className="text-sm text-muted-foreground mb-1">Celular</p>
                                 <p className="font-semibold text-foreground">{telefono}</p>
+                                {restauranteData?.notificarClientesWhatsapp === true && (
+                                    <div className="flex items-center space-x-2 pt-2 animate-in fade-in">
+                                        <Checkbox 
+                                            id="notificarWhatsapp-read" 
+                                            checked={notificarWhatsapp} 
+                                            onCheckedChange={(checked) => setNotificarWhatsapp(checked as boolean)} 
+                                        />
+                                        <Label htmlFor="notificarWhatsapp-read" className="text-sm font-medium leading-none cursor-pointer">
+                                            Recibir actualizaciones de mi pedido por WhatsApp
+                                        </Label>
+                                    </div>
+                                )}
                             </div>
                             {tipoPedido === 'delivery' && (
                                 <div className="animate-in fade-in slide-in-from-top-2 pt-2 border-t border-border/50 space-y-2">

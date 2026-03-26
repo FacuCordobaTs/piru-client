@@ -486,17 +486,17 @@ const MenuDelivery = () => {
 
                 {/* BOTON ARMAR PEDIDO ENTRE AMIGOS (solo si orderGroupEnabled) */}
                 {restaurante?.orderGroupEnabled !== false && (
-                <section className="bg-primary/5 hover:bg-primary/10 transition-colors border border-primary/20 p-4 rounded-2xl flex items-center justify-between shadow-sm cursor-pointer" onClick={onArmarPedidoClick}>
-                    <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center">
-                            <UtensilsCrossed className="w-5 h-5 text-primary" />
+                    <section className="bg-primary/5 hover:bg-primary/10 transition-colors border border-primary/20 p-4 rounded-2xl flex items-center justify-between shadow-sm cursor-pointer" onClick={onArmarPedidoClick}>
+                        <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center">
+                                <UtensilsCrossed className="w-5 h-5 text-primary" />
+                            </div>
+                            <div className="flex flex-col">
+                                <span className="font-semibold text-foreground text-sm">Armar pedido entre amigos</span>
+                                <span className="text-xs text-muted-foreground">Comparte un link y pidan juntos</span>
+                            </div>
                         </div>
-                        <div className="flex flex-col">
-                            <span className="font-semibold text-foreground text-sm">Armar pedido entre amigos</span>
-                            <span className="text-xs text-muted-foreground">Comparte un link y pidan juntos</span>
-                        </div>
-                    </div>
-                </section>
+                    </section>
                 )}
 
                 {restaurante?.sistemaPuntos && (
@@ -788,9 +788,9 @@ const MenuDelivery = () => {
                         </DialogDescription>
                     </DialogHeader>
                     <form onSubmit={handleCrearSala} className="mt-4 space-y-4">
-                        <Input 
-                            placeholder="¿Cuál es tu nombre?" 
-                            value={nombreSala} 
+                        <Input
+                            placeholder="¿Cuál es tu nombre?"
+                            value={nombreSala}
                             onChange={(e) => setNombreSala(e.target.value)}
                             required
                             autoComplete="off"
@@ -907,7 +907,7 @@ const ProductoCard = ({ producto, onClick, fullWidth, disenoAlternativo }: { pro
             )}
             <div className="absolute bottom-0 left-0 right-0 p-3.5">
                 <div className="rounded-2xl p-3 bg-white/70 dark:bg-white/10 backdrop-blur-md border border-white/30 dark:border-white/10 shadow-[0_4px_30px_rgba(0,0,0,0.1)]">
-                    <h3 className="font-semibold text-sm text-zinc-900 dark:text-white truncate leading-tight">
+                    <h3 className="font-bold text-sm text-zinc-900 dark:text-white truncate leading-tight">
                         {producto.nombre}
                     </h3>
                     <div className="flex items-baseline gap-2 mt-0.5">

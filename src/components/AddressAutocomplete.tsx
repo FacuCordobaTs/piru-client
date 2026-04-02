@@ -32,15 +32,31 @@ export function AddressAutocomplete({
 
     const stableOnChange = useCallback(onChange, [])
 
+const SAN_CRISTOBAL_BOUNDS = {
+    north: -30.2800,
+    south: -30.3500,
+    east: -61.2000,
+    west: -61.2700
+}
+
     // Initialize Google Places Autocomplete
     useEffect(() => {
         if (!isLoaded || !inputRef.current || autocompleteRef.current) return
 
-        const autocomplete = new google.maps.places.Autocomplete(inputRef.current, {
+        const isPanther = window.location.pathname.includes('/panther')
+
+        const options: google.maps.places.AutocompleteOptions = {
             componentRestrictions: { country: 'ar' },
             fields: ['formatted_address', 'geometry', 'address_components'],
             types: ['address']
-        })
+        }
+
+        if (isPanther) {
+            options.bounds = SAN_CRISTOBAL_BOUNDS
+            options.strictBounds = true
+        }
+
+        const autocomplete = new google.maps.places.Autocomplete(inputRef.current, options)
 
         autocomplete.addListener('place_changed', () => {
             const place = autocomplete.getPlace()

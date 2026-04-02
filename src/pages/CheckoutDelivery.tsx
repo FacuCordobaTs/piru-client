@@ -4,7 +4,6 @@ import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { RadioGroup } from '@/components/ui/radio-group'
-import { Checkbox } from '@/components/ui/checkbox'
 import { Textarea } from '@/components/ui/textarea'
 import { toast } from 'sonner'
 import { ThemeToggle } from '@/components/ThemeToggle'
@@ -34,7 +33,7 @@ const CheckoutDelivery = () => {
         return saved ? parseFloat(saved) : null
     })
     const [notas, setNotas] = useState('')
-    const [notificarWhatsapp, setNotificarWhatsapp] = useState(true)
+    const notificarWhatsapp = true;
 
     // Zona de delivery dinámica
     const [zonaDeliveryFee, setZonaDeliveryFee] = useState<number | null>(null)
@@ -430,7 +429,7 @@ const CheckoutDelivery = () => {
                             <div className="space-y-2">
                                 <Label htmlFor="telefono">Celular (WhatsApp)</Label>
                                 <Input id="telefono" type="tel" placeholder="Ej: +54 9 11 1234-5678" className="h-12 rounded-xl" value={telefono} onChange={e => setTelefono(e.target.value)} />
-                                {restauranteData?.notificarClientesWhatsapp === true && (
+                                {/* {restauranteData?.notificarClientesWhatsapp === true && (
                                     <div className="flex items-center space-x-2 pt-1 animate-in fade-in">
                                         <Checkbox
                                             id="notificarWhatsapp"
@@ -441,7 +440,7 @@ const CheckoutDelivery = () => {
                                             Recibir actualizaciones de mi pedido por WhatsApp
                                         </Label>
                                     </div>
-                                )}
+                                )} */}
                             </div>
 
                             {tipoPedido === 'delivery' && (

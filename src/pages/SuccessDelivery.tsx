@@ -187,8 +187,8 @@ const SuccessDelivery = () => {
                             isMpCheckout
                                 ? '¡Pago confirmado en Mercado Pago!'
                                 : isMpCard
-                                  ? '¡Pago con tarjeta confirmado!'
-                                  : '¡Transferencia recibida!',
+                                    ? '¡Pago con tarjeta confirmado!'
+                                    : '¡Transferencia recibida!',
                             {
                                 icon: <CheckCircle2 className="w-5 h-5 text-green-500" />,
                                 duration: 6000,
@@ -251,8 +251,8 @@ const SuccessDelivery = () => {
                         isMpCheckout
                             ? '¡Pago confirmado en Mercado Pago!'
                             : isMpCard
-                              ? '¡Pago con tarjeta confirmado!'
-                              : '¡Transferencia recibida!',
+                                ? '¡Pago con tarjeta confirmado!'
+                                : '¡Transferencia recibida!',
                         {
                             icon: <CheckCircle2 className="w-5 h-5 text-green-500" />,
                             duration: 6000,
@@ -420,8 +420,8 @@ const SuccessDelivery = () => {
     const whatsappDigits = waMeDigits(comprobantesRaw)
     const whatsappHref = whatsappDigits
         ? `https://wa.me/${whatsappDigits}?text=${encodeURIComponent(
-              `Hola, te paso el comprobante de mi pedido #${pedidoId} a nombre de ${clienteNombreWhatsapp}.`,
-          )}`
+            `Hola, te paso el comprobante de mi pedido #${pedidoId} a nombre de ${clienteNombreWhatsapp}.`,
+        )}`
         : null
 
     const cachedThemeStr = sessionStorage.getItem(`theme_${username}`)
@@ -572,7 +572,7 @@ const SuccessDelivery = () => {
                                                     onClick={() => handleCopyAlias(transferenciaAlias)}
                                                 >
                                                     <Copy className="w-5 h-5 shrink-0" />
-                                                    <span className="truncate">Copiar alias: {transferenciaAlias}</span>
+                                                    <span className="truncate">{transferenciaAlias}</span>
                                                 </Button>
                                                 {whatsappHref ? (
                                                     <Button
@@ -614,11 +614,11 @@ const SuccessDelivery = () => {
                                                         }}
                                                     >
                                                         <Copy className="w-5 h-5" />
-                                                        Copiar Alias: {aliasDinamico}
+                                                        {aliasDinamico}
                                                     </Button>
                                                 )}
 
-                                                {!aliasDinamico && cvuDinamico && (
+                                                {/* {!aliasDinamico && cvuDinamico && (
                                                     <Button
                                                         className="w-full h-14 text-lg font-bold rounded-xl shadow-md gap-3 bg-purple-600 hover:bg-purple-700 text-white mt-3"
                                                         onClick={() => {
@@ -629,9 +629,9 @@ const SuccessDelivery = () => {
                                                         <Copy className="w-5 h-5" />
                                                         Copiar CBU: {cvuDinamico}
                                                     </Button>
-                                                )}
+                                                )} */}
 
-                                                {cvuDinamico && aliasDinamico && (
+                                                {/* {cvuDinamico && aliasDinamico && (
                                                     <Button
                                                         variant="outline"
                                                         className="w-full h-11 text-sm font-mono rounded-xl border-2 border-slate-200 mt-2"
@@ -640,7 +640,7 @@ const SuccessDelivery = () => {
                                                         <Copy className="w-4 h-4 mr-2" />
                                                         CBU: {cvuDinamico}
                                                     </Button>
-                                                )}
+                                                )} */}
                                                 <p className="text-xs text-center text-muted-foreground mt-2 font-medium">
                                                     Haz clic para copiar y transferir desde tu app bancaria
                                                 </p>
@@ -721,15 +721,15 @@ const SuccessDelivery = () => {
                                     {isMpCheckoutMetodo
                                         ? 'Confirmando pago en Mercado Pago...'
                                         : isMpBricksMetodo
-                                          ? 'Confirmando pago con tarjeta...'
-                                          : 'Aguardando transferencia...'}
+                                            ? 'Confirmando pago con tarjeta...'
+                                            : 'Aguardando transferencia...'}
                                 </h2>
                                 <p className="text-muted-foreground text-sm animate-pulse">
                                     {isMpCheckoutMetodo
                                         ? 'Si ya pagaste en Mercado Pago, la acreditación puede tardar unos segundos. No cierres esta pantalla.'
                                         : isMpBricksMetodo
-                                          ? 'Mercado Pago puede tardar unos segundos. No cierres esta pantalla.'
-                                          : 'Realizá el pago y no cierres esta pantalla'}
+                                            ? 'Mercado Pago puede tardar unos segundos. No cierres esta pantalla.'
+                                            : 'Realizá el pago y no cierres esta pantalla'}
                                 </p>
                             </div>
                         </div>
@@ -765,7 +765,7 @@ const SuccessDelivery = () => {
                                     </Button>
                                 )}
 
-                                {!aliasDinamico && cvuDinamico && (
+                                {/* {!aliasDinamico && cvuDinamico && (
                                     <Button
                                         variant="outline"
                                         className="w-full h-12 text-base font-bold rounded-xl border-primary/20 hover:bg-primary/10 mt-2"
@@ -774,9 +774,9 @@ const SuccessDelivery = () => {
                                         <Copy className="w-5 h-5 mr-2 text-primary" />
                                         CBU: {cvuDinamico}
                                     </Button>
-                                )}
+                                )} */}
 
-                                {cvuDinamico && aliasDinamico && (
+                                {/* {cvuDinamico && aliasDinamico && (
                                     <Button
                                         variant="outline"
                                         className="w-full h-10 text-xs font-mono rounded-xl border-primary/20 hover:bg-primary/10 mt-2"
@@ -785,7 +785,7 @@ const SuccessDelivery = () => {
                                         <Copy className="w-4 h-4 mr-2 text-primary" />
                                         CBU: {cvuDinamico}
                                     </Button>
-                                )}
+                                )} */}
                             </div>
                         )}
 

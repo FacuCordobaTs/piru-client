@@ -309,7 +309,7 @@ const MenuDelivery = () => {
         }
 
         setCartItems(prev => [...prev, newItem])
-        
+
         setTimeout(() => {
             setCartAnimation(true)
             setTimeout(() => setCartAnimation(false), 300)
@@ -826,11 +826,56 @@ const EmptyState = () => (
     </div>
 )
 
+
 const ProductoCard = ({ producto, onClick, fullWidth, disenoAlternativo }: { producto: any, onClick: () => void, fullWidth?: boolean, disenoAlternativo?: boolean }) => {
     const tieneDescuento = !!(producto.descuento && producto.descuento > 0)
     const precioOriginal = parseFloat(producto.precio)
     const precioFinal = tieneDescuento ? precioOriginal * (1 - producto.descuento / 100) : precioOriginal
 
+    // ─────────────────────────────────────────────
+    // DISEÑO 3: TEXT-ONLY (SIN IMAGEN)
+    // ─────────────────────────────────────────────
+    if (!producto.imagenUrl) {
+        return (
+            <div
+                className={`group relative flex flex-col justify-between ${fullWidth ? 'w-full' : 'w-44 lg:w-48 shrink-0'} min-h-[140px] p-4.5 rounded-[24px] bg-card border border-border/50 shadow-sm hover:shadow-md transition-all duration-300 hover:border-primary/30 hover:bg-accent/20 hover:scale-[1.02] active:scale-[0.98] ${!fullWidth ? 'snap-start' : ''}`}
+                onClick={onClick}
+            >
+                <div className="flex-1">
+                    <div className="flex justify-between items-start gap-3 mb-2">
+                        <h3 className="font-bold text-[15px] leading-snug text-foreground line-clamp-3">
+                            {producto.nombre}
+                        </h3>
+                        {tieneDescuento && (
+                            <span className="shrink-0 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 text-[10px] font-extrabold px-1.5 py-0.5 rounded-md uppercase tracking-wider">
+                                -{producto.descuento}%
+                            </span>
+                        )}
+                    </div>
+                    {producto.descripcion && (
+                        <p className="text-xs text-muted-foreground line-clamp-3 leading-relaxed font-medium">
+                            {producto.descripcion}
+                        </p>
+                    )}
+                </div>
+
+                <div className="mt-4 flex items-end gap-1.5">
+                    <span className={`font-black text-[18px] ${tieneDescuento ? 'text-emerald-600 dark:text-emerald-400' : 'text-primary'}`}>
+                        ${precioFinal.toFixed(0)}
+                    </span>
+                    {tieneDescuento && (
+                        <span className="text-[11px] font-semibold text-muted-foreground line-through opacity-70 mb-0.5">
+                            ${precioOriginal.toFixed(0)}
+                        </span>
+                    )}
+                </div>
+            </div>
+        )
+    }
+
+    // ─────────────────────────────────────────────
+    // DISEÑO 2: ALTERNATIVO (CON IMAGEN)
+    // ─────────────────────────────────────────────
     if (disenoAlternativo) {
         return (
             <div
@@ -838,17 +883,11 @@ const ProductoCard = ({ producto, onClick, fullWidth, disenoAlternativo }: { pro
                 onClick={onClick}
             >
                 <div className="w-full h-[130px] shrink-0 bg-zinc-900 relative">
-                    {producto.imagenUrl ? (
-                        <img
-                            src={producto.imagenUrl}
-                            alt={producto.nombre}
-                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700 ease-out"
-                        />
-                    ) : (
-                        <div className="w-full h-full flex items-center justify-center bg-linear-to-br from-zinc-800 to-zinc-900">
-                            <Utensils className="w-10 h-10 text-primary" />
-                        </div>
-                    )}
+                    <img
+                        src={producto.imagenUrl}
+                        alt={producto.nombre}
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700 ease-out"
+                    />
                     {tieneDescuento && (
                         <div className="absolute top-2.5 left-2.5 z-10">
                             <span className="bg-emerald-500 text-white text-[10px] font-extrabold px-2 py-0.5 rounded-full shadow-lg uppercase tracking-wide">
@@ -885,23 +924,20 @@ const ProductoCard = ({ producto, onClick, fullWidth, disenoAlternativo }: { pro
         )
     }
 
+    // ─────────────────────────────────────────────
+    // DISEÑO 1: ORIGINAL (CON IMAGEN)
+    // ─────────────────────────────────────────────
     return (
         <div
             className={`group relative ${fullWidth ? 'w-full' : 'w-44 shrink-0'} h-52 rounded-3xl overflow-hidden cursor-pointer ${!fullWidth ? 'snap-start' : ''} shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-[1.02] active:scale-[0.98]`}
             onClick={onClick}
         >
             <div className="absolute inset-0 bg-zinc-900">
-                {producto.imagenUrl ? (
-                    <img
-                        src={producto.imagenUrl}
-                        alt={producto.nombre}
-                        className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700 ease-out"
-                    />
-                ) : (
-                    <div className="w-full h-full flex items-center justify-center bg-linear-to-br from-zinc-800 to-zinc-900">
-                        <Utensils className="w-12 h-12 text-primary" />
-                    </div>
-                )}
+                <img
+                    src={producto.imagenUrl}
+                    alt={producto.nombre}
+                    className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700 ease-out"
+                />
             </div>
             <div className="absolute inset-0 bg-linear-to-t from-black/90 via-transparent to-transparent" />
             {tieneDescuento && (

@@ -432,10 +432,10 @@ const CheckoutDelivery = () => {
                                 <Input id="telefono" type="tel" placeholder="Ej: +54 9 11 1234-5678" className="h-12 rounded-xl" value={telefono} onChange={e => setTelefono(e.target.value)} />
                                 {restauranteData?.notificarClientesWhatsapp === true && (
                                     <div className="flex items-center space-x-2 pt-1 animate-in fade-in">
-                                        <Checkbox 
-                                            id="notificarWhatsapp" 
-                                            checked={notificarWhatsapp} 
-                                            onCheckedChange={(checked) => setNotificarWhatsapp(checked as boolean)} 
+                                        <Checkbox
+                                            id="notificarWhatsapp"
+                                            checked={notificarWhatsapp}
+                                            onCheckedChange={(checked) => setNotificarWhatsapp(checked as boolean)}
                                         />
                                         <Label htmlFor="notificarWhatsapp" className="text-sm font-medium leading-none cursor-pointer">
                                             Recibir actualizaciones de mi pedido por WhatsApp
@@ -500,7 +500,7 @@ const CheckoutDelivery = () => {
                             <div>
                                 <p className="text-sm text-muted-foreground mb-1">Celular</p>
                                 <p className="font-semibold text-foreground">{telefono}</p>
-                                {restauranteData?.notificarClientesWhatsapp === true && (
+                                {/* {restauranteData?.notificarClientesWhatsapp === true && (
                                     <div className="flex items-center space-x-2 pt-2 animate-in fade-in">
                                         <Checkbox 
                                             id="notificarWhatsapp-read" 
@@ -511,7 +511,7 @@ const CheckoutDelivery = () => {
                                             Recibir actualizaciones de mi pedido por WhatsApp
                                         </Label>
                                     </div>
-                                )}
+                                )} */}
                             </div>
                             {tipoPedido === 'delivery' && (
                                 <div className="animate-in fade-in slide-in-from-top-2 pt-2 border-t border-border/50 space-y-2">
@@ -576,7 +576,7 @@ const CheckoutDelivery = () => {
                                 <div className="flex gap-2">
                                     <Input
                                         id="codigo"
-                                        placeholder="Ej: ALFAJOROPEN"
+                                        placeholder="Ej: CODIGO10"
                                         className="h-11 rounded-xl font-mono uppercase"
                                         value={codigoInput}
                                         onChange={(e) => { setCodigoInput(e.target.value.toUpperCase()); setCodigoError(null) }}
@@ -617,15 +617,14 @@ const CheckoutDelivery = () => {
                                         return (
                                             <div
                                                 key={m.id}
-                                                className={`relative flex flex-col items-center justify-center gap-1 p-4 w-full border-2 rounded-2xl cursor-pointer hover:bg-secondary/50 transition-colors ${
-                                                    selected
-                                                        ? borderMp
-                                                            ? 'border-[#009EE3] bg-[#009EE3]/5'
-                                                            : m.id === 'cash'
-                                                              ? 'border-emerald-500 bg-emerald-500/5'
-                                                              : 'border-purple-500 bg-purple-500/5'
-                                                        : 'border-border'
-                                                }`}
+                                                className={`relative flex flex-col items-center justify-center gap-1 p-4 w-full border-2 rounded-2xl cursor-pointer hover:bg-secondary/50 transition-colors ${selected
+                                                    ? borderMp
+                                                        ? 'border-[#009EE3] bg-[#009EE3]/5'
+                                                        : m.id === 'cash'
+                                                            ? 'border-emerald-500 bg-emerald-500/5'
+                                                            : 'border-purple-500 bg-purple-500/5'
+                                                    : 'border-border'
+                                                    }`}
                                                 onClick={() => setMetodoPago(m.id)}
                                             >
                                                 {showAuto && (

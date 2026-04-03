@@ -265,7 +265,7 @@ const MenuDelivery = () => {
         abrirProductoDrawer()
     }
 
-    const agregarAlPedido = (producto: any, cantidad: number = 1, ingredientesExcluidos?: number[], agregados?: any[]) => {
+    const agregarAlPedido = (producto: any, cantidad: number = 1, ingredientesExcluidos?: number[], agregados?: any[], varianteSeleccionada?: any) => {
         let ingExNombres: string[] = []
         if (ingredientesExcluidos && ingredientesExcluidos.length > 0) {
             ingExNombres = producto.ingredientes
@@ -283,23 +283,29 @@ const MenuDelivery = () => {
         }
 
         // Calculate discounted price
-        let precioFinal = producto.precio
+        let basePrecio = varianteSeleccionada ? parseFloat(varianteSeleccionada.precio) : parseFloat(producto.precio)
+        let precioFinal = basePrecio
         if (!esCanje && producto.descuento && producto.descuento > 0) {
-            precioFinal = (parseFloat(producto.precio) * (1 - producto.descuento / 100)).toFixed(2)
+            precioFinal = basePrecio * (1 - producto.descuento / 100)
         }
 
         const precioAgregados = agregados ? agregados.reduce((sum: number, ag: any) => sum + parseFloat(ag.precio || 0), 0) : 0;
-        const precioFinalNumber = esCanje ? 0 : parseFloat(precioFinal) + precioAgregados;
+        const precioFinalNumber = esCanje ? 0 : precioFinal + precioAgregados;
+
+        const baseNombre = varianteSeleccionada ? `${producto.nombre} - ${varianteSeleccionada.nombre}` : producto.nombre;
+        const nombreFinal = esCanje ? `${baseNombre} (Canje)` : baseNombre;
 
         const newItem = {
             id: Math.random().toString(36).substr(2, 9),
             productoId: producto.id,
-            nombre: esCanje ? `${producto.nombre} (Canje)` : producto.nombre,
+            nombre: nombreFinal,
             precio: precioFinalNumber.toFixed(2),
-            precioOriginal: producto.precio,
+            precioOriginal: varianteSeleccionada ? varianteSeleccionada.precio : producto.precio,
             descuento: producto.descuento || 0,
             imagenUrl: producto.imagenUrl,
             cantidad,
+            varianteId: varianteSeleccionada?.id,
+            varianteNombre: varianteSeleccionada?.nombre,
             ingredientesExcluidos: ingredientesExcluidos || [],
             ingredientesExcluidosNombres: ingExNombres,
             agregados: agregados || [],

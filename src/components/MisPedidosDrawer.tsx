@@ -23,6 +23,7 @@ type Pedido = {
         cantidad: number | null
         precioUnitario: string
         productoNombre: string | null
+        varianteNombre?: string | null
         ingredientesExcluidos: any
         agregados: any
         esCanjePuntos: boolean | null
@@ -371,7 +372,7 @@ function ActiveOrderCard({ pedido }: { pedido: Pedido }) {
                     {pedido.items.slice(0, 3).map(item => (
                         <div key={item.id} className="flex justify-between items-center text-sm">
                             <span className="text-muted-foreground truncate">
-                                {item.cantidad ?? 1}x {item.productoNombre || 'Producto'}
+                                {item.cantidad ?? 1}x {item.productoNombre || 'Producto'} {item.varianteNombre ? `(${item.varianteNombre})` : ''}
                             </span>
                             <span className="font-medium text-foreground shrink-0 ml-2">
                                 ${(parseFloat(item.precioUnitario) * (item.cantidad ?? 1)).toFixed(2)}

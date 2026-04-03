@@ -26,6 +26,12 @@ interface Agregado {
   precio: string
 }
 
+interface Variante {
+  id: number
+  nombre: string
+  precio: string
+}
+
 interface Product {
   id: number
   nombre: string
@@ -35,6 +41,7 @@ interface Product {
   categoria?: string
   ingredientes?: Ingrediente[]
   agregados?: Agregado[]
+  variantes?: Variante[]
   descuento?: number | null
 }
 
@@ -42,19 +49,21 @@ interface ProductDetailDrawerProps {
   product: Product | null
   open: boolean
   onClose: () => void
-  onAddToOrder: (product: Product, quantity: number, ingredientesExcluidos?: number[], agregados?: Agregado[]) => void
+  onAddToOrder: (product: Product, quantity: number, ingredientesExcluidos?: number[], agregados?: Agregado[], varianteSeleccionada?: Variante) => void
 }
 
 export function ProductDetailDrawer({ product, open, onClose, onAddToOrder }: ProductDetailDrawerProps) {
   const [quantity, setQuantity] = useState(1)
   const [ingredientesExcluidos, setIngredientesExcluidos] = useState<number[]>([])
   const [agregadosSeleccionados, setAgregadosSeleccionados] = useState<Agregado[]>([])
+  const [varianteSeleccionada, setVarianteSeleccionada] = useState<Variante | null>(null)
   const [isAdded, setIsAdded] = useState(false)
 
   useEffect(() => {
     if (open && product) {
       setIngredientesExcluidos([])
       setAgregadosSeleccionados([])
+      setVarianteSeleccionada(null)
       setQuantity(1)
       setIsAdded(false)
     }
@@ -72,12 +81,13 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder }: Pr
   const handleAdd = () => {
     if (!product) return
     setIsAdded(true)
-    onAddToOrder(product, quantity, ingredientesExcluidos.length > 0 ? ingredientesExcluidos : undefined, agregadosSeleccionados.length > 0 ? agregadosSeleccionados : undefined)
+    onAddToOrder(product, quantity, ingredientesExcluidos.length > 0 ? ingredientesExcluidos : undefined, agregadosSeleccionados.length > 0 ? agregadosSeleccionados : undefined, varianteSeleccionada ?? undefined)
 
     setTimeout(() => {
       setQuantity(1)
       setIngredientesExcluidos([])
       setAgregadosSeleccionados([])
+      setVarianteSeleccionada(null)
       setIsAdded(false)
       onClose()
     }, 600)
@@ -85,6 +95,7 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder }: Pr
 
   const tieneIngredientes = product?.ingredientes && product.ingredientes.length > 0
   const tieneAgregados = product?.agregados && product.agregados.length > 0
+  const tieneVariantes = product?.variantes && product.variantes.length > 0
 
   const toggleAgregado = (agregado: Agregado) => {
     setAgregadosSeleccionados(prev => {
@@ -132,7 +143,9 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder }: Pr
                   </div>
                   <div className="text-right shrink-0">
                     {(() => {
-                      const precioBase = parseFloat(String(product.precio))
+                      const precioBase = varianteSeleccionada
+                        ? parseFloat(varianteSeleccionada.precio)
+                        : parseFloat(String(product.precio))
                       const precioConDescuento = product.descuento && product.descuento > 0
                         ? precioBase * (1 - product.descuento / 100) : precioBase
                       const precioAgregados = (agregadosSeleccionados || []).reduce((sum, ag) => sum + parseFloat(ag.precio || '0'), 0)
@@ -155,6 +168,28 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder }: Pr
                     {product.descripcion || 'Sin descripción'}
                   </p>
                 </div>
+
+                {tieneVariantes && (
+                  <div className="space-y-3 pt-2">
+                    <h4 className="font-semibold text-sm text-foreground">Elige una opción <span className="text-red-500">*</span></h4>
+                    <div className="flex flex-col gap-2">
+                      {product.variantes!.map((v) => {
+                        const isSelected = varianteSeleccionada?.id === v.id
+                        return (
+                          <div
+                            key={v.id}
+                            onClick={() => setVarianteSeleccionada(v)}
+                            className={`flex items-center space-x-3 p-3 rounded-xl border-2 cursor-pointer transition-colors ${isSelected ? 'bg-primary/10 border-primary/40 shadow-sm' : 'bg-background hover:bg-muted border-border'}`}
+                          >
+                            <div className={`w-4 h-4 rounded-full border flex shrink-0 items-center justify-center ${isSelected ? 'border-primary border-[5px]' : 'border-muted-foreground'}`} />
+                            <span className={`text-sm flex-1 font-medium ${isSelected ? 'text-primary' : 'text-foreground'}`}>{v.nombre}</span>
+                            <span className={`text-sm font-bold ${isSelected ? 'text-primary' : 'text-foreground'}`}>${parseFloat(v.precio).toFixed(2)}</span>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
 
                 <div className="flex gap-3 pt-2">
                   {tieneIngredientes && (
@@ -227,7 +262,7 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder }: Pr
                   <Button
                     size="lg"
                     onClick={handleAdd}
-                    disabled={isAdded}
+                    disabled={isAdded || (tieneVariantes && !varianteSeleccionada)}
                     className={`rounded-2xl px-8 h-14 font-bold w-full transition-all duration-300 shadow-lg ${isAdded ? 'bg-emerald-500 text-white scale-[1.02] disabled:opacity-100 disabled:pointer-events-none' : 'bg-primary hover:bg-primary/90 active:scale-[0.98] shadow-primary/20'}`}
                   >
                     {isAdded ? (
@@ -263,7 +298,9 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder }: Pr
                   </div>
                   <div className="text-right shrink-0">
                     {(() => {
-                      const precioBase = parseFloat(String(product.precio))
+                      const precioBase = varianteSeleccionada
+                        ? parseFloat(varianteSeleccionada.precio)
+                        : parseFloat(String(product.precio))
                       const precioConDescuento = product.descuento && product.descuento > 0
                         ? precioBase * (1 - product.descuento / 100) : precioBase
                       const precioAgregados = (agregadosSeleccionados || []).reduce((sum, ag) => sum + parseFloat(ag.precio || '0'), 0)
@@ -290,6 +327,28 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder }: Pr
                     {product.descripcion || 'Este producto no cuenta con una descripción detallada en este momento.'}
                   </p>
                 </div>
+
+                {tieneVariantes && (
+                  <div className="space-y-3 pt-2">
+                    <h4 className="font-semibold text-sm text-foreground">Elige una opción <span className="text-red-500">*</span></h4>
+                    <div className="flex flex-col gap-2">
+                      {product.variantes!.map((v) => {
+                        const isSelected = varianteSeleccionada?.id === v.id
+                        return (
+                          <div
+                            key={v.id}
+                            onClick={() => setVarianteSeleccionada(v)}
+                            className={`flex items-center space-x-3 p-3 rounded-xl border-2 cursor-pointer transition-colors ${isSelected ? 'bg-primary/10 border-primary/40 shadow-sm' : 'bg-background hover:bg-muted border-border'}`}
+                          >
+                            <div className={`w-4 h-4 rounded-full border flex shrink-0 items-center justify-center ${isSelected ? 'border-primary border-[5px]' : 'border-muted-foreground'}`} />
+                            <span className={`text-sm flex-1 font-medium ${isSelected ? 'text-primary' : 'text-foreground'}`}>{v.nombre}</span>
+                            <span className={`text-sm font-bold ${isSelected ? 'text-primary' : 'text-foreground'}`}>${parseFloat(v.precio).toFixed(2)}</span>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
 
                 {/* Botones de Extras */}
                 <div className="flex gap-3">
@@ -365,7 +424,7 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder }: Pr
                 <Button
                   size="lg"
                   onClick={handleAdd}
-                  disabled={isAdded}
+                  disabled={isAdded || (tieneVariantes && !varianteSeleccionada)}
                   className={`rounded-2xl px-8 h-14 font-bold w-full transition-all duration-300 shadow-lg ${isAdded ? 'bg-emerald-500 text-white scale-[1.02] disabled:opacity-100 disabled:pointer-events-none' : 'bg-primary hover:bg-primary/90 active:scale-[0.98] shadow-primary/20'}`}
                 >
                   {isAdded ? (

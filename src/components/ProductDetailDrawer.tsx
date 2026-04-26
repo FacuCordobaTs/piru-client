@@ -4,6 +4,7 @@ import {
   DrawerContent
 } from '@/components/ui/drawer'
 import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
 import { Checkbox } from '@/components/ui/checkbox'
 import {
   Dialog,
@@ -103,6 +104,14 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder }: Pr
       return [...prev, agregado]
     })
   }
+
+  const hayModificaciones =
+    agregadosSeleccionados.length > 0 ||
+    ingredientesExcluidos.length > 0 ||
+    varianteSeleccionada != null
+  const ingredientesExcluidosDetalle = (product?.ingredientes ?? []).filter((ing) =>
+    ingredientesExcluidos.includes(ing.id)
+  )
 
   return (
     <Drawer open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
@@ -257,6 +266,42 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder }: Pr
                     </Dialog>
                   )}
                 </div>
+
+                {hayModificaciones && (
+                  <div className="space-y-2 pt-2 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                      Tu pedido así
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {varianteSeleccionada && (
+                        <Badge
+                          variant="default"
+                          className="rounded-lg px-2.5 py-1 text-[11px] font-semibold shadow-sm ring-1 ring-primary/20"
+                        >
+                          + {varianteSeleccionada.nombre}
+                        </Badge>
+                      )}
+                      {agregadosSeleccionados.map((ag) => (
+                        <Badge
+                          key={ag.id}
+                          variant="default"
+                          className="rounded-lg px-2.5 py-1 text-[11px] font-semibold shadow-sm ring-1 ring-primary/20"
+                        >
+                          + {ag.nombre}
+                        </Badge>
+                      ))}
+                      {ingredientesExcluidosDetalle.map((ing) => (
+                        <Badge
+                          key={ing.id}
+                          variant="destructive"
+                          className="rounded-lg px-2.5 py-1 text-[11px] font-semibold shadow-sm"
+                        >
+                          − Sin {ing.nombre}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 <div className="flex items-center justify-between pt-4 border-t border-border">
                   <Button
@@ -418,6 +463,42 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder }: Pr
                   )}
                 </div>
               </div>
+
+              {hayModificaciones && (
+                <div className="shrink-0 px-6 md:px-8 pt-2 pb-1 space-y-2 border-t border-border/60 bg-background animate-in fade-in slide-in-from-bottom-2 duration-300">
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                    Tu pedido así
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {varianteSeleccionada && (
+                      <Badge
+                        variant="default"
+                        className="rounded-lg px-2.5 py-1 text-[11px] font-semibold shadow-sm ring-1 ring-primary/20"
+                      >
+                        + {varianteSeleccionada.nombre}
+                      </Badge>
+                    )}
+                    {agregadosSeleccionados.map((ag) => (
+                      <Badge
+                        key={ag.id}
+                        variant="default"
+                        className="rounded-lg px-2.5 py-1 text-[11px] font-semibold shadow-sm ring-1 ring-primary/20"
+                      >
+                        + {ag.nombre}
+                      </Badge>
+                    ))}
+                    {ingredientesExcluidosDetalle.map((ing) => (
+                      <Badge
+                        key={ing.id}
+                        variant="destructive"
+                        className="rounded-lg px-2.5 py-1 text-[11px] font-semibold shadow-sm"
+                      >
+                        − Sin {ing.nombre}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* Botón Footer Anclado: Sube desde abajo sutilmente un instante después */}
               <div className="p-6 pt-4 border-t border-border bg-background shrink-0 shadow-[0_-15px_30px_-15px_rgba(0,0,0,0.05)] animate-in slide-in-from-bottom-8 fade-in duration-700 ease-out fill-mode-both">

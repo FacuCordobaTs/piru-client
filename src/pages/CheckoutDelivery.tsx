@@ -54,6 +54,9 @@ const CheckoutDelivery = () => {
     const [restauranteData, setRestauranteData] = useState<any>(null)
     const [isLoadingRestaurante, setIsLoadingRestaurante] = useState(true)
     const [misPedidosOpen, setMisPedidosOpen] = useState(false)
+    const [sucursales, setSucursales] = useState<{ id: number; nombre: string; direccion: string | null }[]>([])
+    const [sucursalSeleccionada, setSucursalSeleccionada] = useState<number | null>(null)
+    const [sucursalDelivery, setSucursalDelivery] = useState<number | null>(null)
     const codigoDescuentoEnabled = restauranteData?.codigoDescuentoEnabled === true
 
     useEffect(() => {
@@ -67,6 +70,10 @@ const CheckoutDelivery = () => {
                     const methods: MetodoPublico[] = Array.isArray(r.metodosPago) ? r.metodosPago : []
                     setAvailablePaymentMethods(methods)
                     setRestauranteData(r)
+                    const s = Array.isArray(data.data.sucursales) ? data.data.sucursales : []
+                    setSucursales(s)
+                    if (s.length === 1) setSucursalSeleccionada(s[0].id)
+                    else if (s.length === 0) setSucursalSeleccionada(null)
                 }
             } catch (err) {
                 console.error('Error fetching restaurante data', err)
@@ -123,6 +130,10 @@ const CheckoutDelivery = () => {
     const itemsTotal = cart?.items?.reduce((sum: number, item: any) => sum + (parseFloat(item.precio) * item.cantidad), 0) || 0
     const subtotalConEnvio = tipoPedido === 'delivery' ? itemsTotal + deliveryFee : itemsTotal
     const total = Math.max(0, subtotalConEnvio - montoDescuento)
+    const direccionRetiro =
+        sucursales.length > 1
+            ? sucursales.find((s) => s.id === sucursalSeleccionada)?.direccion ?? null
+            : restauranteData?.direccion ?? null
     const handleValidarCodigo = async () => {
         if (!codigoInput.trim() || !cart?.restauranteId) return
         setValidandoCodigo(true)
@@ -176,6 +187,7 @@ const CheckoutDelivery = () => {
             setZonaDeliveryFee(null)
             setZonaNombre(null)
             setFueraDeZona(false)
+            setSucursalDelivery(null)
             return
         }
 
@@ -191,15 +203,18 @@ const CheckoutDelivery = () => {
                     setFueraDeZona(true)
                     setZonaDeliveryFee(null)
                     setZonaNombre(null)
+                    setSucursalDelivery(null)
                 } else if (data.success) {
                     setFueraDeZona(false)
                     setZonaDeliveryFee(parseFloat(data.deliveryFee))
                     setZonaNombre(data.zonaNombre || null)
+                    setSucursalDelivery(data.sucursalId ?? null)
                 }
             } catch {
                 // Silently fallback to global fee
                 setZonaDeliveryFee(null)
                 setZonaNombre(null)
+                setSucursalDelivery(null)
             } finally {
                 setIsCheckingZona(false)
             }
@@ -217,11 +232,16 @@ const CheckoutDelivery = () => {
             setZonaDeliveryFee(null)
             setZonaNombre(null)
             setFueraDeZona(false)
+            setSucursalDelivery(null)
         }
     }, [])
 
     const handleConfirm = async () => {
         if (!nombre.trim()) return toast.error('Ingresa tu nombre')
+        if (!telefono.trim()) return toast.error('Ingresa tu celular')
+        if (tipoPedido === 'takeaway' && sucursales.length > 1 && sucursalSeleccionada === null) {
+            return toast.error('Seleccioná un local de retiro')
+        }
         if (!telefono.trim()) return toast.error('Ingresa tu celular')
         if (tipoPedido === 'delivery' && !direccion.trim()) return toast.error('Ingresa tu dirección')
         if (tipoPedido === 'delivery' && (lat === null || lng === null)) return toast.error('Selecciona una dirección de las sugerencias')
@@ -263,6 +283,12 @@ const CheckoutDelivery = () => {
                 payload.direccion = direccion
                 payload.lat = lat
                 payload.lng = lng
+                if (sucursalDelivery) {
+                    payload.sucursalId = sucursalDelivery
+                }
+            }
+            if (tipoPedido === 'takeaway' && sucursalSeleccionada) {
+                payload.sucursalId = sucursalSeleccionada
             }
 
             const res = await fetch(`${url}${endpoint}`, {
@@ -392,13 +418,13 @@ const CheckoutDelivery = () => {
                     <h1 className="text-2xl font-bold">Completa tus datos</h1>
                     <p className="text-muted-foreground text-sm">Para enviar tu pedido a preparar</p>
 
-                    {(restauranteData?.direccion && tipoPedido == 'takeaway') && (
+                    {(direccionRetiro && tipoPedido === 'takeaway') && (
                         <div className="flex items-center gap-2 pt-2 animate-in fade-in slide-in-from-bottom-2 duration-500">
                             <div className="flex items-center gap-2 px-3 py-1.5 bg-primary/5 rounded-full border border-primary/20 text-muted-foreground shadow-sm max-w-full">
                                 <span className="p-1 bg-background rounded-full shrink-0 shadow-sm border border-border/50">
                                     <MapPin className="w-3.5 h-3.5 text-primary" />
                                 </span>
-                                <span className="text-sm font-medium truncate text-primary/80">Retira en <strong className="text-primary">{restauranteData.direccion}</strong></span>
+                                <span className="text-sm font-medium truncate text-primary/80">Retira en <strong className="text-primary">{direccionRetiro}</strong></span>
                             </div>
                         </div>
                     )}
@@ -419,6 +445,35 @@ const CheckoutDelivery = () => {
                         </div>
                     </RadioGroup>
                 </section>
+
+                {tipoPedido === 'takeaway' && sucursales.length > 1 && (
+                    <section className="space-y-3">
+                        <Label>¿En qué local retirás?</Label>
+                        <div className="grid grid-cols-1 gap-2">
+                            {sucursales.map((s) => (
+                                <div
+                                    key={s.id}
+                                    onClick={() => setSucursalSeleccionada(s.id)}
+                                    className={`flex items-center gap-3 p-4 border-2 rounded-2xl cursor-pointer transition-colors ${
+                                        sucursalSeleccionada === s.id
+                                            ? 'border-primary bg-primary/5'
+                                            : 'border-border hover:bg-secondary/50'
+                                    }`}
+                                >
+                                    <Store
+                                        className={`w-5 h-5 shrink-0 ${
+                                            sucursalSeleccionada === s.id ? 'text-primary' : 'text-muted-foreground'
+                                        }`}
+                                    />
+                                    <div>
+                                        <p className="font-semibold text-sm">{s.nombre}</p>
+                                        {s.direccion && <p className="text-xs text-muted-foreground">{s.direccion}</p>}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </section>
+                )}
                 <section className="space-y-4">
                     {editMode ? (
                         <div className="space-y-4">

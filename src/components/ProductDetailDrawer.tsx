@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback, useLayoutEffect, useRef } from 'react'
 import {
   Drawer,
   DrawerContent
@@ -15,6 +15,79 @@ import {
 } from '@/components/ui/dialog'
 import { Check } from 'lucide-react'
 import { Separator } from '@/components/ui/separator'
+import { cn } from '@/lib/utils'
+
+const SCROLL_EPS = 10
+
+/** Degradados en los bordes del scroll cuando hay más contenido (sin texto). */
+function DrawerScrollEdgeFades({ showTop, showBottom }: { showTop: boolean; showBottom: boolean }) {
+  return (
+    <>
+      <div
+        aria-hidden
+        className={cn(
+          'pointer-events-none absolute inset-x-0 top-0 z-[2] h-11 bg-linear-to-b from-background from-45% via-background/75 to-transparent transition-opacity duration-300',
+          showTop ? 'opacity-100' : 'opacity-0'
+        )}
+      />
+      <div
+        aria-hidden
+        className={cn(
+          'pointer-events-none absolute inset-x-0 bottom-0 z-[2] h-16 bg-linear-to-t from-background from-55% via-background/80 to-transparent transition-opacity duration-300',
+          showBottom ? 'opacity-100' : 'opacity-0'
+        )}
+      />
+    </>
+  )
+}
+
+function useDrawerScrollOverflowHints(measureVersion: unknown) {
+  const ref = useRef<HTMLDivElement>(null)
+  const [hints, setHints] = useState({ top: false, bottom: false })
+
+  const recalc = useCallback(() => {
+    const el = ref.current
+    if (!el) return
+    const { scrollTop, scrollHeight, clientHeight } = el
+    const canScroll = scrollHeight > clientHeight + SCROLL_EPS
+    if (!canScroll) {
+      setHints({ top: false, bottom: false })
+      return
+    }
+    setHints({
+      top: scrollTop > SCROLL_EPS,
+      bottom: scrollTop + clientHeight < scrollHeight - SCROLL_EPS,
+    })
+  }, [])
+
+  useLayoutEffect(() => {
+    recalc()
+    requestAnimationFrame(recalc)
+  }, [measureVersion, recalc])
+
+  useLayoutEffect(() => {
+    const el = ref.current
+    if (!el) return
+    recalc()
+
+    let ro: ResizeObserver | undefined
+    if (typeof ResizeObserver !== 'undefined') {
+      ro = new ResizeObserver(() => requestAnimationFrame(recalc))
+      ro.observe(el)
+    }
+
+    window.addEventListener('resize', recalc)
+    el.addEventListener('scroll', recalc, { passive: true })
+
+    return () => {
+      ro?.disconnect()
+      window.removeEventListener('resize', recalc)
+      el.removeEventListener('scroll', recalc)
+    }
+  }, [recalc])
+
+  return { ref, showTopFade: hints.top, showBottomFade: hints.bottom }
+}
 
 interface Ingrediente {
   id: number
@@ -113,6 +186,12 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder }: Pr
     ingredientesExcluidos.includes(ing.id)
   )
 
+  const scrollMeasureKey = product
+    ? `${open}-${product.id}-${product.variantes?.length ?? 0}-${product.ingredientes?.length ?? 0}-${product.agregados?.length ?? 0}-${product.imagenUrl ? '1' : '0'}-${hayModificaciones}-${varianteSeleccionada?.id ?? 'x'}-${ingredientesExcluidos.length}-${agregadosSeleccionados.length}`
+    : `${open}`
+
+  const { ref: scrollAreaRef, showTopFade, showBottomFade } = useDrawerScrollOverflowHints(scrollMeasureKey)
+
   return (
     <Drawer open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
       <DrawerContent
@@ -138,7 +217,8 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder }: Pr
               </div>
 
               <div className="relative z-10 -mt-8 flex flex-1 min-h-0 flex-col overflow-hidden rounded-t-3xl bg-background shadow-[0_-15px_30px_-15px_rgba(0,0,0,0.1)] dark:shadow-[0_-15px_30px_-15px_rgba(0,0,0,0.5)] animate-in slide-in-from-bottom-8 fade-in duration-700 ease-out fill-mode-both">
-                <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain p-6">
+                <div className="relative min-h-0 flex flex-1 flex-col overflow-hidden">
+                <div ref={scrollAreaRef} className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain p-6">
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex-1">
                     <div className="flex items-center gap-2 flex-wrap mb-1">
@@ -304,6 +384,8 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder }: Pr
                   </div>
                 )}
                 </div>
+                <DrawerScrollEdgeFades showTop={showTopFade} showBottom={showBottomFade} />
+                </div>
 
                 <div className="shrink-0 border-t border-border bg-background p-6 pt-4 shadow-[0_-8px_24px_-12px_rgba(0,0,0,0.08)] dark:shadow-[0_-8px_24px_-12px_rgba(0,0,0,0.35)]">
                   <Button
@@ -327,8 +409,8 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder }: Pr
             /* ───────────────────────────────────────────────────────── */
             <div className="flex min-h-0 flex-1 flex-col overflow-hidden animate-in fade-in duration-500">
 
-              {/* Contenido Superior: Animación de deslizado suave */}
-              <div className="flex-1 overflow-y-auto p-6 md:p-8 space-y-6 animate-in slide-in-from-bottom-6 fade-in duration-700 ease-out fill-mode-both">
+              <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden animate-in slide-in-from-bottom-6 fade-in duration-700 ease-out fill-mode-both">
+              <div ref={scrollAreaRef} className="min-h-0 flex-1 overflow-y-auto p-6 md:p-8 space-y-6">
 
                 {/* Header Tipográfico Limpio */}
                 <div className="flex items-start justify-between gap-5">
@@ -464,6 +546,8 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder }: Pr
                     </Dialog>
                   )}
                 </div>
+              </div>
+              <DrawerScrollEdgeFades showTop={showTopFade} showBottom={showBottomFade} />
               </div>
 
               {hayModificaciones && (

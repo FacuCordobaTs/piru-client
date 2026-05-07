@@ -118,8 +118,8 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder }: Pr
       <DrawerContent
         className={
           product?.imagenUrl
-            ? "h-[80vh] flex flex-col overflow-hidden border-none outline-none"
-            : "flex flex-col max-h-[85vh] overflow-hidden border-none outline-none bg-background"
+            ? "flex h-[80vh] min-h-0 flex-col overflow-hidden border-none outline-none"
+            : "flex h-[80vh] min-h-0 flex-col overflow-hidden border-none outline-none bg-background max-h-[85vh]"
         }
       >
         {product ? (
@@ -128,7 +128,7 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder }: Pr
             /* 1. DISEÑO ORIGINAL (CON IMAGEN)                           */
             /* ───────────────────────────────────────────────────────── */
             <>
-              <div className="relative flex-1 min-h-0 w-full bg-secondary overflow-hidden">
+              <div className="relative h-[38vh] min-h-[140px] max-h-[320px] shrink-0 w-full bg-secondary overflow-hidden">
                 <img
                   src={product.imagenUrl}
                   alt={product.nombre}
@@ -137,7 +137,8 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder }: Pr
                 <div className="absolute inset-x-0 bottom-0 h-32 bg-linear-to-t from-background via-background/60 to-transparent" />
               </div>
 
-              <div className="p-6 space-y-4 shrink-0 bg-background relative z-10 -mt-8 rounded-t-3xl shadow-[0_-15px_30px_-15px_rgba(0,0,0,0.1)] dark:shadow-[0_-15px_30px_-15px_rgba(0,0,0,0.5)] animate-in slide-in-from-bottom-8 fade-in duration-700 ease-out fill-mode-both">
+              <div className="relative z-10 -mt-8 flex flex-1 min-h-0 flex-col overflow-hidden rounded-t-3xl bg-background shadow-[0_-15px_30px_-15px_rgba(0,0,0,0.1)] dark:shadow-[0_-15px_30px_-15px_rgba(0,0,0,0.5)] animate-in slide-in-from-bottom-8 fade-in duration-700 ease-out fill-mode-both">
+                <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain p-6">
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex-1">
                     <div className="flex items-center gap-2 flex-wrap mb-1">
@@ -302,8 +303,9 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder }: Pr
                     </div>
                   </div>
                 )}
+                </div>
 
-                <div className="flex items-center justify-between pt-4 border-t border-border">
+                <div className="shrink-0 border-t border-border bg-background p-6 pt-4 shadow-[0_-8px_24px_-12px_rgba(0,0,0,0.08)] dark:shadow-[0_-8px_24px_-12px_rgba(0,0,0,0.35)]">
                   <Button
                     size="lg"
                     onClick={handleAdd}
@@ -323,7 +325,7 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder }: Pr
             /* ───────────────────────────────────────────────────────── */
             /* 2. DISEÑO TIPOGRÁFICO CON ANIMACIÓN (SIN IMAGEN)          */
             /* ───────────────────────────────────────────────────────── */
-            <div className="flex flex-col h-full overflow-hidden animate-in fade-in duration-500">
+            <div className="flex min-h-0 flex-1 flex-col overflow-hidden animate-in fade-in duration-500">
 
               {/* Contenido Superior: Animación de deslizado suave */}
               <div className="flex-1 overflow-y-auto p-6 md:p-8 space-y-6 animate-in slide-in-from-bottom-6 fade-in duration-700 ease-out fill-mode-both">

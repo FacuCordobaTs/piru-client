@@ -311,7 +311,10 @@ const Menu = () => {
   }, [todosConfirmaron, urlQrToken])
 
   const todosLosItems = wsState?.items || []
-  const totalPedido = wsState?.total || '0.00'
+  const totalPedido = todosLosItems.reduce((sum, item) => {
+    const precio = parseFloat((item as any).precioUnitario || String((item as any).precio || 0))
+    return sum + precio * item.cantidad
+  }, 0).toFixed(2)
 
   // Guardar tema cuando el restaurante tiene colores propios
   const token = urlQrToken || qrToken

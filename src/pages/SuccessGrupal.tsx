@@ -28,7 +28,7 @@ const SuccessGrupal = () => {
       if (!orderInfo?.token) return
       try {
         const url = import.meta.env.VITE_API_URL || 'http://localhost:3000/api'
-        const res = await fetch(`${url}/mesa/join/${orderInfo.token}`)
+        const res = await fetch(`${url}/public/sala/join/${orderInfo.token}`)
         const data = await res.json()
         if (data.success && data.data?.restaurante) {
           const rest = data.data.restaurante

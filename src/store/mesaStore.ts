@@ -13,9 +13,8 @@ interface Restaurante {
   nombre: string
   imagenUrl: string | null
   mpConnected: boolean | null
-  esCarrito: boolean | null
-  splitPayment: boolean | null
-  soloCartaDigital: boolean
+  esCarrito?: boolean | null
+  splitPayment?: boolean | null
   disenoAlternativo?: boolean | null
   direccion?: string | null
   colorPrimario?: string | null

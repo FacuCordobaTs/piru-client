@@ -92,7 +92,7 @@ const Nombre = () => {
     }
   }, [isHydrated, urlQrToken, storedQrToken, clienteNombre, sessionEnded, pedido?.estado, navigate, dataLoaded])
 
-  // Efecto para cargar datos de la mesa
+  // Efecto para cargar datos de la mesa o sala
   useEffect(() => {
     const cargarMesa = async () => {
       if (!urlQrToken) {
@@ -107,87 +107,94 @@ const Nombre = () => {
       setQrToken(urlQrToken)
       setIsLoading(true)
 
+      const esRutaSala = location.pathname.includes('/sala/')
+
       try {
-        const response = await mesaApi.join(urlQrToken) as {
-          success: boolean
-          data?: {
-            mesa: {
-              id: number
-              nombre: string
-              restauranteId: number
-              qrToken: string
-              createdAt: string
+        if (esRutaSala) {
+          // Flujo sala: usar endpoint público específico (sin pedido legacy)
+          const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000/api'
+          const res = await fetch(`${apiUrl}/public/sala/join/${urlQrToken}`)
+          const response = await res.json() as {
+            success: boolean
+            data?: {
+              sala: { id: number; nombre: string; token: string; restauranteId: number }
+              productos: Array<{
+                id: number; nombre: string; descripcion: string | null
+                precio: string; imagenUrl: string | null; categoriaId: number | null; categoria: string | null
+              }>
+              restaurante: {
+                id: number; nombre: string; imagenUrl: string | null
+                mpConnected: boolean | null; colorPrimario?: string | null; colorSecundario?: string | null
+                direccion?: string | null; username?: string | null
+              } | null
             }
-            productos: Array<{
-              id: number
-              nombre: string
-              descripcion: string | null
-              precio: string
-              imagenUrl: string | null
-              categoriaId: number | null
-              categoria: string | null
-            }>
-            pedido: {
-              id: number
-              mesaId: number
-              restauranteId: number
-              estado: string
-              total: string
-              createdAt: string
-              nombrePedido?: string | null
-            }
-            restaurante: {
-              id: number
-              nombre: string
-              imagenUrl: string | null
-              mpConnected: boolean | null
-              esCarrito: boolean | null
-              splitPayment: boolean | null
-              soloCartaDigital: boolean
-              colorPrimario?: string | null
-              colorSecundario?: string | null
-            } | null
-          }
-        }
-
-        console.log('response', response)
-
-        if (response.success && response.data) {
-          setMesa(response.data.mesa)
-          setProductos(response.data.productos || [])
-          setPedidoId(response.data.pedido.id)
-          setPedido(response.data.pedido)
-          setRestaurante(response.data.restaurante || null)
-          setDataLoaded(true) // Marcar que los datos del servidor ya se cargaron
-
-          // Guardar tema cuando el restaurante tiene colores propios
-          const rest = response.data.restaurante
-          if (rest?.colorPrimario && rest?.colorSecundario) {
-            const isSala = location.pathname.includes('/sala/')
-            const key = isSala ? `theme_sala_${urlQrToken}` : `theme_mesa_${urlQrToken}`
-            sessionStorage.setItem(key, JSON.stringify({
-              primario: rest.colorPrimario,
-              secundario: rest.colorSecundario
-            }))
           }
 
-          // Si es carrito y ya tiene nombrePedido, mostrar modal de bienvenida
-          if (response.data.restaurante?.esCarrito && response.data.pedido.nombrePedido) {
-            setShowCarritoModal(true)
+          if (response.success && response.data) {
+            const { sala, productos, restaurante: rest } = response.data
+            setMesa({ id: sala.id, nombre: sala.nombre, qrToken: sala.token, restauranteId: sala.restauranteId })
+            setProductos(productos || [])
+            setPedidoId(0) // sentinel: sala no usa pedido legacy
+            setRestaurante(rest || null)
+            setDataLoaded(true)
+
+            if (rest?.colorPrimario && rest?.colorSecundario) {
+              sessionStorage.setItem(`theme_sala_${urlQrToken}`, JSON.stringify({
+                primario: rest.colorPrimario,
+                secundario: rest.colorSecundario
+              }))
+            }
+          } else {
+            toast.error('Sala no encontrada')
+            navigate('/')
           }
         } else {
-          toast.error('Error al cargar la mesa')
-          navigate('/')
+          // Flujo mesa legacy
+          const response = await mesaApi.join(urlQrToken) as {
+            success: boolean
+            data?: {
+              mesa: { id: number; nombre: string; restauranteId: number; qrToken: string; createdAt: string }
+              productos: Array<{
+                id: number; nombre: string; descripcion: string | null
+                precio: string; imagenUrl: string | null; categoriaId: number | null; categoria: string | null
+              }>
+              pedido: {
+                id: number; mesaId: number; restauranteId: number
+                estado: string; total: string; createdAt: string; nombrePedido?: string | null
+              }
+              restaurante: {
+                id: number; nombre: string; imagenUrl: string | null
+                mpConnected: boolean | null; colorPrimario?: string | null; colorSecundario?: string | null
+              } | null
+            }
+          }
+
+          if (response.success && response.data) {
+            setMesa(response.data.mesa)
+            setProductos(response.data.productos || [])
+            setPedidoId(response.data.pedido.id)
+            setPedido(response.data.pedido)
+            setRestaurante(response.data.restaurante || null)
+            setDataLoaded(true)
+
+            const rest = response.data.restaurante
+            if (rest?.colorPrimario && rest?.colorSecundario) {
+              sessionStorage.setItem(`theme_mesa_${urlQrToken}`, JSON.stringify({
+                primario: rest.colorPrimario,
+                secundario: rest.colorSecundario
+              }))
+            }
+          } else {
+            toast.error('Error al cargar la mesa')
+            navigate('/')
+          }
         }
       } catch (error) {
-        console.error('Error cargando mesa:', error)
+        console.error('Error cargando mesa/sala:', error)
         if (error instanceof ApiError) {
-          toast.error('Mesa no encontrada', {
-            description: error.message,
-          })
+          toast.error('No encontrado', { description: error.message })
         } else {
           toast.error('Error de conexión')
-          console.error('Error de conexión:', error)
         }
         navigate('/')
       } finally {

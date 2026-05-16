@@ -7,8 +7,9 @@ import { RadioGroup } from '@/components/ui/radio-group'
 import { Textarea } from '@/components/ui/textarea'
 import { toast } from 'sonner'
 import { ThemeToggle } from '@/components/ThemeToggle'
-import { ArrowLeft, Loader2, MapPin, Store, Zap, Truck, AlertTriangle, Package, Tag, X, CreditCard, Wallet, Clock } from 'lucide-react'
+import { ArrowLeft, Loader2, MapPin, Store, Zap, Truck, AlertTriangle, Package, Tag, X, CreditCard, Wallet, Clock, Home, Building2 } from 'lucide-react'
 import { AddressAutocomplete } from '@/components/AddressAutocomplete'
+import { AddressMapPreview } from '@/components/AddressMapPreview'
 import { MisPedidosDrawer } from '@/components/MisPedidosDrawer'
 
 type MetodoPublico = { id: string; label: string; automatico: boolean }
@@ -59,6 +60,9 @@ const CheckoutDelivery = () => {
     const [sucursales, setSucursales] = useState<{ id: number; nombre: string; direccion: string | null }[]>([])
     const [sucursalSeleccionada, setSucursalSeleccionada] = useState<number | null>(null)
     const [sucursalDelivery, setSucursalDelivery] = useState<number | null>(null)
+    const [tipoDomicilio, setTipoDomicilio] = useState<'casa' | 'departamento' | null>(null)
+    const [piso, setPiso] = useState('')
+    const [numeroDepartamento, setNumeroDepartamento] = useState('')
     const codigoDescuentoEnabled = restauranteData?.codigoDescuentoEnabled === true
 
     useEffect(() => {
@@ -247,6 +251,8 @@ const CheckoutDelivery = () => {
         if (!telefono.trim()) return toast.error('Ingresa tu celular')
         if (tipoPedido === 'delivery' && !direccion.trim()) return toast.error('Ingresa tu dirección')
         if (tipoPedido === 'delivery' && (lat === null || lng === null)) return toast.error('Selecciona una dirección de las sugerencias')
+        if (tipoPedido === 'delivery' && !tipoDomicilio) return toast.error('Indicá si es casa o departamento')
+        if (tipoPedido === 'delivery' && tipoDomicilio === 'departamento' && (!piso.trim() || !numeroDepartamento.trim())) return toast.error('Ingresá el piso y el número de departamento')
         if (programarPedido && !horarioProgramado.trim()) return toast.error('Ingresa el horario para tu pedido')
         const allowedIds = new Set(availablePaymentMethods.map((m) => m.id))
         if (!isLoadingRestaurante && (!metodoPago || !allowedIds.has(metodoPago))) {
@@ -262,7 +268,14 @@ const CheckoutDelivery = () => {
                 restauranteId: cart.restauranteId,
                 nombreCliente: nombre,
                 telefono: telefono,
-                notas: notas.replace(/[^\x20-\x7E\xA0-\xFF\n]/g, '').trim(),
+                notas: (() => {
+                    const notasLimpias = notas.replace(/[^\x20-\x7E\xA0-\xFF\n]/g, '').trim()
+                    if (tipoPedido === 'delivery' && tipoDomicilio === 'departamento') {
+                        const infoDepto = `Piso ${piso.trim()} Dpto ${numeroDepartamento.trim()}`
+                        return notasLimpias ? `${infoDepto}\n${notasLimpias}` : infoDepto
+                    }
+                    return notasLimpias
+                })(),
                 items: cart.items.map((i: any) => ({
                     productoId: i.productoId,
                     varianteId: i.varianteId,
@@ -514,6 +527,9 @@ const CheckoutDelivery = () => {
                                         onChange={handleAddressChange}
                                         placeholder="Ej: Espora 811, Santa Fe"
                                     />
+                                    {lat !== null && lng !== null && (
+                                        <AddressMapPreview lat={lat} lng={lng} />
+                                    )}
                                     {/* Zone status after address selection */}
                                     {lat !== null && lng !== null && direccion && (
                                         <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
@@ -611,6 +627,52 @@ const CheckoutDelivery = () => {
                                             ) : null}
                                         </div>
                                     )}
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {tipoPedido === 'delivery' && (
+                        <div className="space-y-3 pt-4 border-t border-border/50 animate-in fade-in slide-in-from-top-2">
+                            <Label>¿Es casa o departamento?</Label>
+                            <div className="grid grid-cols-2 gap-3">
+                                <div
+                                    className={`flex flex-col items-center gap-2 p-4 border-2 rounded-2xl cursor-pointer transition-colors ${tipoDomicilio === 'casa' ? 'border-primary bg-primary/5' : 'border-border hover:bg-secondary/50'}`}
+                                    onClick={() => { setTipoDomicilio('casa'); setPiso(''); setNumeroDepartamento('') }}
+                                >
+                                    <Home className={`w-7 h-7 ${tipoDomicilio === 'casa' ? 'text-primary' : 'text-muted-foreground'}`} />
+                                    <span className={`font-semibold text-sm ${tipoDomicilio === 'casa' ? 'text-primary' : 'text-foreground'}`}>Casa</span>
+                                </div>
+                                <div
+                                    className={`flex flex-col items-center gap-2 p-4 border-2 rounded-2xl cursor-pointer transition-colors ${tipoDomicilio === 'departamento' ? 'border-primary bg-primary/5' : 'border-border hover:bg-secondary/50'}`}
+                                    onClick={() => setTipoDomicilio('departamento')}
+                                >
+                                    <Building2 className={`w-7 h-7 ${tipoDomicilio === 'departamento' ? 'text-primary' : 'text-muted-foreground'}`} />
+                                    <span className={`font-semibold text-sm ${tipoDomicilio === 'departamento' ? 'text-primary' : 'text-foreground'}`}>Departamento</span>
+                                </div>
+                            </div>
+                            {tipoDomicilio === 'departamento' && (
+                                <div className="grid grid-cols-2 gap-3 animate-in fade-in slide-in-from-top-2">
+                                    <div className="space-y-1.5">
+                                        <Label htmlFor="piso">Piso</Label>
+                                        <Input
+                                            id="piso"
+                                            placeholder="Ej: 4"
+                                            className="h-11 rounded-xl"
+                                            value={piso}
+                                            onChange={e => setPiso(e.target.value)}
+                                        />
+                                    </div>
+                                    <div className="space-y-1.5">
+                                        <Label htmlFor="numeroDepartamento">Departamento</Label>
+                                        <Input
+                                            id="numeroDepartamento"
+                                            placeholder="Ej: C"
+                                            className="h-11 rounded-xl"
+                                            value={numeroDepartamento}
+                                            onChange={e => setNumeroDepartamento(e.target.value.toUpperCase())}
+                                        />
+                                    </div>
                                 </div>
                             )}
                         </div>

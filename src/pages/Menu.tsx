@@ -165,10 +165,12 @@ const Menu = () => {
     abrirProductoDrawer()
   }
 
-  const agregarAlPedido = (producto: typeof productos[0] | any, cantidad: number = 1, ingredientesExcluidos?: number[], agregados?: any[]) => {
+  const agregarAlPedido = (producto: typeof productos[0] | any, cantidad: number = 1, ingredientesExcluidos?: number[], agregados?: any[], varianteSeleccionada?: any) => {
     if (!clienteNombre) return
-    let precioBase = parseFloat(String(producto.precio))
-    if (producto.descuento && producto.descuento > 0) {
+    let precioBase = varianteSeleccionada
+      ? parseFloat(String(varianteSeleccionada.precio))
+      : parseFloat(String(producto.precio))
+    if (!varianteSeleccionada && producto.descuento && producto.descuento > 0) {
       precioBase = precioBase * (1 - producto.descuento / 100)
     }
     const precioAgregados = (agregados || []).reduce((sum: number, ag: any) => sum + parseFloat(ag.precio || '0'), 0)
@@ -182,7 +184,9 @@ const Menu = () => {
         precioUnitario,
         imagenUrl: producto.imagenUrl,
         ingredientesExcluidos: ingredientesExcluidos || [],
-        agregados: agregados || []
+        agregados: agregados || [],
+        varianteId: varianteSeleccionada?.id,
+        varianteNombre: varianteSeleccionada?.nombre,
       },
     })
     // Abrir el carrito automáticamente tras agregar un producto

@@ -199,19 +199,7 @@ const Menu = () => {
 
   // --- LÓGICA DE CONFIRMACIÓN GRUPAL ---
 
-  // Botón principal del carrito: "Continuar" (sala) o "Confirmar Pedido" (mesa)
-  const handleBotonPrincipalCarrito = () => {
-    if (!clienteNombre || !clienteId) return
 
-    if (esSala) {
-      // Sala: mostrar checkout de delivery/takeaway
-      setMostrarCheckoutEnCarrito(true)
-      return
-    }
-
-    // Mesa: flujo original de confirmación grupal
-    iniciarConfirmacionPedido()
-  }
 
   // Iniciar el proceso de confirmación grupal (votación)
   const iniciarConfirmacionPedido = () => {
@@ -512,14 +500,6 @@ const Menu = () => {
           </div>
         </section>
 
-        {/* --- MENSAJE EXPLICANDO DE QUE DEBEN SELECCIONAR LOS PRODUCTOS Y CONFIRMAR EL PEDIDO  --- */}
-        <section className="space-y-3 py-4 px-4 bg-secondary/50 rounded-lg">
-          <p className="text-sm font-medium">
-            {restaurante?.soloCartaDigital
-              ? 'Arma tu pedido aquí para leerle fácilmente a la caja o al mozo lo que elegiste cuando vayas a pedir.'
-              : 'Selecciona los productos y confirma el pedido para enviarlo a la caja/cocina.'}
-          </p>
-        </section>
 
         {/* --- CATEGORÍAS --- */}
         {categorias.length > 1 && (
@@ -748,17 +728,6 @@ const Menu = () => {
                   <span className="text-muted-foreground text-sm">Total a pagar</span>
                   <span className="text-2xl font-black tracking-tight">${totalPedido}</span>
                 </div>
-                {!restaurante?.soloCartaDigital && (
-                  <Button className="w-full h-14 text-base font-bold rounded-2xl shadow-lg shadow-primary/20" size="lg" onClick={handleBotonPrincipalCarrito}>
-                    {esSala ? 'Continuar' : 'Confirmar Pedido'}
-                    <ArrowLeft className="w-5 h-5 ml-2 rotate-180" />
-                  </Button>
-                )}
-                {restaurante?.soloCartaDigital && (
-                  <div className="text-center text-sm font-medium text-primary py-3 bg-primary/10 rounded-xl">
-                    Léele tu pedido al mozo o a la caja 😊
-                  </div>
-                )}
               </div>
             )}
           </div>

@@ -504,7 +504,7 @@ const CheckoutDelivery = () => {
 
                             <div className="space-y-2">
                                 <Label htmlFor="telefono">Celular (WhatsApp)</Label>
-                                <Input id="telefono" type="tel" placeholder="Ej: +54 9 11 1234-5678" className="h-12 rounded-xl" value={telefono} onChange={e => setTelefono(e.target.value)} />
+                                <Input id="telefono" type="tel" placeholder="Ej: 5491112345678" className="h-12 rounded-xl" value={telefono} onChange={e => setTelefono(e.target.value.replace(/\D/g, ''))} />
                                 {/* {restauranteData?.notificarClientesWhatsapp === true && (
                                     <div className="flex items-center space-x-2 pt-1 animate-in fade-in">
                                         <Checkbox

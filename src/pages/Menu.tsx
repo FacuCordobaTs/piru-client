@@ -20,7 +20,7 @@ import { CheckoutDeliveryGrupal } from '@/components/CheckoutDeliveryGrupal'
 const Menu = () => {
   const navigate = useNavigate()
   const { qrToken: urlQrToken } = useParams<{ qrToken?: string }>()
-  const { mesa, productos, clientes, clienteNombre, clienteId, qrToken, isHydrated, sessionEnded, restaurante, pedido, checkoutDeliveryData, checkoutEditSemaphore, setMesa, setProductos, setPedidoId, setPedido, setRestaurante, setQrToken, setClientes, setCheckoutDeliveryData, setCheckoutEditSemaphore } = useMesaStore()
+  const { mesa, productos, clientes, clienteNombre, clienteId, qrToken, isHydrated, sessionEnded, restaurante, checkoutDeliveryData, checkoutEditSemaphore, setMesa, setProductos, setPedidoId, setPedido, setRestaurante, setQrToken, setClientes, setCheckoutDeliveryData, setCheckoutEditSemaphore } = useMesaStore()
   const { state: wsState, isConnected, sendMessage, confirmacionGrupal, confirmacionCancelada, clearConfirmacionCancelada } = useClienteWebSocket()
 
   const [carritoAbierto, setCarritoAbierto] = useState(false)
@@ -30,6 +30,9 @@ const Menu = () => {
 
   // ESTADO PARA EL MODAL DE CONFIRMACIÓN GRUPAL
   const [confirmacionGrupalOpen, setConfirmacionGrupalOpen] = useState(false)
+
+  // ESTADO PARA EL MODAL DE BIENVENIDA
+  const [bienvenidaOpen, setBienvenidaOpen] = useState(false)
 
   // Para sala: mostrar checkout en lugar de ir directo a confirmación
   const esSala = typeof window !== 'undefined' && window.location.pathname.includes('/sala/')
@@ -239,6 +242,17 @@ const Menu = () => {
     })
   }
 
+  // Mostrar modal de bienvenida la primera vez que se entra al menú
+  useEffect(() => {
+    const t = urlQrToken || qrToken
+    if (!isHydrated || !t) return
+    const key = `bienvenida_shown_${t}`
+    if (!sessionStorage.getItem(key)) {
+      setBienvenidaOpen(true)
+      sessionStorage.setItem(key, '1')
+    }
+  }, [isHydrated, urlQrToken, qrToken])
+
   // Efecto para abrir/cerrar el modal de confirmación grupal
   useEffect(() => {
     if (confirmacionGrupal?.activa) {
@@ -428,19 +442,6 @@ const Menu = () => {
                 {clienteNombre}
               </h1>
             </div>
-            <div className="text-right">
-              {restaurante?.esCarrito && pedido?.nombrePedido ? (
-                <>
-                  <span className="text-xs font-semibold text-primary uppercase tracking-wider block">Pedido</span>
-                  <span className="text-sm font-medium">de {pedido.nombrePedido}</span>
-                </>
-              ) : (
-                <>
-                  <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block">Pedido</span>
-                  <span className="text-sm font-medium">{mesa?.nombre}</span>
-                </>
-              )}
-            </div>
           </div>
 
           {/* Lista de Usuarios */}
@@ -462,20 +463,6 @@ const Menu = () => {
                 <span className="text-xs font-medium truncate max-w-[60px] text-center">Tú</span>
               </div>
 
-              {/* Botón compartir si es sala */}
-              {window.location.pathname.includes('/sala/') && (
-                <div className="flex flex-col items-center gap-1.5 min-w-[56px] snap-start" onClick={() => {
-                  navigator.clipboard.writeText(window.location.href);
-                  toast.success('¡Link copiado al portapapeles!');
-                }}>
-                  <div className="relative cursor-pointer hover:scale-105 transition-transform">
-                    <div className="w-12 h-12 rounded-xl border-2 shadow-sm border-primary/30 bg-primary/10 text-primary flex items-center justify-center">
-                      <LinkIcon className="w-5 h-5" />
-                    </div>
-                  </div>
-                  <span className="text-xs font-medium text-primary text-center cursor-pointer">Compartir</span>
-                </div>
-              )}
 
               {/* Otros usuarios */}
               {clientes.filter(c => c.nombre !== clienteNombre).map((cliente) => (
@@ -498,6 +485,20 @@ const Menu = () => {
               <div className="min-w-5 shrink-0"></div>
             </div>
           </div>
+
+          {/* Botón compartir sala */}
+          {window.location.pathname.includes('/sala/') && (
+            <button
+              onClick={() => {
+                navigator.clipboard.writeText(window.location.href)
+                toast.success('¡Link copiado al portapapeles!')
+              }}
+              className="w-full flex items-center justify-center gap-2.5 py-3 px-4 rounded-xl border-2 border-dashed border-primary/30 text-primary hover:bg-primary/5 active:bg-primary/10 transition-colors text-sm font-semibold"
+            >
+              <LinkIcon className="w-4 h-4" />
+              Invitá a tus amigos — copiá el link
+            </button>
+          )}
         </section>
 
 
@@ -631,6 +632,7 @@ const Menu = () => {
                   </Button>
                   <CheckoutDeliveryGrupal
                     restauranteId={restaurante?.id ?? 0}
+                    restauranteUsername={restaurante?.username ?? null}
                     itemsTotal={totalPedido}
                     totalItems={todosLosItems.length}
                     onConfirmarClick={iniciarConfirmacionPedido}
@@ -728,6 +730,12 @@ const Menu = () => {
                   <span className="text-muted-foreground text-sm">Total a pagar</span>
                   <span className="text-2xl font-black tracking-tight">${totalPedido}</span>
                 </div>
+                <Button
+                  className="w-full h-12 rounded-xl font-bold text-base shadow-md"
+                  onClick={() => esSala ? setMostrarCheckoutEnCarrito(true) : iniciarConfirmacionPedido()}
+                >
+                  Continuar
+                </Button>
               </div>
             )}
           </div>
@@ -852,6 +860,68 @@ const Menu = () => {
               </>
             )}
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* --- MODAL DE BIENVENIDA --- */}
+      <Dialog open={bienvenidaOpen} onOpenChange={setBienvenidaOpen}>
+        <DialogContent className="max-w-sm rounded-3xl p-0 overflow-hidden border-0 shadow-2xl gap-0">
+          {/* Cabecera con fondo primary */}
+          <div className="bg-primary px-6 pt-8 pb-10 relative overflow-hidden">
+            <div className="absolute -right-10 -top-10 w-44 h-44 rounded-full bg-white/5" />
+            <div className="absolute -right-4 top-12 w-28 h-28 rounded-full bg-white/5" />
+            <div className="w-14 h-14 rounded-2xl bg-primary-foreground/15 flex items-center justify-center mb-4 backdrop-blur-sm shadow-inner">
+              <Users className="w-8 h-8 text-primary-foreground" />
+            </div>
+            <DialogTitle className="text-2xl font-extrabold text-primary-foreground leading-snug">
+              Armá el pedido<br />con tus amigos
+            </DialogTitle>
+            <DialogDescription className="text-sm text-primary-foreground/70 mt-2 leading-relaxed">
+              Cada uno elige sus platos y al final confirman juntos con un solo tap.
+            </DialogDescription>
+          </div>
+
+          {/* Cuerpo */}
+          <div className="px-6 py-5 space-y-5 bg-background">
+            {/* Pasos */}
+            <div className="space-y-3.5">
+              {[
+                { n: '1', title: 'Elegí tus platos', desc: 'Explorá el menú y sumá lo que quieras al pedido.' },
+                { n: '2', title: 'Invitá a tus amigos', desc: 'Compartí el link para que cada uno arme su parte.' },
+                { n: '3', title: 'Confirmen juntos', desc: 'Todos confirman y el pedido se envía automáticamente.' },
+              ].map(({ n, title, desc }) => (
+                <div key={n} className="flex items-start gap-3">
+                  <div className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center shrink-0 mt-0.5">
+                    <span className="text-xs font-extrabold text-primary">{n}</span>
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-foreground">{title}</p>
+                    <p className="text-xs text-muted-foreground leading-snug">{desc}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Botón compartir */}
+            <button
+              onClick={() => {
+                navigator.clipboard.writeText(window.location.href)
+                toast.success('¡Link copiado al portapapeles!')
+              }}
+              className="w-full flex items-center justify-center gap-2.5 py-3 px-4 rounded-xl border-2 border-dashed border-primary/30 text-primary hover:bg-primary/5 active:bg-primary/10 transition-colors text-sm font-semibold"
+            >
+              <LinkIcon className="w-4 h-4" />
+              Copiar link para compartir
+            </button>
+
+            {/* CTA principal */}
+            <Button
+              className="w-full h-12 rounded-xl font-bold text-base shadow-md"
+              onClick={() => setBienvenidaOpen(false)}
+            >
+              ¡Empezar a pedir!
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
 

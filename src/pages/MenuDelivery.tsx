@@ -6,7 +6,7 @@ import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet'
 import { toast } from 'sonner'
 import {
     Trash2, ArrowLeft,
-    Package, Receipt, UtensilsCrossed, Utensils, Clock, Sparkles, Check, X
+    Package, Receipt, UtensilsCrossed, Utensils, Clock, Sparkles, Check, X, Users, ChevronRight
 } from 'lucide-react'
 import { ProductDetailDrawer } from '@/components/ProductDetailDrawer'
 import { ThemeToggle } from '@/components/ThemeToggle'
@@ -15,6 +15,19 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Input } from '@/components/ui/input'
 
 type HorarioTurno = { diaSemana: number; horaApertura: string; horaCierre: string }
+
+function formatTimeLeft(fechaFin: string | Date | null): string | null {
+    if (!fechaFin) return null
+    const now = Date.now()
+    const end = new Date(fechaFin).getTime()
+    const diff = end - now
+    if (diff <= 0) return null
+    const hours = Math.floor(diff / 3600000)
+    if (hours < 1) return 'menos de 1h'
+    if (hours < 24) return `${hours}h`
+    const days = Math.floor(hours / 24)
+    return `${days}d`
+}
 
 function checkIsOpen(horarios: HorarioTurno[]): { abierto: boolean; proximaApertura: string | null } {
     if (!horarios || horarios.length === 0) return { abierto: true, proximaApertura: null }
@@ -543,7 +556,7 @@ const MenuDelivery = () => {
 
     const confirmarPedido = () => {
         if (cartItems.length === 0) return
-        if (!estadoAbierto.abierto) {
+        if (!estadoAbierto.abierto && !restaurante?.permitirPedidosProgramados) {
             toast.error('El restaurante está cerrado en este momento')
             return
         }
@@ -675,11 +688,16 @@ const MenuDelivery = () => {
 
             {!estadoAbierto.abierto && (
                 <div className="bg-red-600 text-white">
-                    <div className="max-w-2xl mx-auto px-5 py-3 flex items-center justify-center gap-2">
-                        <Clock className="w-4 h-4 shrink-0" />
-                        <p className="text-sm font-semibold text-center">
-                            Estamos cerrados{estadoAbierto.proximaApertura ? `. Abrimos ${estadoAbierto.proximaApertura}` : ''}
-                        </p>
+                    <div className="max-w-2xl mx-auto px-5 py-3 flex flex-col items-center justify-center gap-1">
+                        <div className="flex items-center gap-2">
+                            <Clock className="w-4 h-4 shrink-0" />
+                            <p className="text-sm font-semibold text-center">
+                                Estamos cerrados{estadoAbierto.proximaApertura ? `. Abrimos ${estadoAbierto.proximaApertura}` : ''}
+                            </p>
+                        </div>
+                        {restaurante?.permitirPedidosProgramados && (
+                            <p className="text-xs text-red-100 text-center">Podés programar pedidos para después</p>
+                        )}
                     </div>
                 </div>
             )}
@@ -710,17 +728,21 @@ const MenuDelivery = () => {
                     </div>
                 </section>
 
-                {/* BOTON ARMAR PEDIDO ENTRE AMIGOS (solo si orderGroupEnabled) */}
                 {restaurante?.orderGroupEnabled !== false && (
-                    <section className="bg-primary/5 hover:bg-primary/10 transition-colors border border-primary/20 p-4 rounded-2xl flex items-center justify-between shadow-sm cursor-pointer" onClick={onArmarPedidoClick}>
-                        <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center">
-                                <UtensilsCrossed className="w-5 h-5 text-primary" />
-                            </div>
-                            <div className="flex flex-col">
-                                <span className="font-semibold text-foreground text-sm">Armar pedido entre amigos</span>
-                                <span className="text-xs text-muted-foreground">Comparte un link y pidan juntos</span>
-                            </div>
+                    <section
+                        className="flex items-center gap-4 px-4 py-3.5 rounded-2xl bg-card border border-border/60 shadow-sm cursor-pointer hover:shadow-md hover:border-border transition-all duration-200 active:scale-[0.98]"
+                        onClick={onArmarPedidoClick}
+                    >
+                        <div className="w-10 h-10 rounded-xl bg-muted flex items-center justify-center shrink-0">
+                            <Users className="w-5 h-5 text-foreground/60" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                            <p className="text-sm font-bold text-foreground leading-tight">Pedido entre amigos</p>
+                            <p className="text-[11.5px] text-muted-foreground mt-0.5 leading-snug">Compartí un link · cada uno elige lo suyo</p>
+                        </div>
+                        <div className="flex items-center gap-0.5 shrink-0 text-[11px] font-semibold text-muted-foreground border border-border/60 rounded-lg px-2.5 py-1.5 bg-muted/50">
+                            Crear
+                            <ChevronRight className="w-3.5 h-3.5" />
                         </div>
                     </section>
                 )}
@@ -956,13 +978,13 @@ const MenuDelivery = () => {
                                     <span className="text-2xl font-black tracking-tight">${totalPedido}</span>
                                 </div>
                                 <Button
-                                    className={`w-full h-14 text-base font-bold rounded-2xl shadow-lg ${!estadoAbierto.abierto ? 'bg-muted text-muted-foreground cursor-not-allowed' : 'shadow-primary/20 bg-primary hover:bg-primary/90 text-primary-foreground'}`}
+                                    className={`w-full h-14 text-base font-bold rounded-2xl shadow-lg ${!estadoAbierto.abierto && !restaurante?.permitirPedidosProgramados ? 'bg-muted text-muted-foreground cursor-not-allowed' : 'shadow-primary/20 bg-primary hover:bg-primary/90 text-primary-foreground'}`}
                                     size="lg"
                                     onClick={confirmarPedido}
-                                    disabled={!estadoAbierto.abierto}
+                                    disabled={!estadoAbierto.abierto && !restaurante?.permitirPedidosProgramados}
                                 >
-                                    {!estadoAbierto.abierto ? 'Cerrado' : 'Continuar'}
-                                    {estadoAbierto.abierto && <ArrowLeft className="w-5 h-5 ml-2 rotate-180" />}
+                                    {!estadoAbierto.abierto && !restaurante?.permitirPedidosProgramados ? 'Cerrado' : 'Continuar'}
+                                    {(estadoAbierto.abierto || restaurante?.permitirPedidosProgramados) && <ArrowLeft className="w-5 h-5 ml-2 rotate-180" />}
                                 </Button>
                             </div>
                         )}
@@ -1090,6 +1112,12 @@ const ProductoCard = ({ producto, onClick, fullWidth, disenoAlternativo }: { pro
                         </span>
                     )}
                 </div>
+                {tieneDescuento && producto.descuentoFechaFin && formatTimeLeft(producto.descuentoFechaFin) && (
+                    <div className="mt-1.5 flex items-center gap-1 text-[10px] font-semibold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 px-2 py-0.5 rounded-full border border-amber-500/20 w-fit">
+                        <span>⏱</span>
+                        <span>Vence en {formatTimeLeft(producto.descuentoFechaFin)}</span>
+                    </div>
+                )}
             </div>
         )
     }
@@ -1140,6 +1168,12 @@ const ProductoCard = ({ producto, onClick, fullWidth, disenoAlternativo }: { pro
                             </span>
                         )}
                     </div>
+                    {tieneDescuento && producto.descuentoFechaFin && formatTimeLeft(producto.descuentoFechaFin) && (
+                        <div className="mt-1 flex items-center gap-1 text-[10px] font-semibold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 px-2 py-0.5 rounded-full border border-amber-500/20 w-fit">
+                            <span>⏱</span>
+                            <span>Vence en {formatTimeLeft(producto.descuentoFechaFin)}</span>
+                        </div>
+                    )}
                 </div>
             </div>
         )
@@ -1183,6 +1217,12 @@ const ProductoCard = ({ producto, onClick, fullWidth, disenoAlternativo }: { pro
                             </span>
                         )}
                     </div>
+                    {tieneDescuento && producto.descuentoFechaFin && formatTimeLeft(producto.descuentoFechaFin) && (
+                        <div className="mt-1 flex items-center gap-1 text-[10px] font-semibold text-amber-600 bg-amber-50/90 px-1.5 py-0.5 rounded-full border border-amber-500/20 w-fit">
+                            <span>⏱</span>
+                            <span>Vence en {formatTimeLeft(producto.descuentoFechaFin)}</span>
+                        </div>
+                    )}
                 </div>
             </div>
         </div>

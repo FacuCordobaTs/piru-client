@@ -1,9 +1,24 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useLayoutEffect, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router'
 import { Button } from '@/components/ui/button'
-import { CheckCircle2, Copy, Loader2, Store, Truck,  MapPin, Clock, Users } from 'lucide-react'
+import { CheckCircle2, Copy, Loader2, Store, Truck, MapPin, Clock, Users } from 'lucide-react'
 import { toast } from 'sonner'
 import { ThemeToggle } from '@/components/ThemeToggle'
+import { initMercadoPago, CardPayment } from '@mercadopago/sdk-react'
+
+/** Session flag: user clicked pay and was sent to Mercado Pago Checkout (survives redirect back). */
+const MP_CHECKOUT_LAUNCHED_KEY = 'mpCheckoutLaunchedSalaPedidoId'
+
+function getEffectiveMetodo(orderInfo: { metodoPago?: string; aliasDinamico?: string; cvuDinamico?: string } | null): string {
+  if (!orderInfo) return ''
+  const raw = orderInfo.metodoPago || ''
+  if (raw === 'efectivo') return 'cash'
+  if (raw === 'mercadopago') return 'mercadopago_bricks'
+  if (raw === 'transferencia') {
+    return orderInfo.aliasDinamico || orderInfo.cvuDinamico ? 'transferencia_automatica_cucuru' : 'manual_transfer'
+  }
+  return raw
+}
 
 const SuccessGrupal = () => {
   const { qrToken } = useParams()
@@ -13,6 +28,8 @@ const SuccessGrupal = () => {
   const [restauranteData, setRestauranteData] = useState<any>(null)
   const [pedidoEstado, setPedidoEstado] = useState<string | null>(null)
   const [rapiboyTrackingUrl, setRapiboyTrackingUrl] = useState<string | null>(null)
+  const [isCreatingMP, setIsCreatingMP] = useState(false)
+  const metaPurchaseTracked = useRef(false)
 
   useEffect(() => {
     const savedInfo = sessionStorage.getItem('salaOrderInfo')
@@ -39,16 +56,25 @@ const SuccessGrupal = () => {
               secundario: rest.colorSecundario
             }))
           }
+          // Auto-confirm for cash
+          const m = getEffectiveMetodo(JSON.parse(sessionStorage.getItem('salaOrderInfo') || '{}'))
+          if (m === 'cash') setStatus('confirmed')
         }
       } catch (err) {
         console.error('Error fetching restaurante:', err)
       }
     }
-    if (orderInfo?.token) {
-      fetchRestaurante()
-    }
+    if (orderInfo?.token) fetchRestaurante()
   }, [orderInfo?.token])
 
+  // Init MercadoPago SDK for Bricks
+  useLayoutEffect(() => {
+    const m = getEffectiveMetodo(orderInfo)
+    if (!orderInfo || m !== 'mercadopago_bricks' || !restauranteData?.mpPublicKey) return
+    initMercadoPago(restauranteData.mpPublicKey, { locale: 'es-AR' })
+  }, [orderInfo, restauranteData?.mpPublicKey])
+
+  // Fetch initial pedido status
   useEffect(() => {
     if (!orderInfo?.pedidoId || !orderInfo?.tipoPedido) return
     const fetchStatus = async () => {
@@ -57,7 +83,13 @@ const SuccessGrupal = () => {
         const res = await fetch(`${url}/public/pedido/${orderInfo.tipoPedido}/${orderInfo.pedidoId}/status`)
         const data = await res.json()
         if (data.success) {
-          if (data.pagado) setStatus('confirmed')
+          if (data.pagado) {
+            setStatus('confirmed')
+            sessionStorage.removeItem(MP_CHECKOUT_LAUNCHED_KEY)
+          } else {
+            const launched = sessionStorage.getItem(MP_CHECKOUT_LAUNCHED_KEY)
+            if (launched === String(orderInfo.pedidoId)) setStatus('verifying')
+          }
           if (data.estado) setPedidoEstado(data.estado)
           if (data.rapiboyTrackingUrl) setRapiboyTrackingUrl(data.rapiboyTrackingUrl)
         }
@@ -68,6 +100,7 @@ const SuccessGrupal = () => {
     fetchStatus()
   }, [orderInfo?.pedidoId, orderInfo?.tipoPedido])
 
+  // WebSocket for live updates
   useEffect(() => {
     if (!orderInfo?.pedidoId || !orderInfo?.tipoPedido) return
 
@@ -84,6 +117,7 @@ const SuccessGrupal = () => {
         const data = JSON.parse(event.data)
         if (data.type === 'PAGO_ACREDITADO') {
           setStatus('confirmed')
+          sessionStorage.removeItem(MP_CHECKOUT_LAUNCHED_KEY)
           toast.success('¡Transferencia recibida!', {
             icon: <CheckCircle2 className="w-5 h-5 text-green-500" />,
             duration: 6000
@@ -106,6 +140,7 @@ const SuccessGrupal = () => {
     return () => ws.close()
   }, [orderInfo?.pedidoId, orderInfo?.tipoPedido])
 
+  // Polling while verifying
   useEffect(() => {
     if (status !== 'verifying' || !orderInfo) return
     let isChecking = false
@@ -118,7 +153,8 @@ const SuccessGrupal = () => {
         const data = await res.json()
         if (data.success && data.pagado) {
           setStatus('confirmed')
-          toast.success('¡Transferencia recibida!', {
+          sessionStorage.removeItem(MP_CHECKOUT_LAUNCHED_KEY)
+          toast.success('¡Pago confirmado!', {
             icon: <CheckCircle2 className="w-5 h-5 text-green-500" />,
             duration: 6000
           })
@@ -140,16 +176,113 @@ const SuccessGrupal = () => {
     }
   }, [status, orderInfo])
 
+  // Meta Pixel Purchase event on confirm
+  useEffect(() => {
+    if (status !== 'confirmed' || !orderInfo || metaPurchaseTracked.current) return
+    const total = parseFloat(orderInfo.total)
+    if (isNaN(total) || total <= 0) return
+    metaPurchaseTracked.current = true
+    try {
+      const fbq = (window as any).fbq
+      if (typeof fbq === 'function') fbq('track', 'Purchase', { currency: 'ARS', value: total })
+    } catch { /* ignore */ }
+  }, [status, orderInfo])
+
   if (!orderInfo) return null
 
   const { items, tipoPedido, total, pedidoId, deliveryFee, direccion, aliasDinamico, cvuDinamico } = orderInfo
+  const effectiveMetodo = getEffectiveMetodo(orderInfo)
+  const isManualTransferMetodo = effectiveMetodo === 'manual_transfer'
+  const isAutoTransferMetodo = effectiveMetodo === 'transferencia_automatica_cucuru' || effectiveMetodo === 'transferencia_automatica_talo'
+  const isMpBricksMetodo = effectiveMetodo === 'mercadopago_bricks' || effectiveMetodo === 'mercadopago'
+  const isMpCheckoutMetodo = effectiveMetodo === 'mercadopago_checkout'
+  const isCash = effectiveMetodo === 'cash'
 
   const handleCopyAlias = async (aliasToCopy: string) => {
     try {
       await navigator.clipboard.writeText(aliasToCopy)
       toast.success('Alias copiado', { description: aliasToCopy })
-    } catch (err) {
+    } catch {
       toast.error('No se pudo copiar el alias')
+    }
+  }
+
+  const handleCardPaymentSubmit = async (formData: {
+    token: string
+    issuer_id: string
+    payment_method_id: string
+    transaction_amount: number
+    installments: number
+    payer: { email?: string; identification?: { type?: string; number?: string } }
+  }) => {
+    setIsCreatingMP(true)
+    try {
+      const url = import.meta.env.VITE_API_URL || 'http://localhost:3000/api'
+      const response = await fetch(`${url}/mp/process-brick`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          token: formData.token,
+          installments: formData.installments,
+          payment_method_id: formData.payment_method_id,
+          issuer_id: formData.issuer_id,
+          payer: {
+            email: formData.payer?.email,
+            identification: formData.payer?.identification
+              ? { type: formData.payer.identification.type, number: formData.payer.identification.number }
+              : undefined
+          },
+          pedidoId: orderInfo.pedidoId
+        })
+      })
+      const data = await response.json()
+      if (data.success) {
+        if (data.status === 'approved') { setStatus('confirmed'); return }
+        if (data.status === 'pending') {
+          setStatus('verifying')
+          toast.message('Pago en proceso', { description: 'Te avisamos cuando se acredite. No cierres esta pantalla.' })
+          return
+        }
+        if (data.status === 'rejected') {
+          toast.error('Pago rechazado', { description: data.message || 'Revisá los datos o probá con otra tarjeta.' })
+          throw new Error('mp_rejected')
+        }
+        toast.error('No se pudo completar el pago', { description: 'Intentá de nuevo.' })
+        throw new Error('mp_error')
+      }
+      toast.error('No se pudo procesar el pago', { description: data.error || 'Intentá de nuevo' })
+      throw new Error('mp_error')
+    } catch (err) {
+      console.error(err)
+      if (err instanceof Error && err.message !== 'mp_rejected' && err.message !== 'mp_error') {
+        toast.error('Error de conexión al procesar el pago')
+      }
+      throw err
+    } finally {
+      setIsCreatingMP(false)
+    }
+  }
+
+  const handleMercadoPagoCheckoutRedirect = async () => {
+    setIsCreatingMP(true)
+    try {
+      const url = import.meta.env.VITE_API_URL || 'http://localhost:3000/api'
+      const response = await fetch(`${url}/mp/crear-preferencia-externo`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pedidoId: orderInfo.pedidoId }),
+      })
+      const data = await response.json()
+      if (data.success && data.url_pago) {
+        sessionStorage.setItem(MP_CHECKOUT_LAUNCHED_KEY, String(orderInfo.pedidoId))
+        window.location.href = data.url_pago
+        return
+      }
+      toast.error('No se pudo iniciar el pago', { description: data.error || 'Intentá de nuevo.' })
+    } catch {
+      toast.error('Error de conexión al iniciar Mercado Pago')
+    } finally {
+      setIsCreatingMP(false)
     }
   }
 
@@ -261,45 +394,112 @@ const SuccessGrupal = () => {
               </div>
               <div className="space-y-1">
                 <h1 className="text-2xl font-black tracking-tight">¡Casi listo!</h1>
-                <p className="text-muted-foreground">Pedido grupal #{pedidoId} creado. Un integrante debe transferir el total.</p>
+                <p className="text-muted-foreground">Pedido grupal #{pedidoId} creado.</p>
               </div>
             </div>
 
             <div className="bg-primary/5 border border-primary/20 rounded-2xl p-6 shadow-sm mx-auto max-w-sm w-full space-y-4">
-              <p className="font-medium text-primary/80 text-center">Total a transferir</p>
+              <p className="font-medium text-primary/80 text-center">
+                {isMpBricksMetodo || isMpCheckoutMetodo ? 'Total a pagar' : 'Total a transferir'}
+              </p>
               <p className="text-4xl font-black text-center">${parseFloat(total || '0').toFixed(2)}</p>
 
-              {(aliasDinamico || cvuDinamico) ? (
-                <>
-                  <Button
-                    className="w-full h-14 text-lg font-bold rounded-xl shadow-md gap-3 bg-purple-600 hover:bg-purple-700 text-white"
-                    onClick={() => {
-                      handleCopyAlias(aliasDinamico || cvuDinamico!)
-                      setStatus('verifying')
-                    }}
-                  >
-                    <Copy className="w-5 h-5" />
-                    Copiar Alias: {aliasDinamico || cvuDinamico}
-                  </Button>
-                  {cvuDinamico && (
+              <div className="pt-2">
+                {isManualTransferMetodo ? (
+                  <>
+                    {restauranteData?.transferenciaAlias ? (
+                      <Button
+                        variant="outline"
+                        className="w-full h-14 text-base font-bold rounded-xl border-2 border-primary/30 gap-2"
+                        onClick={() => handleCopyAlias(restauranteData.transferenciaAlias)}
+                      >
+                        <Copy className="w-5 h-5 shrink-0" />
+                        <span className="truncate">{restauranteData.transferenciaAlias}</span>
+                      </Button>
+                    ) : (
+                      <p className="text-sm text-center text-muted-foreground">
+                        Este local aún no indicó un alias para transferencias. Contactalos para coordinar el pago.
+                      </p>
+                    )}
+                    <p className="text-xs text-center text-muted-foreground mt-3 font-medium">
+                      Transferí el monto exacto y enviá el comprobante al local.
+                    </p>
+                  </>
+                ) : isAutoTransferMetodo ? (
+                  (aliasDinamico || cvuDinamico) ? (
+                    <>
+                      <Button
+                        className="w-full h-14 text-lg font-bold rounded-xl shadow-md gap-3 bg-purple-600 hover:bg-purple-700 text-white"
+                        onClick={() => {
+                          handleCopyAlias(aliasDinamico || cvuDinamico!)
+                          setStatus('verifying')
+                        }}
+                      >
+                        <Copy className="w-5 h-5" />
+                        Copiar Alias: {aliasDinamico || cvuDinamico}
+                      </Button>
+                      {cvuDinamico && (
+                        <Button
+                          variant="outline"
+                          className="w-full h-11 text-sm font-mono rounded-xl border border-primary/30 hover:bg-primary/10 mt-2"
+                          onClick={() => handleCopyAlias(cvuDinamico)}
+                        >
+                          <Copy className="w-4 h-4 mr-2" />
+                          CBU: {cvuDinamico}
+                        </Button>
+                      )}
+                      <p className="text-xs text-center text-muted-foreground mt-3 font-medium">
+                        Copiá el alias o CBU y transferí el monto exacto desde tu app bancaria. Todos verán cuando se confirme.
+                      </p>
+                    </>
+                  ) : (
+                    <p className="text-sm text-center text-muted-foreground">
+                      Cargando datos de pago...
+                    </p>
+                  )
+                ) : isMpBricksMetodo ? (
+                  restauranteData?.mpPublicKey ? (
+                    <div className="w-full relative mt-1 space-y-2">
+                      {isCreatingMP && (
+                        <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/80 backdrop-blur-sm rounded-xl min-h-[120px]">
+                          <Loader2 className="w-8 h-8 text-primary animate-spin" />
+                        </div>
+                      )}
+                      <p className="text-xs text-center text-muted-foreground">
+                        Completá los datos de tu tarjeta. El cobro lo procesa Mercado Pago de forma segura.
+                      </p>
+                      <CardPayment
+                        locale="es-AR"
+                        initialization={{ amount: Number(total) }}
+                        customization={{ paymentMethods: { maxInstallments: 12 } }}
+                        onSubmit={handleCardPaymentSubmit}
+                        onError={() => {
+                          toast.error('No se pudo cargar el formulario de pago', {
+                            description: 'Actualizá la página o probá más tarde.'
+                          })
+                        }}
+                      />
+                    </div>
+                  ) : (
+                    <p className="text-sm text-center text-muted-foreground">
+                      Este local no tiene habilitado el pago con tarjeta.
+                    </p>
+                  )
+                ) : isMpCheckoutMetodo ? (
+                  <div className="space-y-3">
+                    <p className="text-xs text-center text-muted-foreground leading-snug">
+                      Te redirigimos a Mercado Pago para abonar con dinero en cuenta, tarjeta u otros medios.
+                    </p>
                     <Button
-                      variant="outline"
-                      className="w-full h-11 text-sm font-mono rounded-xl border border-primary/30 hover:bg-primary/10 mt-2"
-                      onClick={() => handleCopyAlias(cvuDinamico)}
+                      className="w-full h-14 text-lg font-bold rounded-xl bg-[#009EE3] hover:bg-[#008ed4] text-white"
+                      onClick={handleMercadoPagoCheckoutRedirect}
+                      disabled={isCreatingMP}
                     >
-                      <Copy className="w-4 h-4 mr-2" />
-                      CBU: {cvuDinamico}
+                      {isCreatingMP ? <Loader2 className="w-6 h-6 animate-spin" /> : 'Ir a Mercado Pago'}
                     </Button>
-                  )}
-                  <p className="text-xs text-center text-muted-foreground mt-3 font-medium">
-                    Copiá el alias o CBU y transferí el monto exacto desde tu app bancaria. Todos verán cuando se confirme.
-                  </p>
-                </>
-              ) : (
-                <p className="text-sm text-center text-muted-foreground">
-                  Cargando datos de pago...
-                </p>
-              )}
+                  </div>
+                ) : null}
+              </div>
             </div>
 
             <OrderSummary />
@@ -313,12 +513,31 @@ const SuccessGrupal = () => {
                 <Loader2 className="w-14 h-14 text-primary animate-spin absolute" />
               </div>
               <div className="space-y-1">
-                <h2 className="text-xl font-bold">Aguardando transferencia...</h2>
-                <p className="text-muted-foreground text-sm animate-pulse">Quien vaya a pagar debe transferir el monto exacto. Todos verán cuando se confirme.</p>
+                <h2 className="text-xl font-bold">
+                  {isMpCheckoutMetodo
+                    ? 'Confirmando pago en Mercado Pago...'
+                    : isMpBricksMetodo
+                      ? 'Confirmando pago con tarjeta...'
+                      : 'Aguardando transferencia...'}
+                </h2>
+                <p className="text-muted-foreground text-sm animate-pulse">
+                  {isMpCheckoutMetodo
+                    ? 'Si ya pagaste en Mercado Pago, la acreditación puede tardar unos segundos. No cierres esta pantalla.'
+                    : isMpBricksMetodo
+                      ? 'Mercado Pago puede tardar unos segundos. No cierres esta pantalla.'
+                      : 'Quien vaya a pagar debe transferir el monto exacto. Todos verán cuando se confirme.'}
+                </p>
               </div>
             </div>
 
-            {(aliasDinamico || cvuDinamico) && (
+            {(isMpBricksMetodo || isMpCheckoutMetodo) && (
+              <div className="bg-primary/5 border border-primary/20 rounded-2xl p-5 max-w-sm mx-auto w-full text-center">
+                <p className="text-xs font-semibold text-primary/80">Monto del pedido</p>
+                <p className="text-3xl font-black mt-1">${parseFloat(total || '0').toFixed(2)}</p>
+              </div>
+            )}
+
+            {!isMpBricksMetodo && !isMpCheckoutMetodo && (aliasDinamico || cvuDinamico) && (
               <div className="bg-primary/5 border border-primary/20 rounded-2xl p-5 space-y-3 max-w-sm mx-auto w-full">
                 <p className="text-xs font-bold text-primary/80 text-center">Transferí este monto exacto:</p>
                 <p className="text-3xl font-black text-center">${parseFloat(total || '0').toFixed(2)}</p>
@@ -334,7 +553,7 @@ const SuccessGrupal = () => {
                   <Button
                     variant="outline"
                     size="sm"
-                    className="w-full h-10 text-xs font-mono rounded-xl border-primary/20 hover:bg-primary/10"
+                    className="w-full h-10 text-xs font-mono rounded-xl border-primary/20 hover:bg-primary/10 mt-2"
                     onClick={() => handleCopyAlias(cvuDinamico)}
                   >
                     <Copy className="w-5 h-5 mr-2" />
@@ -413,34 +632,76 @@ const SuccessGrupal = () => {
             </div>
 
             <div className="bg-card border border-border rounded-2xl overflow-hidden shadow-sm">
-              {(aliasDinamico || cvuDinamico) && (
-                <div className="p-4 border-b border-border bg-primary/5">
-                  <div className="flex items-center justify-between mb-2">
-                    <p className="text-sm font-bold text-primary/80">Alias / CBU de transferencia</p>
-                    <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400">
-                      Verificación automática
-                    </span>
-                  </div>
-                  <Button
-                    variant="outline"
-                    className="w-full h-11 text-base font-bold rounded-xl border-primary/20 hover:bg-primary/10"
-                    onClick={() => handleCopyAlias(aliasDinamico || cvuDinamico!)}
-                  >
-                    <Copy className="w-4 h-4 mr-2 text-primary" />
-                    {aliasDinamico || cvuDinamico}
-                  </Button>
-                  {cvuDinamico && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="w-full h-9 text-xs font-mono rounded-xl border-primary/20 hover:bg-primary/10 mt-2"
-                      onClick={() => handleCopyAlias(cvuDinamico)}
-                    >
-                      <Copy className="w-4 h-4 mr-2" /> CBU: {cvuDinamico}
-                    </Button>
+              {/* Payment info */}
+              {(!pedidoEstado || !['dispatched', 'delivered', 'archived'].includes(pedidoEstado)) && (
+                <>
+                  {isAutoTransferMetodo && (aliasDinamico || cvuDinamico) && (
+                    <div className="p-4 border-b border-border bg-primary/5">
+                      <div className="flex items-center justify-between mb-2">
+                        <p className="text-sm font-bold text-primary/80">Alias / CBU de transferencia</p>
+                        <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400">
+                          Verificación automática
+                        </span>
+                      </div>
+                      <Button
+                        variant="outline"
+                        className="w-full h-11 text-base font-bold rounded-xl border-primary/20 hover:bg-primary/10"
+                        onClick={() => handleCopyAlias(aliasDinamico || cvuDinamico!)}
+                      >
+                        <Copy className="w-4 h-4 mr-2 text-primary" />
+                        {aliasDinamico || cvuDinamico}
+                      </Button>
+                      {cvuDinamico && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="w-full h-9 text-xs font-mono rounded-xl border-primary/20 hover:bg-primary/10 mt-2"
+                          onClick={() => handleCopyAlias(cvuDinamico)}
+                        >
+                          <Copy className="w-4 h-4 mr-2" /> CBU: {cvuDinamico}
+                        </Button>
+                      )}
+                      <p className="text-xs mt-2 text-center text-muted-foreground">Total: ${parseFloat(total || '0').toFixed(2)}</p>
+                    </div>
                   )}
-                  <p className="text-xs mt-2 text-center text-muted-foreground">Total: ${parseFloat(total || '0').toFixed(2)}</p>
-                </div>
+
+                  {isManualTransferMetodo && restauranteData?.transferenciaAlias && (
+                    <div className="p-4 border-b border-border bg-primary/5">
+                      <p className="text-sm font-bold text-primary/80 mb-2">Transferencia manual</p>
+                      <Button
+                        variant="outline"
+                        className="w-full h-11 text-base font-bold rounded-xl border-primary/20 hover:bg-primary/10"
+                        onClick={() => handleCopyAlias(restauranteData.transferenciaAlias)}
+                      >
+                        <Copy className="w-4 h-4 mr-2 text-primary" />
+                        {restauranteData.transferenciaAlias}
+                      </Button>
+                    </div>
+                  )}
+
+                  {isCash && (
+                    <div className="p-4 border-b border-border bg-emerald-50 dark:bg-emerald-950/20 text-center">
+                      <p className="text-sm font-bold text-emerald-800 dark:text-emerald-400">Pago en Efectivo</p>
+                      <p className="text-xs mt-1 text-muted-foreground">Aboná el importe exacto al recibir tu pedido.</p>
+                    </div>
+                  )}
+
+                  {isMpCheckoutMetodo && (
+                    <div className="p-4 border-b border-border bg-primary/5 text-center">
+                      <p className="text-sm font-bold text-primary/80">Pago vía Mercado Pago Checkout</p>
+                      <p className="text-xs mt-1 text-muted-foreground">
+                        Abonaste en el sitio de Mercado Pago.
+                      </p>
+                    </div>
+                  )}
+
+                  {isMpBricksMetodo && (
+                    <div className="p-4 border-b border-border bg-primary/5 text-center">
+                      <p className="text-sm font-bold text-primary/80">Pago con tarjeta</p>
+                      <p className="text-xs mt-1 text-muted-foreground">El cobro con tarjeta fue procesado por Mercado Pago.</p>
+                    </div>
+                  )}
+                </>
               )}
 
               <div className="p-4">
@@ -496,6 +757,7 @@ const SuccessGrupal = () => {
               className="w-full h-12 rounded-xl font-semibold"
               onClick={() => {
                 sessionStorage.removeItem('salaOrderInfo')
+                sessionStorage.removeItem(MP_CHECKOUT_LAUNCHED_KEY)
                 navigate(qrToken ? `/sala/${qrToken}` : '/')
               }}
             >

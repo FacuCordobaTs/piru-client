@@ -298,16 +298,16 @@ const Menu = () => {
             deliveryFee: data.order.deliveryFee,
             zonaNombre: data.order.zonaNombre,
             direccion: data.order.direccion,
-            metodoPago: 'transferencia',
+            metodoPago: data.order.metodoPago || checkoutDeliveryData?.metodoPago || 'transferencia',
+            montoDescuento: data.order.montoDescuento ? parseFloat(data.order.montoDescuento) : undefined,
           }))
           window.location.href = `/sala/${data.order.token}/success`
         }
       } catch { /* ignore */ }
     }
-    const t = setTimeout(poll, 500)
-    const interval = setInterval(poll, 1500)
+    poll()
+    const interval = setInterval(poll, 500)
     return () => {
-      clearTimeout(t)
       clearInterval(interval)
     }
   }, [todosConfirmaron, urlQrToken])
@@ -753,113 +753,124 @@ const Menu = () => {
       {/* --- MODAL DE CONFIRMACIÓN GRUPAL --- */}
       <Dialog open={confirmacionGrupalOpen} onOpenChange={() => { }}>
         <DialogContent className="max-w-sm rounded-2xl p-4 sm:p-5 max-h-[85dvh] flex flex-col" onPointerDownOutside={(e) => e.preventDefault()}>
-          <DialogHeader className="text-center shrink-0">
-            <div className="mx-auto w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-primary/10 flex items-center justify-center mb-2 sm:mb-3">
-              <Users className="w-6 h-6 sm:w-7 sm:h-7 text-primary" />
+          {todosConfirmaron ? (
+            <div className="flex flex-col items-center justify-center py-8 gap-4">
+              <Loader2 className="w-12 h-12 text-primary animate-spin" />
+              <DialogTitle className="text-lg font-bold text-center">¡Todos confirmaron!</DialogTitle>
+              <DialogDescription className="text-center text-sm">
+                Estamos preparando tu pedido, te redirigimos en un momento...
+              </DialogDescription>
             </div>
-            <DialogTitle className="text-lg sm:text-xl">Confirmación del Pedido</DialogTitle>
-            <DialogDescription className="text-center pt-1 text-sm">
-              {confirmacionGrupal?.iniciadaPorNombre === clienteNombre
-                ? 'Esperando que todos confirmen...'
-                : `${confirmacionGrupal?.iniciadaPorNombre} quiere confirmar`
-              }
-            </DialogDescription>
-          </DialogHeader>
-
-          {/* Resumen del pedido (sala: datos de envío) - compacto */}
-          {esSala && checkoutDeliveryData && (
-            <div className="mt-2 sm:mt-3 p-3 rounded-xl bg-secondary/50 border border-border/50 space-y-1 text-left shrink-0 overflow-hidden">
-              <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Resumen</p>
-              <p className="text-xs truncate"><span className="text-muted-foreground">Nombre:</span> {checkoutDeliveryData.nombre}</p>
-              <p className="text-xs truncate"><span className="text-muted-foreground">Celular:</span> {checkoutDeliveryData.telefono}</p>
-              {checkoutDeliveryData.tipoPedido === 'delivery' && (
-                <p className="text-xs truncate"><span className="text-muted-foreground">Dirección:</span> {checkoutDeliveryData.direccion}</p>
-              )}
-              {checkoutDeliveryData.tipoPedido === 'delivery' && checkoutDeliveryData.deliveryFee > 0 && (
-                <p className="text-xs"><span className="text-muted-foreground">Envío:</span> ${checkoutDeliveryData.deliveryFee.toFixed(2)}</p>
-              )}
-              <p className="text-sm font-bold pt-1.5 border-t border-border/50">Total: ${checkoutDeliveryData.total}</p>
-            </div>
-          )}
-
-          {/* Lista de usuarios - scroll interno si hace falta */}
-          <div className="mt-2 sm:mt-3 min-h-0 flex-1 overflow-y-auto">
-            <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide text-center mb-2">
-              {totalConfirmados}/{totalClientes} confirmados
-              {todosConfirmaron && <span className="block text-primary font-normal normal-case mt-1">Procesando pedido...</span>}
-            </p>
-
-            <div className="flex flex-wrap justify-center gap-2 sm:gap-3 py-2">
-              {confirmacionGrupal?.confirmaciones.map((conf) => {
-                const esYo = conf.clienteId === clienteId
-                return (
-                  <div key={conf.clienteId} className="flex flex-col items-center gap-1">
-                    <div className={`relative w-11 h-11 sm:w-12 sm:h-12 rounded-lg border-2 shadow-sm flex items-center justify-center font-bold text-xs transition-all duration-300 ${conf.confirmado
-                      ? 'bg-primary border-primary text-primary-foreground ring-2 ring-primary/30'
-                      : 'bg-zinc-200 dark:bg-zinc-700 border-zinc-300 dark:border-zinc-600 text-zinc-500 dark:text-zinc-400'
-                      }`}>
-                      {conf.nombre.slice(0, 2).toUpperCase()}
-                      {conf.confirmado && (
-                        <div className="absolute -bottom-0.5 -right-0.5 w-4 h-4 bg-green-500 rounded-full flex items-center justify-center">
-                          <Check className="w-2.5 h-2.5 text-white" />
-                        </div>
-                      )}
-                      {!conf.confirmado && (
-                        <div className="absolute -bottom-0.5 -right-0.5 w-4 h-4 bg-zinc-400 dark:bg-zinc-500 rounded-full flex items-center justify-center">
-                          <Loader2 className="w-2.5 h-2.5 text-white animate-spin" />
-                        </div>
-                      )}
-                    </div>
-                    <span className={`text-[10px] font-medium truncate max-w-[48px] sm:max-w-[56px] text-center ${esYo ? 'text-foreground' : 'text-muted-foreground'
-                      }`}>
-                      {esYo ? 'Tú' : conf.nombre}
-                    </span>
-                  </div>
-                )
-              })}
-            </div>
-          </div>
-
-          <DialogFooter className="flex-col gap-2 shrink-0 mt-3 pt-3 border-t border-border/50">
-            {!yaConfirme ? (
-              <>
-                <Button
-                  size="sm"
-                  onClick={confirmarMiParte}
-                  className="w-full h-11 rounded-xl font-semibold bg-primary hover:bg-primary/90"
-                >
-                  <Check className="w-4 h-4 mr-2" />
-                  Confirmar mi pedido
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={cancelarConfirmacion}
-                  className="w-full h-10 rounded-xl text-destructive hover:bg-destructive/10"
-                >
-                  <X className="w-4 h-4 mr-2" />
-                  Cancelar
-                </Button>
-              </>
-            ) : (
-              <>
-                <div className="w-full py-2 px-3 rounded-xl bg-primary/10 text-center">
-                  <p className="text-xs font-medium text-primary">
-                    ✓ Ya confirmaste. Esperando a los demás...
-                  </p>
+          ) : (
+            <>
+              <DialogHeader className="text-center shrink-0">
+                <div className="mx-auto w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-primary/10 flex items-center justify-center mb-2 sm:mb-3">
+                  <Users className="w-6 h-6 sm:w-7 sm:h-7 text-primary" />
                 </div>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={cancelarConfirmacion}
-                  className="w-full h-10 rounded-xl text-destructive hover:bg-destructive/10"
-                >
-                  <X className="w-4 h-4 mr-2" />
-                  Cancelar para todos
-                </Button>
-              </>
-            )}
-          </DialogFooter>
+                <DialogTitle className="text-lg sm:text-xl">Confirmación del Pedido</DialogTitle>
+                <DialogDescription className="text-center pt-1 text-sm">
+                  {confirmacionGrupal?.iniciadaPorNombre === clienteNombre
+                    ? 'Esperando que todos confirmen...'
+                    : `${confirmacionGrupal?.iniciadaPorNombre} quiere confirmar`
+                  }
+                </DialogDescription>
+              </DialogHeader>
+
+              {/* Resumen del pedido (sala: datos de envío) - compacto */}
+              {esSala && checkoutDeliveryData && (
+                <div className="mt-2 sm:mt-3 p-3 rounded-xl bg-secondary/50 border border-border/50 space-y-1 text-left shrink-0 overflow-hidden">
+                  <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Resumen</p>
+                  <p className="text-xs truncate"><span className="text-muted-foreground">Nombre:</span> {checkoutDeliveryData.nombre}</p>
+                  <p className="text-xs truncate"><span className="text-muted-foreground">Celular:</span> {checkoutDeliveryData.telefono}</p>
+                  {checkoutDeliveryData.tipoPedido === 'delivery' && (
+                    <p className="text-xs truncate"><span className="text-muted-foreground">Dirección:</span> {checkoutDeliveryData.direccion}</p>
+                  )}
+                  {checkoutDeliveryData.tipoPedido === 'delivery' && checkoutDeliveryData.deliveryFee > 0 && (
+                    <p className="text-xs"><span className="text-muted-foreground">Envío:</span> ${checkoutDeliveryData.deliveryFee.toFixed(2)}</p>
+                  )}
+                  <p className="text-sm font-bold pt-1.5 border-t border-border/50">Total: ${checkoutDeliveryData.total}</p>
+                </div>
+              )}
+
+              {/* Lista de usuarios - scroll interno si hace falta */}
+              <div className="mt-2 sm:mt-3 min-h-0 flex-1 overflow-y-auto">
+                <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide text-center mb-2">
+                  {totalConfirmados}/{totalClientes} confirmados
+                </p>
+
+                <div className="flex flex-wrap justify-center gap-2 sm:gap-3 py-2">
+                  {confirmacionGrupal?.confirmaciones.map((conf) => {
+                    const esYo = conf.clienteId === clienteId
+                    return (
+                      <div key={conf.clienteId} className="flex flex-col items-center gap-1">
+                        <div className={`relative w-11 h-11 sm:w-12 sm:h-12 rounded-lg border-2 shadow-sm flex items-center justify-center font-bold text-xs transition-all duration-300 ${conf.confirmado
+                          ? 'bg-primary border-primary text-primary-foreground ring-2 ring-primary/30'
+                          : 'bg-zinc-200 dark:bg-zinc-700 border-zinc-300 dark:border-zinc-600 text-zinc-500 dark:text-zinc-400'
+                          }`}>
+                          {conf.nombre.slice(0, 2).toUpperCase()}
+                          {conf.confirmado && (
+                            <div className="absolute -bottom-0.5 -right-0.5 w-4 h-4 bg-green-500 rounded-full flex items-center justify-center">
+                              <Check className="w-2.5 h-2.5 text-white" />
+                            </div>
+                          )}
+                          {!conf.confirmado && (
+                            <div className="absolute -bottom-0.5 -right-0.5 w-4 h-4 bg-zinc-400 dark:bg-zinc-500 rounded-full flex items-center justify-center">
+                              <Loader2 className="w-2.5 h-2.5 text-white animate-spin" />
+                            </div>
+                          )}
+                        </div>
+                        <span className={`text-[10px] font-medium truncate max-w-[48px] sm:max-w-[56px] text-center ${esYo ? 'text-foreground' : 'text-muted-foreground'
+                          }`}>
+                          {esYo ? 'Tú' : conf.nombre}
+                        </span>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+
+              <DialogFooter className="flex-col gap-2 shrink-0 mt-3 pt-3 border-t border-border/50">
+                {!yaConfirme ? (
+                  <>
+                    <Button
+                      size="sm"
+                      onClick={confirmarMiParte}
+                      className="w-full h-11 rounded-xl font-semibold bg-primary hover:bg-primary/90"
+                    >
+                      <Check className="w-4 h-4 mr-2" />
+                      Confirmar mi pedido
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={cancelarConfirmacion}
+                      className="w-full h-10 rounded-xl text-destructive hover:bg-destructive/10"
+                    >
+                      <X className="w-4 h-4 mr-2" />
+                      Cancelar
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <div className="w-full py-2 px-3 rounded-xl bg-primary/10 text-center">
+                      <p className="text-xs font-medium text-primary">
+                        ✓ Ya confirmaste. Esperando a los demás...
+                      </p>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={cancelarConfirmacion}
+                      className="w-full h-10 rounded-xl text-destructive hover:bg-destructive/10"
+                    >
+                      <X className="w-4 h-4 mr-2" />
+                      Cancelar para todos
+                    </Button>
+                  </>
+                )}
+              </DialogFooter>
+            </>
+          )}
         </DialogContent>
       </Dialog>
 

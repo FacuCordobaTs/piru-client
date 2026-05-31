@@ -4,12 +4,14 @@ import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { toast } from 'sonner'
-import { MapPin, Store, Truck, AlertTriangle, Loader2, Pencil, Check, X, Tag, Home, Building2, Clock, CreditCard, Wallet, Zap } from 'lucide-react'
+import { MapPin, Store, Truck, AlertTriangle, Loader2, Pencil, X, Tag, Home, Building2, Clock, CreditCard, Wallet, Zap, ChevronLeft } from 'lucide-react'
 import { AddressAutocomplete } from '@/components/AddressAutocomplete'
 import { AddressMapPreview } from '@/components/AddressMapPreview'
 import type { CheckoutDeliveryData, CheckoutEditSemaphore } from '@/store/mesaStore'
 
 type MetodoPublico = { id: string; label: string; automatico: boolean }
+
+type PasoCheckout = 'tipo' | 'datos' | 'ubicacion' | 'extras'
 
 interface CheckoutDeliveryGrupalProps {
   restauranteId: number
@@ -23,6 +25,12 @@ interface CheckoutDeliveryGrupalProps {
   checkoutData: CheckoutDeliveryData | null
   editSemaphore: CheckoutEditSemaphore | null
   restauranteDireccion?: string
+  /** 'completo' = formulario completo scrolleable (drawer expandido). 'pasos' = wizard paso a paso (drawer comprimido). */
+  modo: 'completo' | 'pasos'
+  /** Volver a la vista del carrito */
+  onVolverCarrito: () => void
+  /** Callback para notificar el título actual al drawer padre */
+  onTituloChange?: (titulo: string) => void
 }
 
 export function CheckoutDeliveryGrupal({
@@ -36,7 +44,10 @@ export function CheckoutDeliveryGrupal({
   clienteNombre,
   checkoutData,
   editSemaphore,
-  restauranteDireccion
+  restauranteDireccion,
+  modo,
+  onVolverCarrito,
+  onTituloChange,
 }: CheckoutDeliveryGrupalProps) {
   const [tipoPedido, setTipoPedido] = useState<'delivery' | 'takeaway'>(checkoutData?.tipoPedido || 'delivery')
   const [nombre, setNombre] = useState(checkoutData?.nombre || localStorage.getItem('cliente_nombre') || '')
@@ -67,6 +78,10 @@ export function CheckoutDeliveryGrupal({
   const [montoDescuento, setMontoDescuento] = useState(checkoutData?.montoDescuento ?? 0)
   const [validandoCodigo, setValidandoCodigo] = useState(false)
   const [codigoError, setCodigoError] = useState<string | null>(null)
+
+  // Paso actual del wizard (modo 'pasos')
+  const [paso, setPaso] = useState(0)
+  const pasos: PasoCheckout[] = ['tipo', 'datos', 'ubicacion', 'extras']
 
   const estoyEditando = editSemaphore?.clienteId === clienteId
   const alguienEditando = editSemaphore && !estoyEditando
@@ -319,6 +334,54 @@ export function CheckoutDeliveryGrupal({
     onConfirmarClick()
   }
 
+  // Al entrar al checkout sin datos y sin nadie editando, tomo la edición automáticamente
+  useEffect(() => {
+    if (!checkoutData && !editSemaphore && !estoyEditando) {
+      handleIniciarEdicion()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Reiniciar el wizard al empezar a editar
+  useEffect(() => {
+    if (estoyEditando) setPaso(0)
+  }, [estoyEditando])
+
+  // Validación por paso (wizard comprimido)
+  const validarPaso = (p: number): boolean => {
+    const k = pasos[p]
+    if (k === 'datos') {
+      if (!nombre.trim() || !telefono.trim()) { toast.error('Completa nombre y celular'); return false }
+    }
+    if (k === 'ubicacion') {
+      if (tipoPedido === 'delivery') {
+        if (!direccion.trim()) { toast.error('Ingresa la dirección'); return false }
+        if (lat === null || lng === null) { toast.error('Selecciona una dirección de las sugerencias'); return false }
+        if (fueraDeZona) { toast.error('La dirección está fuera del área de delivery'); return false }
+        if (!tipoDomicilio) { toast.error('Indicá si es casa o departamento'); return false }
+        if (tipoDomicilio === 'departamento' && (!piso.trim() || !numeroDepartamento.trim())) { toast.error('Ingresá el piso y el número de departamento'); return false }
+      } else {
+        if (sucursales.length > 1 && !sucursalSeleccionada) { toast.error('Seleccioná un local de retiro'); return false }
+      }
+    }
+    if (k === 'extras') {
+      if (programarPedido && !horarioProgramado.trim()) { toast.error('Ingresa el horario para tu pedido'); return false }
+    }
+    return true
+  }
+
+  const handleSiguiente = () => {
+    if (!validarPaso(paso)) return
+    if (paso < pasos.length - 1) setPaso(paso + 1)
+    else handleGuardarEdicion()
+  }
+
+  const handleAtras = () => {
+    if (estoyEditando && modo === 'pasos' && paso > 0) { setPaso(paso - 1); return }
+    if (estoyEditando) handleCancelarEdicion()
+    onVolverCarrito()
+  }
+
   const paymentTitle = (m: MetodoPublico) => {
     switch (m.id) {
       case 'cash': return 'Efectivo'
@@ -339,398 +402,502 @@ export function CheckoutDeliveryGrupal({
   const delEn = restauranteData ? restauranteData.deliveryEnabled !== false : true
   const tkEn = restauranteData ? restauranteData.takeawayEnabled !== false : true
 
-  return (
-    <div className="space-y-4">
-      <div className="space-y-1">
-        <h3 className="font-semibold text-base">Datos de envío</h3>
-        <p className="text-xs text-muted-foreground">Completa la información para el pedido grupal</p>
-      </div>
+  // ===== Secciones del formulario (reutilizadas en 'completo' y 'pasos') =====
 
-      {alguienEditando && (
-        <div className="flex items-center gap-2 px-3 py-2 bg-amber-500/10 rounded-xl border border-amber-500/30">
-          <Loader2 className="w-4 h-4 animate-spin text-amber-600 dark:text-amber-400 shrink-0" />
-          <span className="text-sm font-medium text-amber-700 dark:text-amber-300">
-            {editSemaphore?.clienteNombre} está editando
-          </span>
+  const secTipo = (
+    <section className="space-y-3">
+      {restauranteData && !delEn && !tkEn ? (
+        <div className="flex items-center gap-2 px-3 py-2 bg-destructive/10 rounded-xl border border-destructive/30">
+          <AlertTriangle className="w-4 h-4 text-destructive shrink-0" />
+          <p className="text-sm text-destructive font-medium">El local no está aceptando pedidos ahora.</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 gap-3">
+          <div
+            className={`flex flex-col items-center justify-center px-3 py-7 border-2 rounded-xl transition-colors ${restauranteData && !delEn ? 'opacity-40 cursor-not-allowed border-border' : `cursor-pointer ${tipoPedido === 'delivery' ? 'border-primary bg-primary/5' : 'border-border hover:bg-secondary/50'}`}`}
+            onClick={() => (!restauranteData || delEn) && setTipoPedido('delivery')}
+          >
+            <MapPin className={`w-6 h-6 mb-1 ${tipoPedido === 'delivery' ? 'text-primary' : 'text-muted-foreground'}`} />
+            <Label className="cursor-pointer text-sm font-medium">Delivery</Label>
+          </div>
+          <div
+            className={`flex flex-col items-center justify-center px-3 py-7 border-2 rounded-xl transition-colors ${restauranteData && !tkEn ? 'opacity-40 cursor-not-allowed border-border' : `cursor-pointer ${tipoPedido === 'takeaway' ? 'border-primary bg-primary/5' : 'border-border hover:bg-secondary/50'}`}`}
+            onClick={() => (!restauranteData || tkEn) && setTipoPedido('takeaway')}
+          >
+            <Store className={`w-6 h-6 mb-1 ${tipoPedido === 'takeaway' ? 'text-primary' : 'text-muted-foreground'}`} />
+            <Label className="cursor-pointer text-sm font-medium">Take Away</Label>
+          </div>
+        </div>
+      )}
+    </section>
+  )
+
+  const secDatos = (
+    <div className="space-y-3">
+      <div className="space-y-1.5">
+        <Label htmlFor="nombre-grupal">Nombre de quien recibe</Label>
+        <Input id="nombre-grupal" placeholder="Ej: Juan Perez" className="h-11 rounded-xl" value={nombre} onChange={e => setNombre(e.target.value)} />
+      </div>
+      <div className="space-y-1.5">
+        <Label htmlFor="telefono-grupal">Celular (WhatsApp)</Label>
+        <Input id="telefono-grupal" type="tel" placeholder="Ej: 5491112345678" className="h-11 rounded-xl" value={telefono} onChange={e => setTelefono(e.target.value.replace(/\D/g, ''))} />
+      </div>
+    </div>
+  )
+
+  const secUbicacion = (
+    <div className="space-y-3">
+      {/* Sucursal selector for takeaway with multiple branches */}
+      {tipoPedido === 'takeaway' && sucursales.length > 1 && (
+        <section className="space-y-2">
+          <Label className="text-sm">¿En qué local retirás?</Label>
+          <div className="grid grid-cols-1 gap-2">
+            {sucursales.map(s => (
+              <div
+                key={s.id}
+                onClick={() => setSucursalSeleccionada(s.id)}
+                className={`flex items-center gap-3 p-3 border-2 rounded-xl cursor-pointer transition-colors ${sucursalSeleccionada === s.id ? 'border-primary bg-primary/5' : 'border-border hover:bg-secondary/50'}`}
+              >
+                <Store className={`w-4 h-4 shrink-0 ${sucursalSeleccionada === s.id ? 'text-primary' : 'text-muted-foreground'}`} />
+                <div>
+                  <p className="font-semibold text-sm">{s.nombre}</p>
+                  {s.direccion && <p className="text-xs text-muted-foreground">{s.direccion}</p>}
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* Delivery address */}
+      {tipoPedido === 'delivery' && (
+        <div className="space-y-2 animate-in fade-in slide-in-from-top-2">
+          <Label htmlFor="direccion-grupal">Dirección de entrega</Label>
+          <AddressAutocomplete value={direccion} onChange={handleAddressChange} placeholder="Ej: Espora 811, Santa Fe" />
+          {lat !== null && lng !== null && <AddressMapPreview lat={lat} lng={lng} />}
+          {lat !== null && lng !== null && direccion && (
+            <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
+              {isCheckingZona ? (
+                <div className="flex items-center gap-2 px-3 py-2 bg-secondary/50 rounded-xl border border-border/50">
+                  <Loader2 className="w-3.5 h-3.5 animate-spin text-muted-foreground" />
+                  <span className="text-xs text-muted-foreground">Verificando zona de delivery...</span>
+                </div>
+              ) : fueraDeZona ? (
+                <div className="flex items-center gap-2 px-3 py-2 bg-destructive/10 rounded-xl border border-destructive/30">
+                  <AlertTriangle className="w-4 h-4 text-destructive shrink-0" />
+                  <span className="text-xs text-destructive font-medium">Fuera del área de delivery. Probá otra dirección o Take Away.</span>
+                </div>
+              ) : zonaDeliveryFee !== null ? (
+                <div className="flex items-center justify-between px-3 py-2 bg-emerald-500/10 rounded-xl border border-emerald-500/30">
+                  <div className="flex items-center gap-2">
+                    <Truck className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                    <span className="text-xs font-medium text-emerald-700 dark:text-emerald-300">Envío{zonaNombre ? ` (${zonaNombre})` : ''}</span>
+                  </div>
+                  <span className="text-sm font-bold text-emerald-700 dark:text-emerald-300">
+                    {deliveryFee === 0 ? 'GRATIS' : `$${deliveryFee.toFixed(0)}`}
+                  </span>
+                </div>
+              ) : null}
+            </div>
+          )}
         </div>
       )}
 
-      {(!checkoutData || estoyEditando) && !alguienEditando && (
-        <>
-          {!estoyEditando && !checkoutData && (
-            <Button variant="outline" className="w-full rounded-xl" onClick={handleIniciarEdicion}>
-              <Pencil className="w-4 h-4 mr-2" />
-              Completar datos de envío
-            </Button>
+      {/* Casa / Departamento */}
+      {tipoPedido === 'delivery' && (
+        <div className="space-y-2 pt-2 border-t border-border/50 animate-in fade-in slide-in-from-top-2">
+          <Label className="text-sm">¿Es casa o departamento?</Label>
+          <div className="grid grid-cols-2 gap-3">
+            <div
+              className={`flex flex-col items-center gap-1.5 p-3 border-2 rounded-xl cursor-pointer transition-colors ${tipoDomicilio === 'casa' ? 'border-primary bg-primary/5' : 'border-border hover:bg-secondary/50'}`}
+              onClick={() => { setTipoDomicilio('casa'); setPiso(''); setNumeroDepartamento('') }}
+            >
+              <Home className={`w-6 h-6 ${tipoDomicilio === 'casa' ? 'text-primary' : 'text-muted-foreground'}`} />
+              <span className={`text-sm font-semibold ${tipoDomicilio === 'casa' ? 'text-primary' : 'text-foreground'}`}>Casa</span>
+            </div>
+            <div
+              className={`flex flex-col items-center gap-1.5 p-3 border-2 rounded-xl cursor-pointer transition-colors ${tipoDomicilio === 'departamento' ? 'border-primary bg-primary/5' : 'border-border hover:bg-secondary/50'}`}
+              onClick={() => setTipoDomicilio('departamento')}
+            >
+              <Building2 className={`w-6 h-6 ${tipoDomicilio === 'departamento' ? 'text-primary' : 'text-muted-foreground'}`} />
+              <span className={`text-sm font-semibold ${tipoDomicilio === 'departamento' ? 'text-primary' : 'text-foreground'}`}>Departamento</span>
+            </div>
+          </div>
+          {tipoDomicilio === 'departamento' && (
+            <div className="grid grid-cols-2 gap-3 animate-in fade-in slide-in-from-top-2">
+              <div className="space-y-1.5">
+                <Label htmlFor="piso-grupal">Piso</Label>
+                <Input id="piso-grupal" placeholder="Ej: 4" className="h-10 rounded-xl" value={piso} onChange={e => setPiso(e.target.value)} />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="depto-grupal">Depto</Label>
+                <Input id="depto-grupal" placeholder="Ej: C" className="h-10 rounded-xl" value={numeroDepartamento} onChange={e => setNumeroDepartamento(e.target.value.toUpperCase())} />
+              </div>
+            </div>
           )}
-          {(estoyEditando || checkoutData) && (
-            <>
-              {/* Tipo de pedido */}
-              <section className="space-y-3">
-                <Label className="text-sm">¿Cómo van a recibir el pedido?</Label>
-                {restauranteData && !delEn && !tkEn ? (
-                  <div className="flex items-center gap-2 px-3 py-2 bg-destructive/10 rounded-xl border border-destructive/30">
-                    <AlertTriangle className="w-4 h-4 text-destructive shrink-0" />
-                    <p className="text-sm text-destructive font-medium">El local no está aceptando pedidos ahora.</p>
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-2 gap-3">
-                    <div
-                      className={`flex flex-col items-center justify-center p-3 border-2 rounded-xl transition-colors ${restauranteData && !delEn ? 'opacity-40 cursor-not-allowed border-border' : `cursor-pointer ${tipoPedido === 'delivery' ? 'border-primary bg-primary/5' : 'border-border hover:bg-secondary/50'}`}`}
-                      onClick={() => (!restauranteData || delEn) && setTipoPedido('delivery')}
-                    >
-                      <MapPin className={`w-6 h-6 mb-1 ${tipoPedido === 'delivery' ? 'text-primary' : 'text-muted-foreground'}`} />
-                      <Label className="cursor-pointer text-sm font-medium">Delivery</Label>
-                    </div>
-                    <div
-                      className={`flex flex-col items-center justify-center p-3 border-2 rounded-xl transition-colors ${restauranteData && !tkEn ? 'opacity-40 cursor-not-allowed border-border' : `cursor-pointer ${tipoPedido === 'takeaway' ? 'border-primary bg-primary/5' : 'border-border hover:bg-secondary/50'}`}`}
-                      onClick={() => (!restauranteData || tkEn) && setTipoPedido('takeaway')}
-                    >
-                      <Store className={`w-6 h-6 mb-1 ${tipoPedido === 'takeaway' ? 'text-primary' : 'text-muted-foreground'}`} />
-                      <Label className="cursor-pointer text-sm font-medium">Take Away</Label>
-                    </div>
-                  </div>
-                )}
-              </section>
+        </div>
+      )}
 
-              {/* Sucursal selector for takeaway with multiple branches */}
-              {tipoPedido === 'takeaway' && sucursales.length > 1 && (
-                <section className="space-y-2">
-                  <Label className="text-sm">¿En qué local retirás?</Label>
-                  <div className="grid grid-cols-1 gap-2">
-                    {sucursales.map(s => (
-                      <div
-                        key={s.id}
-                        onClick={() => setSucursalSeleccionada(s.id)}
-                        className={`flex items-center gap-3 p-3 border-2 rounded-xl cursor-pointer transition-colors ${sucursalSeleccionada === s.id ? 'border-primary bg-primary/5' : 'border-border hover:bg-secondary/50'}`}
-                      >
-                        <Store className={`w-4 h-4 shrink-0 ${sucursalSeleccionada === s.id ? 'text-primary' : 'text-muted-foreground'}`} />
-                        <div>
-                          <p className="font-semibold text-sm">{s.nombre}</p>
-                          {s.direccion && <p className="text-xs text-muted-foreground">{s.direccion}</p>}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </section>
-              )}
+      {/* Takeaway - pickup address */}
+      {tipoPedido === 'takeaway' && restauranteDireccion && sucursales.length <= 1 && (
+        <div className="flex items-center gap-2 px-3 py-1.5 bg-primary/5 rounded-lg border border-primary/20">
+          <MapPin className="w-3.5 h-3.5 text-primary shrink-0" />
+          <span className="text-xs font-medium text-primary/80">Retira en {restauranteDireccion}</span>
+        </div>
+      )}
+    </div>
+  )
 
-              {/* Datos personales */}
-              <div className="space-y-3">
-                <div className="space-y-1.5">
-                  <Label htmlFor="nombre-grupal">Nombre de quien recibe</Label>
-                  <Input id="nombre-grupal" placeholder="Ej: Juan Perez" className="h-11 rounded-xl" value={nombre} onChange={e => setNombre(e.target.value)} />
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="telefono-grupal">Celular (WhatsApp)</Label>
-                  <Input id="telefono-grupal" type="tel" placeholder="Ej: 5491112345678" className="h-11 rounded-xl" value={telefono} onChange={e => setTelefono(e.target.value.replace(/\D/g, ''))} />
-                </div>
+  const secExtras = (
+    <div className="space-y-3">
+      {/* Notas */}
+      <div className="space-y-1.5">
+        <Label htmlFor="notas-grupal">Notas adicionales <span className="text-muted-foreground font-normal">(opcional)</span></Label>
+        <Textarea id="notas-grupal" placeholder="Ej: El timbre no anda..." className="min-h-[80px] rounded-xl resize-none text-sm" value={notas} onChange={(e: any) => setNotas(e.target.value)} />
+      </div>
 
-                {/* Delivery address */}
-                {tipoPedido === 'delivery' && (
-                  <div className="space-y-2 animate-in fade-in slide-in-from-top-2">
-                    <Label htmlFor="direccion-grupal">Dirección de entrega</Label>
-                    <AddressAutocomplete value={direccion} onChange={handleAddressChange} placeholder="Ej: Espora 811, Santa Fe" />
-                    {lat !== null && lng !== null && <AddressMapPreview lat={lat} lng={lng} />}
-                    {lat !== null && lng !== null && direccion && (
-                      <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
-                        {isCheckingZona ? (
-                          <div className="flex items-center gap-2 px-3 py-2 bg-secondary/50 rounded-xl border border-border/50">
-                            <Loader2 className="w-3.5 h-3.5 animate-spin text-muted-foreground" />
-                            <span className="text-xs text-muted-foreground">Verificando zona de delivery...</span>
-                          </div>
-                        ) : fueraDeZona ? (
-                          <div className="flex items-center gap-2 px-3 py-2 bg-destructive/10 rounded-xl border border-destructive/30">
-                            <AlertTriangle className="w-4 h-4 text-destructive shrink-0" />
-                            <span className="text-xs text-destructive font-medium">Fuera del área de delivery. Probá otra dirección o Take Away.</span>
-                          </div>
-                        ) : zonaDeliveryFee !== null ? (
-                          <div className="flex items-center justify-between px-3 py-2 bg-emerald-500/10 rounded-xl border border-emerald-500/30">
-                            <div className="flex items-center gap-2">
-                              <Truck className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
-                              <span className="text-xs font-medium text-emerald-700 dark:text-emerald-300">Envío{zonaNombre ? ` (${zonaNombre})` : ''}</span>
-                            </div>
-                            <span className="text-sm font-bold text-emerald-700 dark:text-emerald-300">
-                              {deliveryFee === 0 ? 'GRATIS' : `$${deliveryFee.toFixed(0)}`}
-                            </span>
-                          </div>
-                        ) : null}
-                      </div>
-                    )}
-                  </div>
-                )}
+      {/* Programar pedido */}
+      <div className="space-y-2 pt-2 border-t border-border/50">
+        <div
+          className={`flex items-center justify-between p-3 rounded-xl border-2 cursor-pointer transition-colors ${programarPedido ? 'border-primary bg-primary/5' : 'border-border hover:bg-secondary/50'}`}
+          onClick={() => { setProgramarPedido(!programarPedido); if (programarPedido) setHorarioProgramado('') }}
+        >
+          <div className="flex items-center gap-2.5">
+            <Clock className={`w-5 h-5 ${programarPedido ? 'text-primary' : 'text-muted-foreground'}`} />
+            <div>
+              <p className={`font-semibold text-sm ${programarPedido ? 'text-primary' : 'text-foreground'}`}>Programar para después</p>
+              <p className="text-xs text-muted-foreground">Indicá a qué hora querés recibirlo</p>
+            </div>
+          </div>
+          <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center transition-colors ${programarPedido ? 'border-primary bg-primary' : 'border-muted-foreground'}`}>
+            {programarPedido && <div className="w-1.5 h-1.5 rounded-full bg-primary-foreground" />}
+          </div>
+        </div>
+        {programarPedido && (
+          <div className="animate-in fade-in slide-in-from-top-2 space-y-1.5">
+            <Label htmlFor="horario-grupal">¿A qué hora lo querés?</Label>
+            <input
+              id="horario-grupal"
+              type="time"
+              className="w-full h-11 rounded-xl border border-input bg-background px-4 text-base font-semibold text-foreground"
+              value={horarioProgramado}
+              onChange={e => setHorarioProgramado(e.target.value)}
+            />
+          </div>
+        )}
+      </div>
 
-                {/* Casa / Departamento */}
-                {tipoPedido === 'delivery' && (
-                  <div className="space-y-2 pt-2 border-t border-border/50 animate-in fade-in slide-in-from-top-2">
-                    <Label className="text-sm">¿Es casa o departamento?</Label>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div
-                        className={`flex flex-col items-center gap-1.5 p-3 border-2 rounded-xl cursor-pointer transition-colors ${tipoDomicilio === 'casa' ? 'border-primary bg-primary/5' : 'border-border hover:bg-secondary/50'}`}
-                        onClick={() => { setTipoDomicilio('casa'); setPiso(''); setNumeroDepartamento('') }}
-                      >
-                        <Home className={`w-6 h-6 ${tipoDomicilio === 'casa' ? 'text-primary' : 'text-muted-foreground'}`} />
-                        <span className={`text-sm font-semibold ${tipoDomicilio === 'casa' ? 'text-primary' : 'text-foreground'}`}>Casa</span>
-                      </div>
-                      <div
-                        className={`flex flex-col items-center gap-1.5 p-3 border-2 rounded-xl cursor-pointer transition-colors ${tipoDomicilio === 'departamento' ? 'border-primary bg-primary/5' : 'border-border hover:bg-secondary/50'}`}
-                        onClick={() => setTipoDomicilio('departamento')}
-                      >
-                        <Building2 className={`w-6 h-6 ${tipoDomicilio === 'departamento' ? 'text-primary' : 'text-muted-foreground'}`} />
-                        <span className={`text-sm font-semibold ${tipoDomicilio === 'departamento' ? 'text-primary' : 'text-foreground'}`}>Departamento</span>
-                      </div>
-                    </div>
-                    {tipoDomicilio === 'departamento' && (
-                      <div className="grid grid-cols-2 gap-3 animate-in fade-in slide-in-from-top-2">
-                        <div className="space-y-1.5">
-                          <Label htmlFor="piso-grupal">Piso</Label>
-                          <Input id="piso-grupal" placeholder="Ej: 4" className="h-10 rounded-xl" value={piso} onChange={e => setPiso(e.target.value)} />
-                        </div>
-                        <div className="space-y-1.5">
-                          <Label htmlFor="depto-grupal">Depto</Label>
-                          <Input id="depto-grupal" placeholder="Ej: C" className="h-10 rounded-xl" value={numeroDepartamento} onChange={e => setNumeroDepartamento(e.target.value.toUpperCase())} />
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )}
+      {/* Código de descuento */}
+      {codigoDescuentoEnabled && (
+        <div className="space-y-1.5 pt-2 border-t border-border/50">
+          <Label htmlFor="codigo-grupal">Código de descuento <span className="text-muted-foreground font-normal">(opcional)</span></Label>
+          {codigoDescuentoId ? (
+            <div className="flex items-center justify-between px-3 py-2 rounded-xl bg-emerald-500/10 border border-emerald-500/30">
+              <div className="flex items-center gap-2">
+                <Tag className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                <span className="text-sm font-medium text-emerald-700 dark:text-emerald-300">Descuento: -${montoDescuento.toFixed(0)}</span>
+              </div>
+              <button type="button" onClick={quitarCodigo} className="p-1 rounded hover:bg-emerald-500/20 text-muted-foreground hover:text-destructive">
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          ) : (
+            <div className="flex gap-2">
+              <Input
+                id="codigo-grupal"
+                placeholder="Ej: CODIGO10"
+                className="h-10 rounded-xl font-mono uppercase text-sm"
+                value={codigoInput}
+                onChange={e => { setCodigoInput(e.target.value.toUpperCase()); setCodigoError(null) }}
+                onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), handleValidarCodigo())}
+              />
+              <Button type="button" variant="outline" size="sm" className="rounded-xl shrink-0 h-10" onClick={handleValidarCodigo} disabled={validandoCodigo || !codigoInput.trim()}>
+                {validandoCodigo ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : 'Aplicar'}
+              </Button>
+            </div>
+          )}
+          {codigoError && <p className="text-xs text-destructive font-medium">{codigoError}</p>}
+        </div>
+      )}
 
-                {/* Takeaway - pickup address */}
-                {tipoPedido === 'takeaway' && restauranteDireccion && sucursales.length <= 1 && (
-                  <div className="flex items-center gap-2 px-3 py-1.5 bg-primary/5 rounded-lg border border-primary/20">
-                    <MapPin className="w-3.5 h-3.5 text-primary shrink-0" />
-                    <span className="text-xs font-medium text-primary/80">Retira en {restauranteDireccion}</span>
-                  </div>
-                )}
-
-                {/* Notas */}
-                <div className="space-y-1.5">
-                  <Label htmlFor="notas-grupal">Notas adicionales <span className="text-muted-foreground font-normal">(opcional)</span></Label>
-                  <Textarea id="notas-grupal" placeholder="Ej: El timbre no anda..." className="min-h-[80px] rounded-xl resize-none text-sm" value={notas} onChange={(e: any) => setNotas(e.target.value)} />
-                </div>
-
-                {/* Programar pedido */}
-                <div className="space-y-2 pt-2 border-t border-border/50">
-                  <div
-                    className={`flex items-center justify-between p-3 rounded-xl border-2 cursor-pointer transition-colors ${programarPedido ? 'border-primary bg-primary/5' : 'border-border hover:bg-secondary/50'}`}
-                    onClick={() => { setProgramarPedido(!programarPedido); if (programarPedido) setHorarioProgramado('') }}
-                  >
-                    <div className="flex items-center gap-2.5">
-                      <Clock className={`w-5 h-5 ${programarPedido ? 'text-primary' : 'text-muted-foreground'}`} />
-                      <div>
-                        <p className={`font-semibold text-sm ${programarPedido ? 'text-primary' : 'text-foreground'}`}>Programar para después</p>
-                        <p className="text-xs text-muted-foreground">Indicá a qué hora querés recibirlo</p>
-                      </div>
-                    </div>
-                    <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center transition-colors ${programarPedido ? 'border-primary bg-primary' : 'border-muted-foreground'}`}>
-                      {programarPedido && <div className="w-1.5 h-1.5 rounded-full bg-primary-foreground" />}
-                    </div>
-                  </div>
-                  {programarPedido && (
-                    <div className="animate-in fade-in slide-in-from-top-2 space-y-1.5">
-                      <Label htmlFor="horario-grupal">¿A qué hora lo querés?</Label>
-                      <input
-                        id="horario-grupal"
-                        type="time"
-                        className="w-full h-11 rounded-xl border border-input bg-background px-4 text-base font-semibold text-foreground"
-                        value={horarioProgramado}
-                        onChange={e => setHorarioProgramado(e.target.value)}
-                      />
+      {/* Métodos de pago */}
+      {!isLoadingRestaurante && availablePaymentMethods.length > 0 && (
+        <div className="space-y-3 pt-2 border-t border-border/50 animate-in fade-in slide-in-from-bottom-2">
+          <Label className="text-sm font-bold">Método de pago</Label>
+          <div className="grid grid-cols-2 gap-2">
+            {availablePaymentMethods.map(m => {
+              const selected = metodoPago === m.id
+              const showAuto = m.automatico && (
+                m.id === 'transferencia_automatica_cucuru' ||
+                m.id === 'transferencia_automatica_talo' ||
+                m.id === 'mercadopago_bricks' ||
+                m.id === 'mercadopago_checkout'
+              )
+              return (
+                <div
+                  key={m.id}
+                  className={`relative flex flex-col items-center justify-center gap-1 p-3 border-2 rounded-xl cursor-pointer hover:bg-secondary/50 transition-colors ${selected
+                    ? m.id === 'cash' ? 'border-emerald-500 bg-emerald-500/5'
+                      : m.id.startsWith('mercadopago') ? 'border-[#009EE3] bg-[#009EE3]/5'
+                      : 'border-purple-500 bg-purple-500/5'
+                    : 'border-border'}`}
+                  onClick={() => setMetodoPago(m.id)}
+                >
+                  {showAuto && (
+                    <div className="absolute -top-2 bg-linear-to-r from-purple-600 to-indigo-600 text-white text-[8px] font-extrabold px-1.5 py-0.5 rounded-full shadow-sm flex items-center gap-0.5">
+                      <Zap className="w-2.5 h-2.5 fill-current" />
+                      AUTO
                     </div>
                   )}
+                  {m.id === 'mercadopago_checkout' && <Wallet className={`w-5 h-5 mt-1 ${selected ? 'text-[#009EE3]' : 'text-muted-foreground'}`} />}
+                  {m.id === 'mercadopago_bricks' && <CreditCard className={`w-5 h-5 mt-1 ${selected ? 'text-[#009EE3]' : 'text-muted-foreground'}`} />}
+                  <Label className="cursor-pointer font-semibold text-center text-xs leading-tight px-1">
+                    {paymentTitle(m)}
+                  </Label>
                 </div>
-
-                {/* Código de descuento */}
-                {codigoDescuentoEnabled && (
-                  <div className="space-y-1.5 pt-2 border-t border-border/50">
-                    <Label htmlFor="codigo-grupal">Código de descuento <span className="text-muted-foreground font-normal">(opcional)</span></Label>
-                    {codigoDescuentoId ? (
-                      <div className="flex items-center justify-between px-3 py-2 rounded-xl bg-emerald-500/10 border border-emerald-500/30">
-                        <div className="flex items-center gap-2">
-                          <Tag className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
-                          <span className="text-sm font-medium text-emerald-700 dark:text-emerald-300">Descuento: -${montoDescuento.toFixed(0)}</span>
-                        </div>
-                        <button type="button" onClick={quitarCodigo} className="p-1 rounded hover:bg-emerald-500/20 text-muted-foreground hover:text-destructive">
-                          <X className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    ) : (
-                      <div className="flex gap-2">
-                        <Input
-                          id="codigo-grupal"
-                          placeholder="Ej: CODIGO10"
-                          className="h-10 rounded-xl font-mono uppercase text-sm"
-                          value={codigoInput}
-                          onChange={e => { setCodigoInput(e.target.value.toUpperCase()); setCodigoError(null) }}
-                          onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), handleValidarCodigo())}
-                        />
-                        <Button type="button" variant="outline" size="sm" className="rounded-xl shrink-0 h-10" onClick={handleValidarCodigo} disabled={validandoCodigo || !codigoInput.trim()}>
-                          {validandoCodigo ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : 'Aplicar'}
-                        </Button>
-                      </div>
-                    )}
-                    {codigoError && <p className="text-xs text-destructive font-medium">{codigoError}</p>}
-                  </div>
-                )}
-
-                {/* Métodos de pago */}
-                {!isLoadingRestaurante && availablePaymentMethods.length > 0 && (
-                  <div className="space-y-3 pt-2 border-t border-border/50 animate-in fade-in slide-in-from-bottom-2">
-                    <Label className="text-sm font-bold">Método de pago</Label>
-                    <div className="grid grid-cols-2 gap-2">
-                      {availablePaymentMethods.map(m => {
-                        const selected = metodoPago === m.id
-                        const showAuto = m.automatico && (
-                          m.id === 'transferencia_automatica_cucuru' ||
-                          m.id === 'transferencia_automatica_talo' ||
-                          m.id === 'mercadopago_bricks' ||
-                          m.id === 'mercadopago_checkout'
-                        )
-                        return (
-                          <div
-                            key={m.id}
-                            className={`relative flex flex-col items-center justify-center gap-1 p-3 border-2 rounded-xl cursor-pointer hover:bg-secondary/50 transition-colors ${selected
-                              ? m.id === 'cash' ? 'border-emerald-500 bg-emerald-500/5'
-                                : m.id.startsWith('mercadopago') ? 'border-[#009EE3] bg-[#009EE3]/5'
-                                : 'border-purple-500 bg-purple-500/5'
-                              : 'border-border'}`}
-                            onClick={() => setMetodoPago(m.id)}
-                          >
-                            {showAuto && (
-                              <div className="absolute -top-2 bg-linear-to-r from-purple-600 to-indigo-600 text-white text-[8px] font-extrabold px-1.5 py-0.5 rounded-full shadow-sm flex items-center gap-0.5">
-                                <Zap className="w-2.5 h-2.5 fill-current" />
-                                AUTO
-                              </div>
-                            )}
-                            {m.id === 'mercadopago_checkout' && <Wallet className={`w-5 h-5 mt-1 ${selected ? 'text-[#009EE3]' : 'text-muted-foreground'}`} />}
-                            {m.id === 'mercadopago_bricks' && <CreditCard className={`w-5 h-5 mt-1 ${selected ? 'text-[#009EE3]' : 'text-muted-foreground'}`} />}
-                            <Label className="cursor-pointer font-semibold text-center text-xs leading-tight px-1">
-                              {paymentTitle(m)}
-                            </Label>
-                          </div>
-                        )
-                      })}
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              <div className="flex gap-2 pt-2">
-                <Button variant="outline" size="sm" onClick={handleCancelarEdicion} className="flex-1 rounded-xl">
-                  <X className="w-4 h-4 mr-1" />
-                  Cancelar
-                </Button>
-                <Button size="sm" onClick={handleGuardarEdicion} className="flex-1 rounded-xl" disabled={tipoPedido === 'delivery' && (isCheckingZona || fueraDeZona)}>
-                  <Check className="w-4 h-4 mr-1" />
-                  Guardar
-                </Button>
-              </div>
-            </>
-          )}
-        </>
-      )}
-
-      {/* Read-only view */}
-      {checkoutData && !estoyEditando && !alguienEditando && (
-        <div className="bg-secondary/40 p-4 rounded-2xl border border-border space-y-4">
-          <div className="flex items-center justify-between gap-2">
-            <span className="text-sm font-medium text-muted-foreground">Datos guardados</span>
-            <Button variant="outline" size="sm" onClick={handleIniciarEdicion} className="text-xs h-8 shrink-0">
-              <Pencil className="w-3.5 h-3.5 mr-1" />
-              Editar
-            </Button>
+              )
+            })}
           </div>
-          <div className="space-y-3">
-            <div className="grid grid-cols-2 gap-2">
-              <div className={`flex items-center justify-center p-2 rounded-lg border bg-muted/30 ${checkoutData.tipoPedido === 'delivery' ? 'border-primary/30' : 'border-border'}`}>
-                <span className="text-xs font-medium text-muted-foreground">Delivery</span>
-              </div>
-              <div className={`flex items-center justify-center p-2 rounded-lg border bg-muted/30 ${checkoutData.tipoPedido === 'takeaway' ? 'border-primary/30' : 'border-border'}`}>
-                <span className="text-xs font-medium text-muted-foreground">Take Away</span>
-              </div>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground mb-0.5">Nombre</p>
-              <p className="text-sm font-semibold">{checkoutData.nombre}</p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground mb-0.5">Celular</p>
-              <p className="text-sm font-semibold">{checkoutData.telefono}</p>
-            </div>
-            {checkoutData.tipoPedido === 'delivery' && checkoutData.direccion && (
-              <div>
-                <p className="text-xs text-muted-foreground mb-0.5">Dirección</p>
-                <p className="text-sm font-semibold">{checkoutData.direccion}</p>
-                {checkoutData.tipoDomicilio && (
-                  <p className="text-xs text-muted-foreground capitalize mt-0.5">{checkoutData.tipoDomicilio}</p>
-                )}
-                {(checkoutData.deliveryFee ?? 0) > 0 && (
-                  <p className="text-xs text-emerald-600/80 dark:text-emerald-400/80 mt-0.5">
-                    Envío: ${checkoutData.deliveryFee.toFixed(0)}{checkoutData.zonaNombre ? ` (${checkoutData.zonaNombre})` : ''}
-                  </p>
-                )}
-              </div>
+        </div>
+      )}
+    </div>
+  )
+
+  const tituloPaso: Record<PasoCheckout, string> = {
+    tipo: '¿Cómo lo querés?',
+    datos: 'Tus datos',
+    ubicacion: tipoPedido === 'delivery' ? 'Dirección de entrega' : 'Retiro',
+    extras: 'Pago y detalles',
+  }
+
+  useEffect(() => {
+    if (!onTituloChange) return
+    if (estoyEditando && modo === 'pasos') {
+      onTituloChange(tituloPaso[pasos[paso]])
+    } else if (checkoutData && !estoyEditando) {
+      onTituloChange('Revisá tu pedido')
+    } else {
+      onTituloChange('Datos de envío')
+    }
+  }, [onTituloChange, estoyEditando, modo, paso, checkoutData, tipoPedido])
+
+  const readOnly = (
+    <div className="bg-secondary/40 p-4 rounded-2xl border border-border space-y-4">
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-sm font-medium text-muted-foreground">Datos guardados</span>
+        <Button variant="outline" size="sm" onClick={handleIniciarEdicion} className="text-xs h-8 shrink-0">
+          <Pencil className="w-3.5 h-3.5 mr-1" />
+          Editar
+        </Button>
+      </div>
+      <div className="space-y-3">
+        <div className="grid grid-cols-2 gap-2">
+          <div className={`flex items-center justify-center p-2 rounded-lg border bg-muted/30 ${checkoutData?.tipoPedido === 'delivery' ? 'border-primary/30' : 'border-border'}`}>
+            <span className="text-xs font-medium text-muted-foreground">Delivery</span>
+          </div>
+          <div className={`flex items-center justify-center p-2 rounded-lg border bg-muted/30 ${checkoutData?.tipoPedido === 'takeaway' ? 'border-primary/30' : 'border-border'}`}>
+            <span className="text-xs font-medium text-muted-foreground">Take Away</span>
+          </div>
+        </div>
+        <div>
+          <p className="text-xs text-muted-foreground mb-0.5">Nombre</p>
+          <p className="text-sm font-semibold">{checkoutData?.nombre}</p>
+        </div>
+        <div>
+          <p className="text-xs text-muted-foreground mb-0.5">Celular</p>
+          <p className="text-sm font-semibold">{checkoutData?.telefono}</p>
+        </div>
+        {checkoutData?.tipoPedido === 'delivery' && checkoutData.direccion && (
+          <div>
+            <p className="text-xs text-muted-foreground mb-0.5">Dirección</p>
+            <p className="text-sm font-semibold">{checkoutData.direccion}</p>
+            {checkoutData.tipoDomicilio && (
+              <p className="text-xs text-muted-foreground capitalize mt-0.5">{checkoutData.tipoDomicilio}</p>
             )}
-            {checkoutData.metodoPago && (
-              <div>
-                <p className="text-xs text-muted-foreground mb-0.5">Método de pago</p>
-                <p className="text-sm font-semibold">{checkoutData.metodoPago.replace(/_/g, ' ')}</p>
-              </div>
-            )}
-            {checkoutData.horarioProgramado && (
-              <div className="flex items-center gap-1.5">
-                <Clock className="w-3.5 h-3.5 text-muted-foreground" />
-                <p className="text-xs text-muted-foreground">Programado para las <span className="font-semibold text-foreground">{checkoutData.horarioProgramado}</span></p>
-              </div>
-            )}
-            {(checkoutData.montoDescuento ?? 0) > 0 && (
-              <p className="text-xs text-emerald-600/80 dark:text-emerald-400/80">
-                Descuento: -${(checkoutData.montoDescuento ?? 0).toFixed(0)}
+            {(checkoutData.deliveryFee ?? 0) > 0 && (
+              <p className="text-xs text-emerald-600/80 dark:text-emerald-400/80 mt-0.5">
+                Envío: ${checkoutData.deliveryFee.toFixed(0)}{checkoutData.zonaNombre ? ` (${checkoutData.zonaNombre})` : ''}
               </p>
             )}
-            {checkoutData.notas && (
-              <div>
-                <p className="text-xs text-muted-foreground mb-0.5">Notas</p>
-                <p className="text-sm text-muted-foreground line-clamp-2">{checkoutData.notas}</p>
-              </div>
-            )}
           </div>
+        )}
+        {checkoutData?.metodoPago && (
+          <div>
+            <p className="text-xs text-muted-foreground mb-0.5">Método de pago</p>
+            <p className="text-sm font-semibold">{checkoutData.metodoPago.replace(/_/g, ' ')}</p>
+          </div>
+        )}
+        {checkoutData?.horarioProgramado && (
+          <div className="flex items-center gap-1.5">
+            <Clock className="w-3.5 h-3.5 text-muted-foreground" />
+            <p className="text-xs text-muted-foreground">Programado para las <span className="font-semibold text-foreground">{checkoutData.horarioProgramado}</span></p>
+          </div>
+        )}
+        {(checkoutData?.montoDescuento ?? 0) > 0 && (
+          <p className="text-xs text-emerald-600/80 dark:text-emerald-400/80">
+            Descuento: -${(checkoutData?.montoDescuento ?? 0).toFixed(0)}
+          </p>
+        )}
+        {checkoutData?.notas && (
+          <div>
+            <p className="text-xs text-muted-foreground mb-0.5">Notas</p>
+            <p className="text-sm text-muted-foreground line-clamp-2">{checkoutData.notas}</p>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+
+  const totalSummary = (
+    <div className="bg-secondary/50 rounded-xl p-4 border border-border/50 space-y-2">
+      <div className="flex justify-between text-sm">
+        <span className="text-muted-foreground">Subtotal ({totalItems} items)</span>
+        <span className="font-medium">${itemsTotal}</span>
+      </div>
+      {checkoutData?.tipoPedido === 'delivery' && (checkoutData.deliveryFee ?? 0) > 0 && (
+        <div className="flex justify-between text-sm">
+          <span className="text-muted-foreground">Delivery</span>
+          <span className="font-medium">${checkoutData.deliveryFee.toFixed(2)}</span>
         </div>
       )}
-
-      {/* Total summary */}
-      <div className="bg-secondary/50 rounded-xl p-4 border border-border/50 space-y-2">
+      {(checkoutData?.montoDescuento ?? montoDescuento) > 0 && (
         <div className="flex justify-between text-sm">
-          <span className="text-muted-foreground">Subtotal ({totalItems} items)</span>
-          <span className="font-medium">${itemsTotal}</span>
+          <span className="text-emerald-600 dark:text-emerald-400 font-medium">Descuento</span>
+          <span className="text-emerald-600 dark:text-emerald-400 font-medium">-${(checkoutData?.montoDescuento ?? montoDescuento).toFixed(2)}</span>
         </div>
-        {checkoutData?.tipoPedido === 'delivery' && (checkoutData.deliveryFee ?? 0) > 0 && (
-          <div className="flex justify-between text-sm">
-            <span className="text-muted-foreground">Delivery</span>
-            <span className="font-medium">${checkoutData.deliveryFee.toFixed(2)}</span>
-          </div>
+      )}
+      <div className="flex justify-between font-bold text-base pt-2 border-t border-border/50">
+        <span>Total</span>
+        <span>${checkoutData?.total || total.toFixed(2)}</span>
+      </div>
+    </div>
+  )
+
+  // ===== Botón de acción del footer (depende del estado) =====
+  const accionDisabled = tipoPedido === 'delivery' && (fueraDeZona || (isCheckingZona && (modo === 'completo' || pasos[paso] === 'ubicacion')))
+
+  let footerButton: React.ReactNode
+  if (alguienEditando) {
+    footerButton = (
+      <Button disabled className="w-full h-12 rounded-xl font-bold text-base">
+        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+        {editSemaphore?.clienteNombre} está editando...
+      </Button>
+    )
+  } else if (estoyEditando) {
+    const esUltimo = modo === 'pasos' ? paso === pasos.length - 1 : true
+    footerButton = (
+      <Button
+        className="w-full h-12 rounded-xl font-bold text-base shadow-md"
+        onClick={modo === 'pasos' ? handleSiguiente : handleGuardarEdicion}
+        disabled={accionDisabled}
+      >
+        {modo === 'pasos' && !esUltimo ? 'Siguiente' : 'Guardar datos'}
+      </Button>
+    )
+  } else if (checkoutData) {
+    footerButton = datosCompletos ? (
+      <Button className="w-full h-12 rounded-xl font-bold text-base shadow-md" onClick={handleConfirmarPedido}>
+        Confirmar Pedido
+      </Button>
+    ) : (
+      <p className="text-xs text-muted-foreground text-center py-2">Esperando que se completen los datos...</p>
+    )
+  } else {
+    footerButton = (
+      <Button className="w-full h-12 rounded-xl font-bold text-base shadow-md" onClick={handleIniciarEdicion}>
+        <Pencil className="w-4 h-4 mr-2" />
+        Completar datos de envío
+      </Button>
+    )
+  }
+
+  const compacto = modo === 'pasos'
+
+  return (
+    <div className={`flex flex-col ${compacto ? '' : 'flex-1 min-h-0'}`}>
+      {/* Barra superior: atrás + progreso */}
+      <div className="shrink-0 flex items-center gap-3 px-5 pt-3 pb-1">
+        <button
+          onClick={handleAtras}
+          className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-secondary transition-colors shrink-0"
+          aria-label="Atrás"
+        >
+          <ChevronLeft className="w-5 h-5" />
+        </button>
+        {estoyEditando && modo === 'pasos' ? (
+          <>
+            <div className="flex-1 flex items-center gap-1.5">
+              {pasos.map((_, i) => (
+                <div
+                  key={i}
+                  className={`h-1.5 rounded-full flex-1 transition-colors ${i <= paso ? 'bg-primary' : 'bg-secondary'}`}
+                />
+              ))}
+            </div>
+            <span className="text-xs font-semibold text-muted-foreground shrink-0">{paso + 1}/{pasos.length}</span>
+          </>
+        ) : (
+          <span className="text-sm font-bold">
+            {estoyEditando ? 'Datos de envío' : checkoutData ? 'Revisá tu pedido' : 'Datos de envío'}
+          </span>
         )}
-        {(checkoutData?.montoDescuento ?? montoDescuento) > 0 && (
-          <div className="flex justify-between text-sm">
-            <span className="text-emerald-600 dark:text-emerald-400 font-medium">Descuento</span>
-            <span className="text-emerald-600 dark:text-emerald-400 font-medium">-${(checkoutData?.montoDescuento ?? montoDescuento).toFixed(2)}</span>
-          </div>
-        )}
-        <div className="flex justify-between font-bold text-base pt-2 border-t border-border/50">
-          <span>Total</span>
-          <span>${checkoutData?.total || total.toFixed(2)}</span>
-        </div>
       </div>
 
-      {datosCompletos ? (
-        <Button className="w-full h-12 font-bold rounded-xl" size="lg" onClick={handleConfirmarPedido}>
-          Confirmar Pedido
-        </Button>
-      ) : (
-        <p className="text-xs text-muted-foreground text-center py-2">
-          {!checkoutData ? 'Completa los datos de envío para continuar' : 'Esperando que se completen los datos...'}
-        </p>
-      )}
+
+      {/* Cuerpo: scrolleable en 'completo', ajustado al contenido en 'pasos' */}
+      <div className={compacto ? 'px-5 py-3 space-y-4' : 'flex-1 overflow-y-auto px-5 py-3 space-y-4 min-h-0'}>
+        {alguienEditando && (
+          <div className="flex items-center gap-2 px-3 py-2 bg-amber-500/10 rounded-xl border border-amber-500/30">
+            <Loader2 className="w-4 h-4 animate-spin text-amber-600 dark:text-amber-400 shrink-0" />
+            <span className="text-sm font-medium text-amber-700 dark:text-amber-300">
+              {editSemaphore?.clienteNombre} está editando
+            </span>
+          </div>
+        )}
+
+        {estoyEditando && !alguienEditando && (
+          modo === 'completo' ? (
+            <>
+              {secTipo}
+              {secDatos}
+              {secUbicacion}
+              {secExtras}
+              {totalSummary}
+            </>
+          ) : (
+            <>
+              {pasos[paso] === 'tipo' && secTipo}
+              {pasos[paso] === 'datos' && secDatos}
+              {pasos[paso] === 'ubicacion' && secUbicacion}
+              {pasos[paso] === 'extras' && secExtras}
+            </>
+          )
+        )}
+
+        {checkoutData && !estoyEditando && !alguienEditando && (
+          <>
+            {readOnly}
+            {totalSummary}
+          </>
+        )}
+
+        {!checkoutData && !estoyEditando && !alguienEditando && (
+          <div className="flex flex-col items-center justify-center text-center gap-2 py-10 text-muted-foreground">
+            <Loader2 className="w-5 h-5 animate-spin" />
+            <span className="text-sm">Cargando datos de envío...</span>
+          </div>
+        )}
+      </div>
+
+      {/* Footer fijo */}
+      <div className={`p-4 border-t border-border bg-background space-y-2 ${compacto ? 'sticky bottom-0 z-10' : 'shrink-0'}`}>
+        <div className="flex justify-between items-center">
+          <span className="text-muted-foreground text-sm">Total</span>
+          <span className="text-xl font-black tracking-tight">${checkoutData?.total || total.toFixed(2)}</span>
+        </div>
+        {footerButton}
+      </div>
     </div>
   )
 }

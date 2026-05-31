@@ -2,13 +2,12 @@ import { useState, useEffect, useCallback } from 'react'
 import { useNavigate, useParams } from 'react-router'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet'
 import { useMesaStore } from '@/store/mesaStore'
 import { useClienteWebSocket } from '@/hooks/useClienteWebSocket'
 import { mesaApi } from '@/lib/api'
 import { toast } from 'sonner'
 import {
-  Trash2, ArrowLeft,
+  Trash2, Maximize2, Minimize2,
   Wifi, WifiOff, Package, ChefHat, UtensilsCrossed, Receipt, Utensils,
   Check, X, Users, Loader2, Link as LinkIcon
 } from 'lucide-react'
@@ -24,6 +23,7 @@ const Menu = () => {
   const { state: wsState, isConnected, sendMessage, confirmacionGrupal, confirmacionCancelada, clearConfirmacionCancelada } = useClienteWebSocket()
 
   const [carritoAbierto, setCarritoAbierto] = useState(false)
+  const [expandido, setExpandido] = useState(false)
   const [selectedProduct, setSelectedProduct] = useState<typeof productos[0] | null>(null)
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [selectedCategory, setSelectedCategory] = useState<string>('All')
@@ -37,15 +37,18 @@ const Menu = () => {
   // Para sala: mostrar checkout en lugar de ir directo a confirmación
   const esSala = typeof window !== 'undefined' && window.location.pathname.includes('/sala/')
   const [mostrarCheckoutEnCarrito, setMostrarCheckoutEnCarrito] = useState(false)
+  const [tituloCheckout, setTituloCheckout] = useState('¿Cómo lo querés?')
 
   const abrirCarrito = useCallback(() => {
     window.history.pushState({ drawer: 'carrito' }, '')
     setCarritoAbierto(true)
+    setExpandido(true)
   }, [])
 
   const cerrarCarrito = useCallback(() => {
     setCarritoAbierto(false)
     setMostrarCheckoutEnCarrito(false)
+    setExpandido(false)
     if (window.history.state?.drawer === 'carrito') {
       window.history.back()
     }
@@ -68,6 +71,7 @@ const Menu = () => {
     const handlePopState = (event: PopStateEvent) => {
       if (carritoAbierto) {
         setCarritoAbierto(false)
+        setExpandido(false)
         event.preventDefault()
         return
       }
@@ -313,6 +317,11 @@ const Menu = () => {
   }, [todosConfirmaron, urlQrToken])
 
   const todosLosItems = wsState?.items || []
+  const alturaCarrito = (() => {
+    const n = todosLosItems.length
+    if (n >= 4) return '85vh'
+    return ['28vh', '42vh', '57vh', '71vh'][n]
+  })()
   const totalPedido = todosLosItems.reduce((sum, item) => {
     const precio = parseFloat((item as any).precioUnitario || String((item as any).precio || 0))
     return sum + precio * item.cantidad
@@ -409,6 +418,71 @@ const Menu = () => {
       }
     `}} />
   ) : null
+
+  const renderItem = (item: any) => {
+    const esMio = item.clienteNombre === clienteNombre;
+    const prodOriginal = productos.find(p => p.id === (item.productoId || item.id));
+    const imagen = item.imagenUrl || prodOriginal?.imagenUrl;
+    const precio = parseFloat(item.precioUnitario || String(item.precio || 0));
+
+    return (
+      <div key={item.id} className={`relative flex gap-4 p-3 rounded-2xl border transition-all ${esMio ? 'bg-card border-primary/20 shadow-sm' : 'bg-secondary/30 border-transparent opacity-90 grayscale-[0.3]'
+        }`}>
+        <div className="w-20 h-20 shrink-0 rounded-xl overflow-hidden bg-secondary">
+          {imagen ? (
+            <img src={imagen} alt="img" className="w-full h-full object-cover" />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center text-muted-foreground">
+              <Utensils className="w-6 h-6 text-primary" />
+            </div>
+          )}
+        </div>
+
+        <div className="flex-1 flex flex-col justify-between py-0.5 min-w-0">
+          <div className="flex justify-between items-start gap-2">
+            <div className="min-w-0">
+              <p className="font-bold text-sm truncate">{item.nombreProducto || item.nombre}</p>
+              <div className="flex items-center gap-1.5 mt-1">
+                <Badge variant="secondary" className={`h-5 text-[10px] px-1.5 font-normal rounded-md ${esMio ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-300' : ''}`}>
+                  {esMio ? 'Tú' : item.clienteNombre}
+                </Badge>
+              </div>
+              {(item as any).ingredientesExcluidosNombres?.length > 0 && (
+                <p className="text-xs text-primary font-medium mt-1">
+                  ⚠️ Sin: {(item as any).ingredientesExcluidosNombres.join(', ')}
+                </p>
+              )}
+              {(item as any).agregados?.length > 0 && (
+                <div className="mt-1">
+                  {(item as any).agregados.map((ag: any) => (
+                    <p key={ag.id} className="text-xs text-muted-foreground font-medium flex items-center gap-1">
+                      <span>+ {ag.nombre || 'Extra'}</span>
+                      {ag.precio && parseFloat(ag.precio) > 0 && (
+                        <span className="text-primary/80">(+${parseFloat(ag.precio).toFixed(0)})</span>
+                      )}
+                    </p>
+                  ))}
+                </div>
+              )}
+            </div>
+            <p className="font-bold text-base">${(precio * item.cantidad).toFixed(2)}</p>
+          </div>
+
+          {esMio ? (
+            <div className="flex items-center justify-end gap-3 mt-2">
+              <button onClick={() => handleEliminarItem(item.id)} className="w-8 h-8 flex items-center justify-center rounded-full bg-destructive/10 text-destructive hover:bg-destructive hover:text-white transition-colors">
+                <Trash2 className="w-4 h-4" />
+              </button>
+            </div>
+          ) : (
+            <div className="flex justify-end mt-2">
+              <span className="text-xs text-muted-foreground">x{item.cantidad} unidades</span>
+            </div>
+          )}
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen pb-32 bg-background font-sans selection:bg-primary/20">
@@ -609,138 +683,103 @@ const Menu = () => {
         </button>
       </div>
 
-      {/* --- DRAWER DEL PEDIDO --- */}
-      <Sheet open={carritoAbierto} onOpenChange={(open) => !open && cerrarCarrito()}>
-        <SheetContent side="right" className="w-full sm:max-w-md p-0 border-l-0 sm:border-l bg-background">
-          <div className="flex flex-col h-full">
-            <div className="px-5 py-4 flex items-center gap-4 border-b border-border/50 bg-background/80 backdrop-blur-md sticky top-0 z-10">
-              <Button variant="ghost" size="icon" className="rounded-full -ml-2 hover:bg-secondary" onClick={cerrarCarrito}>
-                <ArrowLeft className="w-6 h-6" />
-              </Button>
-              <div>
-                <SheetTitle className="text-xl">Tu Pedido</SheetTitle>
-                <p className="text-xs text-muted-foreground mt-0.5">Pedido {mesa?.nombre} • {todosLosItems.length} items</p>
-              </div>
+      {/* --- OVERLAY DEL PEDIDO --- */}
+      {carritoAbierto && (
+        <div
+          className="fixed inset-0 z-40 bg-black/40 backdrop-blur-[2px] animate-in fade-in duration-200"
+          onClick={cerrarCarrito}
+        />
+      )}
+
+      {/* --- DRAWER VERTICAL DEL PEDIDO --- */}
+      <div
+        className={`fixed inset-x-0 bottom-0 z-50 transition-transform duration-300 ease-out ${carritoAbierto ? 'translate-y-0' : 'translate-y-full pointer-events-none'}`}
+      >
+        <div
+          className={`mx-auto max-w-2xl bg-background rounded-t-3xl shadow-[0_-12px_40px_rgba(0,0,0,0.28)] border-t border-border flex flex-col transition-[height] duration-300 ease-out ${(!mostrarCheckoutEnCarrito || expandido) ? 'overflow-hidden' : 'overflow-y-auto'}`}
+          style={!mostrarCheckoutEnCarrito ? { height: alturaCarrito } : expandido ? { height: '85vh' } : { maxHeight: '88vh' }}
+        >
+          {/* Header */}
+          <div className="shrink-0 sticky top-0 z-10 bg-background border-b border-border/50 pt-2">
+            <div className="w-full flex justify-center pt-3 pb-1">
+              <span className="w-12 h-1.5 rounded-full bg-muted-foreground/30" />
             </div>
+            <div className="flex items-center justify-between px-4 pb-3 pt-2">
 
-            <div className="flex-1 overflow-y-auto px-5 py-6 space-y-4">
-              {mostrarCheckoutEnCarrito && esSala ? (
-                <div className="space-y-4">
-                  <Button variant="ghost" size="sm" className="-ml-2 -mt-2" onClick={() => setMostrarCheckoutEnCarrito(false)}>
-                    <ArrowLeft className="w-4 h-4 mr-1" />
-                    Volver al pedido
-                  </Button>
-                  <CheckoutDeliveryGrupal
-                    restauranteId={restaurante?.id ?? 0}
-                    restauranteUsername={restaurante?.username ?? null}
-                    itemsTotal={totalPedido}
-                    totalItems={todosLosItems.length}
-                    onConfirmarClick={iniciarConfirmacionPedido}
-                    sendMessage={sendMessage}
-                    clienteId={clienteId ?? ''}
-                    clienteNombre={clienteNombre ?? ''}
-                    checkoutData={checkoutDeliveryData}
-                    editSemaphore={checkoutEditSemaphore}
-                    restauranteDireccion={restaurante?.direccion ?? undefined}
-                  />
-                </div>
-              ) : todosLosItems.length === 0 ? (
-                <div className="h-full flex flex-col items-center justify-center text-center space-y-4 opacity-60">
-                  <div className="bg-secondary p-6 rounded-full">
-                    <UtensilsCrossed className="w-10 h-10" />
-                  </div>
-                  <p className="font-medium">El pedido está vacío.</p>
-                  <Button variant="link" onClick={cerrarCarrito}>Ir al menú</Button>
-                </div>
+              <div className="w-8 h-8 flex items-center justify-center">
+              </div>
+              <span className="text-xl font-extrabold">
+                {mostrarCheckoutEnCarrito ? tituloCheckout : 'Tu pedido'}
+              </span>
+              {mostrarCheckoutEnCarrito ? (
+                <button
+                  onClick={() => setExpandido(e => !e)}
+                  className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-secondary transition-colors"
+                  aria-label={expandido ? 'Minimizar' : 'Maximizar'}
+                >
+                  {expandido ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+                </button>
               ) : (
-                <>
-                {todosLosItems.map((item) => {
-                  const esMio = item.clienteNombre === clienteNombre;
-                  const prodOriginal = productos.find(p => p.id === (item.productoId || item.id));
-                  const imagen = item.imagenUrl || prodOriginal?.imagenUrl;
-                  const precio = parseFloat(item.precioUnitario || String(item.precio || 0));
-
-                  return (
-                    <div key={item.id} className={`relative flex gap-4 p-3 rounded-2xl border transition-all ${esMio ? 'bg-card border-primary/20 shadow-sm' : 'bg-secondary/30 border-transparent opacity-90 grayscale-[0.3]'
-                      }`}>
-                      <div className="w-20 h-20 shrink-0 rounded-xl overflow-hidden bg-secondary">
-                        {imagen ? (
-                          <img src={imagen} alt="img" className="w-full h-full object-cover" />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center text-muted-foreground">
-                            <Utensils className="w-6 h-6 text-primary" />
-                          </div>
-                        )}
-                      </div>
-
-                      <div className="flex-1 flex flex-col justify-between py-0.5 min-w-0">
-                        <div className="flex justify-between items-start gap-2">
-                          <div className="min-w-0">
-                            <p className="font-bold text-sm truncate">{item.nombreProducto || item.nombre}</p>
-                            <div className="flex items-center gap-1.5 mt-1">
-                              <Badge variant="secondary" className={`h-5 text-[10px] px-1.5 font-normal rounded-md ${esMio ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-300' : ''}`}>
-                                {esMio ? 'Tú' : item.clienteNombre}
-                              </Badge>
-                            </div>
-                            {(item as any).ingredientesExcluidosNombres?.length > 0 && (
-                              <p className="text-xs text-primary font-medium mt-1">
-                                ⚠️ Sin: {(item as any).ingredientesExcluidosNombres.join(', ')}
-                              </p>
-                            )}
-                            {(item as any).agregados?.length > 0 && (
-                              <div className="mt-1">
-                                {(item as any).agregados.map((ag: any) => (
-                                  <p key={ag.id} className="text-xs text-muted-foreground font-medium flex items-center gap-1">
-                                    <span>+ {ag.nombre || 'Extra'}</span>
-                                    {ag.precio && parseFloat(ag.precio) > 0 && (
-                                      <span className="text-primary/80">(+${parseFloat(ag.precio).toFixed(0)})</span>
-                                    )}
-                                  </p>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                          <p className="font-bold text-base">${(precio * item.cantidad).toFixed(2)}</p>
-                        </div>
-
-                        {esMio ? (
-                          <div className="flex items-center justify-end gap-3 mt-2">
-
-                            <button onClick={() => handleEliminarItem(item.id)} className="w-8 h-8 flex items-center justify-center rounded-full bg-destructive/10 text-destructive hover:bg-destructive hover:text-white transition-colors">
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-
-                          </div>
-                        ) : (
-                          <div className="flex justify-end mt-2">
-                            <span className="text-xs text-muted-foreground">x{item.cantidad} unidades</span>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  )
-                })}
-                </>
+                <div className="w-8 h-8" />
               )}
             </div>
+          </div>
 
-            {(todosLosItems.length > 0 && !mostrarCheckoutEnCarrito) && (
-              <div className="p-5 bg-background border-t border-border shadow-[0_-5px_20px_rgba(0,0,0,0.05)] z-20">
-                <div className="flex justify-between items-center mb-4">
+          {/* Cuerpo */}
+          {mostrarCheckoutEnCarrito && esSala ? (
+            <CheckoutDeliveryGrupal
+              modo={expandido ? 'completo' : 'pasos'}
+              onVolverCarrito={() => { setMostrarCheckoutEnCarrito(false); setExpandido(true) }}
+              restauranteId={restaurante?.id ?? 0}
+              restauranteUsername={restaurante?.username ?? null}
+              itemsTotal={totalPedido}
+              totalItems={todosLosItems.length}
+              onConfirmarClick={iniciarConfirmacionPedido}
+              sendMessage={sendMessage}
+              clienteId={clienteId ?? ''}
+              clienteNombre={clienteNombre ?? ''}
+              checkoutData={checkoutDeliveryData}
+              editSemaphore={checkoutEditSemaphore}
+              restauranteDireccion={restaurante?.direccion ?? undefined}
+              onTituloChange={setTituloCheckout}
+            />
+          ) : todosLosItems.length === 0 ? (
+            <div className={`flex flex-col items-center justify-center text-center gap-4 opacity-60 px-5 ${expandido ? 'flex-1' : 'py-12'}`}>
+              <div className="bg-secondary p-6 rounded-full">
+                <UtensilsCrossed className="w-10 h-10" />
+              </div>
+              <p className="font-medium">El pedido está vacío.</p>
+              <Button variant="link" onClick={cerrarCarrito}>Ir al menú</Button>
+            </div>
+          ) : (
+            <>
+              <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3 min-h-0">
+                {todosLosItems.map((item) => renderItem(item))}
+              </div>
+
+              <div className="shrink-0 p-4 border-t border-border bg-background">
+                <div className="flex justify-between items-center mb-3">
                   <span className="text-muted-foreground text-sm">Total a pagar</span>
                   <span className="text-2xl font-black tracking-tight">${totalPedido}</span>
                 </div>
                 <Button
                   className="w-full h-12 rounded-xl font-bold text-base shadow-md"
-                  onClick={() => esSala ? setMostrarCheckoutEnCarrito(true) : iniciarConfirmacionPedido()}
+                  onClick={() => {
+                    if (esSala) {
+                      setMostrarCheckoutEnCarrito(true)
+                      setExpandido(false)
+                    } else {
+                      iniciarConfirmacionPedido()
+                    }
+                  }}
                 >
                   Continuar
                 </Button>
               </div>
-            )}
-          </div>
-        </SheetContent>
-      </Sheet>
+            </>
+          )}
+        </div>
+      </div>
 
       <ProductDetailDrawer
         product={selectedProduct ? { ...selectedProduct, categoria: selectedProduct.categoria ?? undefined } : null}

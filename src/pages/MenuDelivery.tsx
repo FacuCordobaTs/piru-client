@@ -2,10 +2,10 @@ import { useState, useEffect, useLayoutEffect, useCallback, useRef, type Dispatc
 import { flushSync } from 'react-dom'
 import { useNavigate, useParams } from 'react-router'
 import { Button } from '@/components/ui/button'
-import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet'
+import { Sheet, SheetContent } from '@/components/ui/sheet'
 import { toast } from 'sonner'
 import {
-    Trash2, ArrowLeft,
+    Trash2, Maximize2, Minimize2, Loader2,
     Package, Receipt, UtensilsCrossed, Utensils, Clock, Sparkles, Check, X, Users, ChevronRight
 } from 'lucide-react'
 import { ProductDetailDrawer } from '@/components/ProductDetailDrawer'
@@ -13,6 +13,7 @@ import { ThemeToggle } from '@/components/ThemeToggle'
 import { MisPedidosDrawer } from '@/components/MisPedidosDrawer'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
+import { CheckoutDeliveryGrupal } from '@/components/CheckoutDeliveryGrupal'
 
 type HorarioTurno = { diaSemana: number; horaApertura: string; horaCierre: string }
 
@@ -319,6 +320,15 @@ const MenuDelivery = () => {
     const [modalPuntosOpen, setModalPuntosOpen] = useState(false)
     const [misPedidosOpen, setMisPedidosOpen] = useState(false)
 
+    const [mostrarCheckoutEnCarrito, setMostrarCheckoutEnCarrito] = useState(false)
+    const [expandido, setExpandido] = useState(false)
+    const [checkoutDeliveryData, setCheckoutDeliveryData] = useState<any>(null)
+    const [editSemaphoreLocal, setEditSemaphoreLocal] = useState<{ clienteId: string; clienteNombre: string } | null>(null)
+    const [tituloCheckout, setTituloCheckout] = useState('¿Cómo lo querés?')
+    const [submittingOrder, setSubmittingOrder] = useState(false)
+    const checkoutDataRef = useRef<any>(null)
+    const isSubmittingRef = useRef(false)
+
     // Function to fetch points
     const fetchPuntos = useCallback(async (telefono: string, restauranteId: number) => {
         if (!telefono || !restauranteId) return
@@ -394,10 +404,16 @@ const MenuDelivery = () => {
     const abrirCarrito = useCallback(() => {
         window.history.pushState({ drawer: 'carrito' }, '')
         setCarritoAbierto(true)
-    }, [])
+        if (!mostrarCheckoutEnCarrito) setExpandido(true)
+    }, [mostrarCheckoutEnCarrito])
 
     const cerrarCarrito = useCallback(() => {
         setCarritoAbierto(false)
+        setMostrarCheckoutEnCarrito(false)
+        setExpandido(false)
+        setEditSemaphoreLocal(null)
+        setCheckoutDeliveryData(null)
+        checkoutDataRef.current = null
         if (window.history.state?.drawer === 'carrito') {
             window.history.back()
         }
@@ -420,6 +436,11 @@ const MenuDelivery = () => {
         const handlePopState = (event: PopStateEvent) => {
             if (carritoAbierto) {
                 setCarritoAbierto(false)
+                setMostrarCheckoutEnCarrito(false)
+                setExpandido(false)
+                setEditSemaphoreLocal(null)
+                setCheckoutDeliveryData(null)
+                checkoutDataRef.current = null
                 event.preventDefault()
                 return
             }
@@ -554,19 +575,107 @@ const MenuDelivery = () => {
         setCartItems(prev => prev.filter(item => item.id !== itemId))
     }
 
-    const confirmarPedido = () => {
-        if (cartItems.length === 0) return
-        if (!estadoAbierto.abierto && !restaurante?.permitirPedidosProgramados) {
-            toast.error('El restaurante está cerrado en este momento')
-            return
-        }
-        localStorage.setItem(`deliveryCart_${username}`, JSON.stringify({ items: cartItems, restauranteId: restaurante.id, deliveryFee: restaurante.deliveryFee }))
-        navigate(`/${username}/checkout`)
-    }
-
     const totalPedido = cartItems.reduce((sum, item) => sum + (parseFloat(item.precio) * item.cantidad), 0).toFixed(2)
     const puntosEnCarrito = () => cartItems.reduce((sum, item) => sum + (item.esCanjePuntos ? item.puntosNecesarios * item.cantidad : 0), 0)
     const puntosGanadosCarrito = () => cartItems.reduce((sum, item) => sum + (!item.esCanjePuntos && item.puntosGanados ? item.puntosGanados * item.cantidad : 0), 0)
+
+    const alturaCarrito = (() => {
+        const n = cartItems.length
+        if (n >= 4) return '85vh'
+        return ['28vh', '42vh', '57vh', '71vh'][n]
+    })()
+
+    const submitOrder = useCallback(async (data: any) => {
+        if (!data || !restaurante || !username) return
+        setSubmittingOrder(true)
+        try {
+            const url = import.meta.env.VITE_API_URL || 'http://localhost:3000/api'
+            const tipoPedido = data.tipoPedido as 'delivery' | 'takeaway'
+            const endpoint = tipoPedido === 'delivery' ? '/public/delivery/create' : '/public/takeaway/create'
+            const payload: any = {
+                restauranteId: restaurante.id,
+                nombreCliente: data.nombre,
+                telefono: data.telefono,
+                notas: data.notas || '',
+                items: cartItems.map((i: any) => ({
+                    productoId: i.productoId,
+                    varianteId: i.varianteId,
+                    cantidad: i.cantidad,
+                    ingredientesExcluidos: i.ingredientesExcluidos,
+                    agregados: i.agregados || [],
+                    esCanjePuntos: i.esCanjePuntos || false
+                })),
+                metodoPago: data.metodoPago,
+            }
+            if (data.codigoDescuentoId) payload.codigoDescuentoId = data.codigoDescuentoId
+            if (tipoPedido === 'delivery') {
+                payload.direccion = data.direccion
+                payload.lat = data.lat
+                payload.lng = data.lng
+                if (data.sucursalId) payload.sucursalId = data.sucursalId
+            }
+            if (tipoPedido === 'takeaway' && data.sucursalId) payload.sucursalId = data.sucursalId
+            if (data.horarioProgramado) payload.horarioProgramado = data.horarioProgramado
+            const res = await fetch(`${url}${endpoint}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            })
+            const result = await res.json()
+            if (result.success) {
+                localStorage.setItem('cliente_nombre', data.nombre)
+                localStorage.setItem('cliente_telefono', data.telefono)
+                if (tipoPedido === 'delivery') {
+                    localStorage.setItem('cliente_direccion', data.direccion || '')
+                    if (data.lat != null) localStorage.setItem('cliente_lat', String(data.lat))
+                    if (data.lng != null) localStorage.setItem('cliente_lng', String(data.lng))
+                }
+                localStorage.removeItem(`deliveryCart_${username}`)
+                sessionStorage.setItem('deliveryOrderInfo', JSON.stringify({
+                    pedidoId: result.data.id,
+                    tipoPedido,
+                    total: result.data.total ? parseFloat(result.data.total) : parseFloat(data.total || '0'),
+                    items: cartItems,
+                    metodoPago: data.metodoPago,
+                    nombreCliente: data.nombre,
+                    aliasDinamico: result.data.aliasDinamico,
+                    cvuDinamico: result.data.cvuDinamico,
+                    deliveryFee: result.data.deliveryFee,
+                    zonaNombre: result.data.zonaNombre,
+                    direccion: tipoPedido === 'delivery' ? data.direccion : null,
+                    montoDescuento: data.montoDescuento > 0 ? data.montoDescuento : undefined,
+                    horarioProgramado: data.horarioProgramado || undefined,
+                }))
+                navigate(`/${username}/success`)
+            } else {
+                if (result.code === 'FUERA_DE_ZONA') {
+                    toast.error('Fuera de zona', { description: 'Tu dirección está fuera del área de delivery. Probá con otra dirección o elegí Take Away.', duration: 6000 })
+                } else {
+                    toast.error(result.message || 'Error al crear el pedido')
+                }
+            }
+        } catch {
+            toast.error('Ocurrió un error al enviar el pedido')
+        } finally {
+            setSubmittingOrder(false)
+            isSubmittingRef.current = false
+        }
+    }, [restaurante, username, cartItems, navigate])
+
+    const handleCheckoutMessage = useCallback((msg: any) => {
+        if (msg.type === 'INICIAR_EDICION_CHECKOUT') {
+            setEditSemaphoreLocal({ clienteId: 'solo', clienteNombre: msg.payload.clienteNombre })
+        } else if (msg.type === 'CANCELAR_EDICION_CHECKOUT') {
+            setEditSemaphoreLocal(null)
+        } else if (msg.type === 'MODIFICAR_CHECKOUT') {
+            checkoutDataRef.current = msg.payload.updates
+            setCheckoutDeliveryData(msg.payload.updates)
+        } else if (msg.type === 'ACEPTAR_EDICION_CHECKOUT') {
+            if (isSubmittingRef.current) return
+            isSubmittingRef.current = true
+            submitOrder(checkoutDataRef.current)
+        }
+    }, [submitOrder])
     const crearSala = async (nombreParaSala: string) => {
         if (!nombreParaSala.trim() || !restaurante?.id) return
         setCreandoSala(true)
@@ -891,34 +1000,92 @@ const MenuDelivery = () => {
                 </button>
             </div>
 
-            {/* CARRITO SHEET */}
-            <Sheet open={carritoAbierto} onOpenChange={(open) => !open && cerrarCarrito()}>
-                <SheetContent side="right" className="w-full sm:max-w-md p-0 border-l-0 sm:border-l bg-background">
-                    <div className="flex flex-col h-full">
-                        <div className="px-5 py-4 flex items-center gap-4 border-b border-border/50 bg-background/80 backdrop-blur-md sticky top-0 z-10">
-                            <Button variant="ghost" size="icon" className="rounded-full -ml-2 hover:bg-secondary" onClick={cerrarCarrito}>
-                                <ArrowLeft className="w-6 h-6" />
-                            </Button>
-                            <div>
-                                <SheetTitle className="text-xl">Tu Pedido</SheetTitle>
-                                <p className="text-xs text-muted-foreground mt-0.5">{cartItems.length} items</p>
+            {/* CARRITO OVERLAY */}
+            {carritoAbierto && (
+                <div
+                    className="fixed inset-0 z-40 bg-black/40 backdrop-blur-[2px] animate-in fade-in duration-200"
+                    onClick={cerrarCarrito}
+                />
+            )}
+
+            {/* CARRITO DRAWER */}
+            <div
+                className={`fixed inset-x-0 bottom-0 z-50 transition-transform duration-300 ease-out ${carritoAbierto ? 'translate-y-0' : 'translate-y-full pointer-events-none'}`}
+            >
+                <div
+                    className={`mx-auto max-w-2xl bg-background rounded-t-3xl shadow-[0_-12px_40px_rgba(0,0,0,0.28)] border-t border-border flex flex-col transition-[height] duration-300 ease-out relative ${(!mostrarCheckoutEnCarrito || expandido) ? 'overflow-hidden' : 'overflow-y-auto'}`}
+                    style={!mostrarCheckoutEnCarrito ? { height: alturaCarrito } : expandido ? { height: '85vh' } : { maxHeight: '88vh' }}
+                >
+                    {submittingOrder && (
+                        <div className="absolute inset-0 bg-background/80 backdrop-blur-sm z-20 flex items-center justify-center rounded-t-3xl">
+                            <div className="flex flex-col items-center gap-3">
+                                <Loader2 className="w-8 h-8 animate-spin text-primary" />
+                                <p className="text-sm font-medium">Enviando pedido...</p>
                             </div>
                         </div>
+                    )}
 
-                        <div className="flex-1 overflow-y-auto px-5 py-6 space-y-4">
-                            {cartItems.length === 0 ? (
-                                <div className="h-full flex flex-col items-center justify-center text-center space-y-4 opacity-60">
-                                    <div className="bg-secondary p-6 rounded-full">
-                                        <UtensilsCrossed className="w-10 h-10" />
-                                    </div>
-                                    <p className="font-medium">El pedido está vacío.</p>
-                                    <Button variant="link" onClick={cerrarCarrito}>Ir al menú</Button>
-                                </div>
+                    <div className="shrink-0 sticky top-0 z-10 bg-background pt-2">
+                        <div className="w-full flex justify-center pt-3 pb-1">
+                            <span className="w-12 h-1.5 rounded-full bg-muted-foreground/30" />
+                        </div>
+                        <div className="flex items-center justify-between px-4 pb-3 pt-2">
+                            <div className="w-8 h-8" />
+                            <span className="text-xl font-extrabold">
+                                {mostrarCheckoutEnCarrito ? tituloCheckout : 'Tu Pedido'}
+                            </span>
+                            {mostrarCheckoutEnCarrito ? (
+                                <button
+                                    onClick={() => setExpandido(e => !e)}
+                                    className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-secondary transition-colors"
+                                    aria-label={expandido ? 'Minimizar' : 'Maximizar'}
+                                >
+                                    {expandido ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+                                </button>
                             ) : (
-                                cartItems.map((item) => {
-                                    const imagen = item.imagenUrl;
-                                    const precio = parseFloat(item.precio || 0);
+                                <div className="w-8 h-8" />
+                            )}
+                        </div>
+                    </div>
 
+                    {mostrarCheckoutEnCarrito ? (
+                        <CheckoutDeliveryGrupal
+                            modo={expandido ? 'completo' : 'pasos'}
+                            onVolverCarrito={() => {
+                                setMostrarCheckoutEnCarrito(false)
+                                setExpandido(true)
+                                setCheckoutDeliveryData(null)
+                                checkoutDataRef.current = null
+                                setEditSemaphoreLocal(null)
+                            }}
+                            restauranteId={restaurante?.id ?? 0}
+                            restauranteUsername={username ?? null}
+                            itemsTotal={totalPedido}
+                            totalItems={cartItems.length}
+                            onConfirmarClick={() => {}}
+                            sendMessage={handleCheckoutMessage}
+                            clienteId="solo"
+                            clienteNombre={localStorage.getItem('cliente_nombre') || ''}
+                            checkoutData={checkoutDeliveryData}
+                            editSemaphore={editSemaphoreLocal}
+                            restauranteDireccion={restaurante?.direccion ?? undefined}
+                            onTituloChange={setTituloCheckout}
+                            labelGuardar="Confirmar y pedir"
+                        />
+                    ) : cartItems.length === 0 ? (
+                        <div className="flex flex-col items-center justify-center text-center gap-4 opacity-60 px-5 py-12">
+                            <div className="bg-secondary p-6 rounded-full">
+                                <UtensilsCrossed className="w-10 h-10" />
+                            </div>
+                            <p className="font-medium">El pedido está vacío.</p>
+                            <Button variant="link" onClick={cerrarCarrito}>Ir al menú</Button>
+                        </div>
+                    ) : (
+                        <>
+                            <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3 min-h-0">
+                                {cartItems.map((item) => {
+                                    const imagen = item.imagenUrl
+                                    const precio = parseFloat(item.precio || 0)
                                     return (
                                         <div key={item.id} className="relative flex gap-4 p-3 rounded-2xl border transition-all bg-card border-primary/20 shadow-sm">
                                             <div className="w-20 h-20 shrink-0 rounded-xl overflow-hidden bg-secondary">
@@ -930,7 +1097,6 @@ const MenuDelivery = () => {
                                                     </div>
                                                 )}
                                             </div>
-
                                             <div className="flex-1 flex flex-col justify-between py-0.5 min-w-0">
                                                 <div className="flex justify-between items-start gap-2">
                                                     <div className="min-w-0">
@@ -943,9 +1109,7 @@ const MenuDelivery = () => {
                                                         {item.agregados?.length > 0 && (
                                                             <div className="mt-1">
                                                                 {item.agregados.map((ag: any) => (
-                                                                    <p key={ag.id} className="text-xs text-muted-foreground font-medium flex items-center gap-1">
-                                                                        <span>+ {ag.nombre}</span>
-                                                                    </p>
+                                                                    <p key={ag.id} className="text-xs text-muted-foreground font-medium">+ {ag.nombre}</p>
                                                                 ))}
                                                             </div>
                                                         )}
@@ -965,30 +1129,29 @@ const MenuDelivery = () => {
                                             </div>
                                         </div>
                                     )
-                                })
-                            )}
-                        </div>
-
-                        {cartItems.length > 0 && (
-                            <div className="p-5 bg-background border-t border-border shadow-[0_-5px_20px_rgba(0,0,0,0.05)] z-20">
-                                <div className="flex justify-between items-center mb-4">
+                                })}
+                            </div>
+                            <div className="shrink-0 p-4 border-t border-border bg-background">
+                                <div className="flex justify-between items-center mb-3">
                                     <span className="text-muted-foreground text-sm">Total a pagar</span>
                                     <span className="text-2xl font-black tracking-tight">${totalPedido}</span>
                                 </div>
                                 <Button
-                                    className={`w-full h-14 text-base font-bold rounded-2xl shadow-lg ${!estadoAbierto.abierto && !restaurante?.permitirPedidosProgramados ? 'bg-muted text-muted-foreground cursor-not-allowed' : 'shadow-primary/20 bg-primary hover:bg-primary/90 text-primary-foreground'}`}
-                                    size="lg"
-                                    onClick={confirmarPedido}
+                                    className="w-full h-12 rounded-xl font-bold text-base shadow-md"
                                     disabled={!estadoAbierto.abierto && !restaurante?.permitirPedidosProgramados}
+                                    onClick={() => {
+                                        if (!estadoAbierto.abierto && !restaurante?.permitirPedidosProgramados) return
+                                        setMostrarCheckoutEnCarrito(true)
+                                        setExpandido(false)
+                                    }}
                                 >
                                     {!estadoAbierto.abierto && !restaurante?.permitirPedidosProgramados ? 'Cerrado' : 'Continuar'}
-                                    {(estadoAbierto.abierto || restaurante?.permitirPedidosProgramados) && <ArrowLeft className="w-5 h-5 ml-2 rotate-180" />}
                                 </Button>
                             </div>
-                        )}
-                    </div>
-                </SheetContent>
-            </Sheet>
+                        </>
+                    )}
+                </div>
+            </div>
 
             <Sheet open={modalPuntosOpen} onOpenChange={setModalPuntosOpen}>
                 <SheetContent side="bottom" className="rounded-t-3xl border-none">

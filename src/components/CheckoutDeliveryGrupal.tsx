@@ -31,6 +31,8 @@ interface CheckoutDeliveryGrupalProps {
   onVolverCarrito: () => void
   /** Callback para notificar el título actual al drawer padre */
   onTituloChange?: (titulo: string) => void
+  /** Texto personalizado para el botón del último paso (default: 'Guardar datos') */
+  labelGuardar?: string
 }
 
 export function CheckoutDeliveryGrupal({
@@ -48,6 +50,7 @@ export function CheckoutDeliveryGrupal({
   modo,
   onVolverCarrito,
   onTituloChange,
+  labelGuardar,
 }: CheckoutDeliveryGrupalProps) {
   const [tipoPedido, setTipoPedido] = useState<'delivery' | 'takeaway'>(checkoutData?.tipoPedido || 'delivery')
   const [nombre, setNombre] = useState(checkoutData?.nombre || localStorage.getItem('cliente_nombre') || '')
@@ -810,7 +813,7 @@ export function CheckoutDeliveryGrupal({
         onClick={modo === 'pasos' ? handleSiguiente : handleGuardarEdicion}
         disabled={accionDisabled}
       >
-        {modo === 'pasos' && !esUltimo ? 'Siguiente' : 'Guardar datos'}
+        {modo === 'pasos' && !esUltimo ? 'Siguiente' : (labelGuardar || 'Guardar datos')}
       </Button>
     )
   } else if (checkoutData) {

@@ -1013,8 +1013,8 @@ const MenuDelivery = () => {
                 className={`fixed inset-x-0 bottom-0 z-50 transition-transform duration-300 ease-out ${carritoAbierto ? 'translate-y-0' : 'translate-y-full pointer-events-none'}`}
             >
                 <div
-                    className="mx-auto max-w-2xl bg-background rounded-t-3xl shadow-[0_-12px_40px_rgba(0,0,0,0.28)] border-t border-border flex flex-col transition-[height] duration-[380ms] ease-[cubic-bezier(0.4,0,0.2,1)] relative overflow-hidden"
-                    style={{ height: !mostrarCheckoutEnCarrito ? alturaCarrito : expandido ? '85vh' : '88vh' }}
+                    className={`mx-auto max-w-2xl bg-background rounded-t-3xl shadow-[0_-12px_40px_rgba(0,0,0,0.28)] border-t border-border flex flex-col transition-[height] duration-300 ease-out relative ${(!mostrarCheckoutEnCarrito || expandido) ? 'overflow-hidden' : 'overflow-y-auto'}`}
+                    style={!mostrarCheckoutEnCarrito ? { height: alturaCarrito } : expandido ? { height: '85vh' } : { maxHeight: '88vh' }}
                 >
                     {submittingOrder && (
                         <div className="absolute inset-0 bg-background/80 backdrop-blur-sm z-20 flex items-center justify-center rounded-t-3xl">

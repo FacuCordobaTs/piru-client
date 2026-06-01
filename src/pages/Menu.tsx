@@ -42,13 +42,11 @@ const Menu = () => {
   const abrirCarrito = useCallback(() => {
     window.history.pushState({ drawer: 'carrito' }, '')
     setCarritoAbierto(true)
-    setExpandido(true)
-  }, [])
+    if (!mostrarCheckoutEnCarrito) setExpandido(true)
+  }, [mostrarCheckoutEnCarrito])
 
   const cerrarCarrito = useCallback(() => {
     setCarritoAbierto(false)
-    setMostrarCheckoutEnCarrito(false)
-    setExpandido(false)
     if (window.history.state?.drawer === 'carrito') {
       window.history.back()
     }
@@ -317,6 +315,11 @@ const Menu = () => {
   }, [todosConfirmaron, urlQrToken])
 
   const todosLosItems = wsState?.items || []
+
+  useEffect(() => {
+    if (todosLosItems.length === 0) setMostrarCheckoutEnCarrito(false)
+  }, [todosLosItems.length])
+
   const alturaCarrito = (() => {
     const n = todosLosItems.length
     if (n >= 4) return '85vh'
@@ -700,7 +703,7 @@ const Menu = () => {
           style={!mostrarCheckoutEnCarrito ? { height: alturaCarrito } : expandido ? { height: '85vh' } : { maxHeight: '88vh' }}
         >
           {/* Header */}
-          <div className="shrink-0 sticky top-0 z-10 bg-background border-b border-border/50 pt-2">
+          <div className="shrink-0 sticky top-0 z-10 bg-background pt-2">
             <div className="w-full flex justify-center pt-3 pb-1">
               <span className="w-12 h-1.5 rounded-full bg-muted-foreground/30" />
             </div>

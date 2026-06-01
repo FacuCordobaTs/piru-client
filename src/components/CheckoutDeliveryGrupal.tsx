@@ -4,7 +4,7 @@ import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { toast } from 'sonner'
-import { MapPin, Store, Truck, AlertTriangle, Loader2, Pencil, X, Tag, Home, Building2, Clock, CreditCard, Wallet, Zap, ChevronLeft } from 'lucide-react'
+import { MapPin, Store, Truck, AlertTriangle, Loader2, Pencil, X, Tag, Home, Building2, Clock, CreditCard, Wallet, Banknote, ChevronLeft, Check } from 'lucide-react'
 import { AddressAutocomplete } from '@/components/AddressAutocomplete'
 import { AddressMapPreview } from '@/components/AddressMapPreview'
 import type { CheckoutDeliveryData, CheckoutEditSemaphore } from '@/store/mesaStore'
@@ -79,7 +79,6 @@ export function CheckoutDeliveryGrupal({
   const [validandoCodigo, setValidandoCodigo] = useState(false)
   const [codigoError, setCodigoError] = useState<string | null>(null)
 
-  // Paso actual del wizard (modo 'pasos')
   const [paso, setPaso] = useState(0)
   const pasos: PasoCheckout[] = ['tipo', 'datos', 'ubicacion', 'extras']
 
@@ -92,7 +91,6 @@ export function CheckoutDeliveryGrupal({
   const subtotalConEnvio = tipoPedido === 'delivery' ? itemsTotalNum + deliveryFee : itemsTotalNum
   const total = Math.max(0, subtotalConEnvio - montoDescuento)
 
-  // Fetch restaurante data when editing starts
   useEffect(() => {
     if (!restauranteUsername || !estoyEditando || restauranteData) return
     const fetchRestaurante = async () => {
@@ -119,7 +117,6 @@ export function CheckoutDeliveryGrupal({
     fetchRestaurante()
   }, [restauranteUsername, estoyEditando])
 
-  // Auto-select first payment method when methods load
   useEffect(() => {
     if (!availablePaymentMethods.length) return
     const allowed = new Set(availablePaymentMethods.map(m => m.id))
@@ -129,7 +126,6 @@ export function CheckoutDeliveryGrupal({
     })
   }, [availablePaymentMethods])
 
-  // Sync from checkoutData changes (another user saved)
   useEffect(() => {
     if (!checkoutData) return
     setTipoPedido(checkoutData.tipoPedido)
@@ -334,7 +330,6 @@ export function CheckoutDeliveryGrupal({
     onConfirmarClick()
   }
 
-  // Al entrar al checkout sin datos y sin nadie editando, tomo la edición automáticamente
   useEffect(() => {
     if (!checkoutData && !editSemaphore && !estoyEditando) {
       handleIniciarEdicion()
@@ -342,12 +337,10 @@ export function CheckoutDeliveryGrupal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Reiniciar el wizard al empezar a editar
   useEffect(() => {
     if (estoyEditando) setPaso(0)
   }, [estoyEditando])
 
-  // Validación por paso (wizard comprimido)
   const validarPaso = (p: number): boolean => {
     const k = pasos[p]
     if (k === 'datos') {
@@ -389,9 +382,17 @@ export function CheckoutDeliveryGrupal({
       case 'transferencia_automatica_cucuru':
       case 'transferencia_automatica_talo': return 'Transferencia automática'
       case 'mercadopago_checkout': return 'Mercado Pago'
-      case 'mercadopago_bricks': return 'Tarjeta (Bricks)'
+      case 'mercadopago_bricks': return 'Tarjeta'
       default: return m.label
     }
+  }
+
+  const paymentIcon = (m: MetodoPublico) => {
+    const cls = `w-4 h-4 shrink-0 ${metodoPago === m.id ? 'text-foreground' : 'text-muted-foreground'}`
+    if (m.id === 'cash') return <Banknote className={cls} />
+    if (m.id === 'mercadopago_checkout') return <Wallet className={cls} />
+    if (m.id === 'mercadopago_bricks') return <CreditCard className={cls} />
+    return <CreditCard className={cls} />
   }
 
   const datosCompletos = checkoutData &&
@@ -402,99 +403,111 @@ export function CheckoutDeliveryGrupal({
   const delEn = restauranteData ? restauranteData.deliveryEnabled !== false : true
   const tkEn = restauranteData ? restauranteData.takeawayEnabled !== false : true
 
-  // ===== Secciones del formulario (reutilizadas en 'completo' y 'pasos') =====
+  const inputCls = "h-12 rounded-2xl bg-secondary/60 border-0 shadow-none ring-0 focus-visible:ring-0 focus-visible:ring-offset-0 text-base px-4"
+
+  // ===== Secciones del formulario =====
 
   const secTipo = (
-    <section className="space-y-3">
+    <section>
       {restauranteData && !delEn && !tkEn ? (
-        <div className="flex items-center gap-2 px-3 py-2 bg-destructive/10 rounded-xl border border-destructive/30">
+        <div className="flex items-center gap-2.5 px-4 py-3 bg-destructive/10 rounded-2xl">
           <AlertTriangle className="w-4 h-4 text-destructive shrink-0" />
           <p className="text-sm text-destructive font-medium">El local no está aceptando pedidos ahora.</p>
         </div>
       ) : (
-        <div className="grid grid-cols-2 gap-3">
-          <div
-            className={`flex flex-col items-center justify-center px-3 py-7 border-2 rounded-xl transition-colors ${restauranteData && !delEn ? 'opacity-40 cursor-not-allowed border-border' : `cursor-pointer ${tipoPedido === 'delivery' ? 'border-primary bg-primary/5' : 'border-border hover:bg-secondary/50'}`}`}
+        <div className="bg-secondary/60 rounded-2xl p-1 grid grid-cols-2 gap-1">
+          <button
+            type="button"
+            className={`flex items-center justify-center gap-2 py-4 rounded-xl transition-all duration-200 ${
+              restauranteData && !delEn
+                ? 'opacity-40 cursor-not-allowed'
+                : `cursor-pointer ${tipoPedido === 'delivery' ? 'bg-background shadow-sm' : ''}`
+            }`}
             onClick={() => (!restauranteData || delEn) && setTipoPedido('delivery')}
           >
-            <MapPin className={`w-6 h-6 mb-1 ${tipoPedido === 'delivery' ? 'text-primary' : 'text-muted-foreground'}`} />
-            <Label className="cursor-pointer text-sm font-medium">Delivery</Label>
-          </div>
-          <div
-            className={`flex flex-col items-center justify-center px-3 py-7 border-2 rounded-xl transition-colors ${restauranteData && !tkEn ? 'opacity-40 cursor-not-allowed border-border' : `cursor-pointer ${tipoPedido === 'takeaway' ? 'border-primary bg-primary/5' : 'border-border hover:bg-secondary/50'}`}`}
+            <MapPin className={`w-4 h-4 ${tipoPedido === 'delivery' ? 'text-primary' : 'text-muted-foreground'}`} />
+            <span className={`text-sm font-semibold ${tipoPedido === 'delivery' ? 'text-foreground' : 'text-muted-foreground'}`}>Delivery</span>
+          </button>
+          <button
+            type="button"
+            className={`flex items-center justify-center gap-2 py-4 rounded-xl transition-all duration-200 ${
+              restauranteData && !tkEn
+                ? 'opacity-40 cursor-not-allowed'
+                : `cursor-pointer ${tipoPedido === 'takeaway' ? 'bg-background shadow-sm' : ''}`
+            }`}
             onClick={() => (!restauranteData || tkEn) && setTipoPedido('takeaway')}
           >
-            <Store className={`w-6 h-6 mb-1 ${tipoPedido === 'takeaway' ? 'text-primary' : 'text-muted-foreground'}`} />
-            <Label className="cursor-pointer text-sm font-medium">Take Away</Label>
-          </div>
+            <Store className={`w-4 h-4 ${tipoPedido === 'takeaway' ? 'text-primary' : 'text-muted-foreground'}`} />
+            <span className={`text-sm font-semibold ${tipoPedido === 'takeaway' ? 'text-foreground' : 'text-muted-foreground'}`}>Take Away</span>
+          </button>
         </div>
       )}
     </section>
   )
 
   const secDatos = (
-    <div className="space-y-3">
-      <div className="space-y-1.5">
-        <Label htmlFor="nombre-grupal">Nombre de quien recibe</Label>
-        <Input id="nombre-grupal" placeholder="Ej: Juan Perez" className="h-11 rounded-xl" value={nombre} onChange={e => setNombre(e.target.value)} />
+    <div className="space-y-4">
+      <div className="space-y-2">
+        <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-1">Nombre</Label>
+        <Input id="nombre-grupal" placeholder="Quien recibe el pedido" className={inputCls} value={nombre} onChange={e => setNombre(e.target.value)} />
       </div>
-      <div className="space-y-1.5">
-        <Label htmlFor="telefono-grupal">Celular (WhatsApp)</Label>
-        <Input id="telefono-grupal" type="tel" placeholder="Ej: 5491112345678" className="h-11 rounded-xl" value={telefono} onChange={e => setTelefono(e.target.value.replace(/\D/g, ''))} />
+      <div className="space-y-2">
+        <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-1">Celular</Label>
+        <Input id="telefono-grupal" type="tel" placeholder="Ej: 5491112345678" className={inputCls} value={telefono} onChange={e => setTelefono(e.target.value.replace(/\D/g, ''))} />
       </div>
     </div>
   )
 
   const secUbicacion = (
-    <div className="space-y-3">
-      {/* Sucursal selector for takeaway with multiple branches */}
+    <div className="space-y-5">
       {tipoPedido === 'takeaway' && sucursales.length > 1 && (
-        <section className="space-y-2">
-          <Label className="text-sm">¿En qué local retirás?</Label>
-          <div className="grid grid-cols-1 gap-2">
+        <div className="space-y-2">
+          <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-1">¿En qué local retirás?</Label>
+          <div className="space-y-2">
             {sucursales.map(s => (
-              <div
+              <button
                 key={s.id}
+                type="button"
                 onClick={() => setSucursalSeleccionada(s.id)}
-                className={`flex items-center gap-3 p-3 border-2 rounded-xl cursor-pointer transition-colors ${sucursalSeleccionada === s.id ? 'border-primary bg-primary/5' : 'border-border hover:bg-secondary/50'}`}
+                className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-2xl transition-all duration-200 text-left ${sucursalSeleccionada === s.id ? 'bg-primary/10' : 'bg-secondary/50 hover:bg-secondary/80'}`}
               >
                 <Store className={`w-4 h-4 shrink-0 ${sucursalSeleccionada === s.id ? 'text-primary' : 'text-muted-foreground'}`} />
-                <div>
+                <div className="flex-1 min-w-0">
                   <p className="font-semibold text-sm">{s.nombre}</p>
-                  {s.direccion && <p className="text-xs text-muted-foreground">{s.direccion}</p>}
+                  {s.direccion && <p className="text-xs text-muted-foreground mt-0.5">{s.direccion}</p>}
                 </div>
-              </div>
+                {sucursalSeleccionada === s.id && <Check className="w-4 h-4 text-primary shrink-0" />}
+              </button>
             ))}
           </div>
-        </section>
+        </div>
       )}
 
-      {/* Delivery address */}
       {tipoPedido === 'delivery' && (
-        <div className="space-y-2 animate-in fade-in slide-in-from-top-2">
-          <Label htmlFor="direccion-grupal">Dirección de entrega</Label>
+        <div className="space-y-3 animate-in fade-in slide-in-from-top-2">
+          <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-1">Dirección de entrega</Label>
           <AddressAutocomplete value={direccion} onChange={handleAddressChange} placeholder="Ej: Espora 811, Santa Fe" />
           {lat !== null && lng !== null && <AddressMapPreview lat={lat} lng={lng} />}
           {lat !== null && lng !== null && direccion && (
-            <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
+            <div className="animate-in fade-in duration-300">
               {isCheckingZona ? (
-                <div className="flex items-center gap-2 px-3 py-2 bg-secondary/50 rounded-xl border border-border/50">
+                <div className="flex items-center gap-2.5 px-4 py-3 bg-secondary/50 rounded-2xl">
                   <Loader2 className="w-3.5 h-3.5 animate-spin text-muted-foreground" />
-                  <span className="text-xs text-muted-foreground">Verificando zona de delivery...</span>
+                  <span className="text-sm text-muted-foreground">Verificando zona de delivery...</span>
                 </div>
               ) : fueraDeZona ? (
-                <div className="flex items-center gap-2 px-3 py-2 bg-destructive/10 rounded-xl border border-destructive/30">
+                <div className="flex items-center gap-2.5 px-4 py-3 bg-destructive/10 rounded-2xl">
                   <AlertTriangle className="w-4 h-4 text-destructive shrink-0" />
-                  <span className="text-xs text-destructive font-medium">Fuera del área de delivery. Probá otra dirección o Take Away.</span>
+                  <span className="text-sm text-destructive font-medium">Fuera del área de delivery. Probá Take Away.</span>
                 </div>
               ) : zonaDeliveryFee !== null ? (
-                <div className="flex items-center justify-between px-3 py-2 bg-emerald-500/10 rounded-xl border border-emerald-500/30">
-                  <div className="flex items-center gap-2">
-                    <Truck className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
-                    <span className="text-xs font-medium text-emerald-700 dark:text-emerald-300">Envío{zonaNombre ? ` (${zonaNombre})` : ''}</span>
+                <div className="flex items-center justify-between px-4 py-3 bg-secondary/50 rounded-2xl">
+                  <div className="flex items-center gap-2.5">
+                    <Truck className="w-4 h-4 text-muted-foreground shrink-0" />
+                    <span className="text-sm font-medium text-foreground">Envío{zonaNombre ? ` · ${zonaNombre}` : ''}</span>
                   </div>
-                  <span className="text-sm font-bold text-emerald-700 dark:text-emerald-300">
-                    {deliveryFee === 0 ? 'GRATIS' : `$${deliveryFee.toFixed(0)}`}
+                  <span className="text-sm font-bold">
+                    {deliveryFee === 0 ? 'Gratis' : `$${deliveryFee.toFixed(0)}`}
                   </span>
                 </div>
               ) : null}
@@ -503,83 +516,86 @@ export function CheckoutDeliveryGrupal({
         </div>
       )}
 
-      {/* Casa / Departamento */}
       {tipoPedido === 'delivery' && (
-        <div className="space-y-2 pt-2 border-t border-border/50 animate-in fade-in slide-in-from-top-2">
-          <Label className="text-sm">¿Es casa o departamento?</Label>
-          <div className="grid grid-cols-2 gap-3">
-            <div
-              className={`flex flex-col items-center gap-1.5 p-3 border-2 rounded-xl cursor-pointer transition-colors ${tipoDomicilio === 'casa' ? 'border-primary bg-primary/5' : 'border-border hover:bg-secondary/50'}`}
+        <div className="space-y-3 animate-in fade-in slide-in-from-top-2">
+          <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-1">Tipo de domicilio</Label>
+          <div className="bg-secondary/60 rounded-2xl p-1 grid grid-cols-2 gap-1">
+            <button
+              type="button"
+              className={`flex items-center justify-center gap-2 py-4 rounded-xl transition-all duration-200 cursor-pointer ${tipoDomicilio === 'casa' ? 'bg-background shadow-sm' : ''}`}
               onClick={() => { setTipoDomicilio('casa'); setPiso(''); setNumeroDepartamento('') }}
             >
-              <Home className={`w-6 h-6 ${tipoDomicilio === 'casa' ? 'text-primary' : 'text-muted-foreground'}`} />
-              <span className={`text-sm font-semibold ${tipoDomicilio === 'casa' ? 'text-primary' : 'text-foreground'}`}>Casa</span>
-            </div>
-            <div
-              className={`flex flex-col items-center gap-1.5 p-3 border-2 rounded-xl cursor-pointer transition-colors ${tipoDomicilio === 'departamento' ? 'border-primary bg-primary/5' : 'border-border hover:bg-secondary/50'}`}
+              <Home className={`w-4 h-4 ${tipoDomicilio === 'casa' ? 'text-primary' : 'text-muted-foreground'}`} />
+              <span className={`text-sm font-semibold ${tipoDomicilio === 'casa' ? 'text-foreground' : 'text-muted-foreground'}`}>Casa</span>
+            </button>
+            <button
+              type="button"
+              className={`flex items-center justify-center gap-2 py-4 rounded-xl transition-all duration-200 cursor-pointer ${tipoDomicilio === 'departamento' ? 'bg-background shadow-sm' : ''}`}
               onClick={() => setTipoDomicilio('departamento')}
             >
-              <Building2 className={`w-6 h-6 ${tipoDomicilio === 'departamento' ? 'text-primary' : 'text-muted-foreground'}`} />
-              <span className={`text-sm font-semibold ${tipoDomicilio === 'departamento' ? 'text-primary' : 'text-foreground'}`}>Departamento</span>
-            </div>
+              <Building2 className={`w-4 h-4 ${tipoDomicilio === 'departamento' ? 'text-primary' : 'text-muted-foreground'}`} />
+              <span className={`text-sm font-semibold ${tipoDomicilio === 'departamento' ? 'text-foreground' : 'text-muted-foreground'}`}>Departamento</span>
+            </button>
           </div>
           {tipoDomicilio === 'departamento' && (
             <div className="grid grid-cols-2 gap-3 animate-in fade-in slide-in-from-top-2">
-              <div className="space-y-1.5">
-                <Label htmlFor="piso-grupal">Piso</Label>
-                <Input id="piso-grupal" placeholder="Ej: 4" className="h-10 rounded-xl" value={piso} onChange={e => setPiso(e.target.value)} />
+              <div className="space-y-2">
+                <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-1">Piso</Label>
+                <Input id="piso-grupal" placeholder="Ej: 4" className={inputCls} value={piso} onChange={e => setPiso(e.target.value)} />
               </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="depto-grupal">Depto</Label>
-                <Input id="depto-grupal" placeholder="Ej: C" className="h-10 rounded-xl" value={numeroDepartamento} onChange={e => setNumeroDepartamento(e.target.value.toUpperCase())} />
+              <div className="space-y-2">
+                <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-1">Depto</Label>
+                <Input id="depto-grupal" placeholder="Ej: C" className={inputCls} value={numeroDepartamento} onChange={e => setNumeroDepartamento(e.target.value.toUpperCase())} />
               </div>
             </div>
           )}
         </div>
       )}
 
-      {/* Takeaway - pickup address */}
       {tipoPedido === 'takeaway' && restauranteDireccion && sucursales.length <= 1 && (
-        <div className="flex items-center gap-2 px-3 py-1.5 bg-primary/5 rounded-lg border border-primary/20">
-          <MapPin className="w-3.5 h-3.5 text-primary shrink-0" />
-          <span className="text-xs font-medium text-primary/80">Retira en {restauranteDireccion}</span>
+        <div className="flex items-center gap-2.5 px-4 py-3 bg-secondary/50 rounded-2xl">
+          <MapPin className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+          <span className="text-sm text-muted-foreground">Retirás en <span className="font-semibold text-foreground">{restauranteDireccion}</span></span>
         </div>
       )}
     </div>
   )
 
   const secExtras = (
-    <div className="space-y-3">
-      {/* Notas */}
-      <div className="space-y-1.5">
-        <Label htmlFor="notas-grupal">Notas adicionales <span className="text-muted-foreground font-normal">(opcional)</span></Label>
-        <Textarea id="notas-grupal" placeholder="Ej: El timbre no anda..." className="min-h-[80px] rounded-xl resize-none text-sm" value={notas} onChange={(e: any) => setNotas(e.target.value)} />
+    <div className="space-y-5">
+      <div className="space-y-2">
+        <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-1">Notas <span className="normal-case font-normal">(opcional)</span></Label>
+        <Textarea
+          id="notas-grupal"
+          placeholder="Ej: El timbre no anda..."
+          className="rounded-2xl bg-secondary/60 border-0 shadow-none ring-0 focus-visible:ring-0 focus-visible:ring-offset-0 resize-none text-base min-h-[90px] px-4 py-3"
+          value={notas}
+          onChange={(e: any) => setNotas(e.target.value)}
+        />
       </div>
 
-      {/* Programar pedido */}
-      <div className="space-y-2 pt-2 border-t border-border/50">
-        <div
-          className={`flex items-center justify-between p-3 rounded-xl border-2 cursor-pointer transition-colors ${programarPedido ? 'border-primary bg-primary/5' : 'border-border hover:bg-secondary/50'}`}
+      <div className="space-y-2">
+        <button
+          type="button"
+          className={`w-full flex items-center justify-between px-4 py-3.5 rounded-2xl transition-all duration-200 ${programarPedido ? 'bg-primary/10' : 'bg-secondary/50 hover:bg-secondary/80'}`}
           onClick={() => { setProgramarPedido(!programarPedido); if (programarPedido) setHorarioProgramado('') }}
         >
-          <div className="flex items-center gap-2.5">
-            <Clock className={`w-5 h-5 ${programarPedido ? 'text-primary' : 'text-muted-foreground'}`} />
+          <div className="flex items-center gap-3 text-left">
+            <Clock className={`w-4 h-4 shrink-0 ${programarPedido ? 'text-primary' : 'text-muted-foreground'}`} />
             <div>
-              <p className={`font-semibold text-sm ${programarPedido ? 'text-primary' : 'text-foreground'}`}>Programar para después</p>
+              <p className="text-sm font-semibold">Programar para después</p>
               <p className="text-xs text-muted-foreground">Indicá a qué hora querés recibirlo</p>
             </div>
           </div>
-          <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center transition-colors ${programarPedido ? 'border-primary bg-primary' : 'border-muted-foreground'}`}>
-            {programarPedido && <div className="w-1.5 h-1.5 rounded-full bg-primary-foreground" />}
-          </div>
-        </div>
+          {programarPedido && <Check className="w-4 h-4 text-primary shrink-0" />}
+        </button>
         {programarPedido && (
-          <div className="animate-in fade-in slide-in-from-top-2 space-y-1.5">
-            <Label htmlFor="horario-grupal">¿A qué hora lo querés?</Label>
+          <div className="animate-in fade-in slide-in-from-top-2 space-y-2">
+            <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-1">¿A qué hora?</Label>
             <input
               id="horario-grupal"
               type="time"
-              className="w-full h-11 rounded-xl border border-input bg-background px-4 text-base font-semibold text-foreground"
+              className="w-full h-12 rounded-2xl bg-secondary/60 px-4 text-base font-semibold text-foreground border-0 outline-none"
               value={horarioProgramado}
               onChange={e => setHorarioProgramado(e.target.value)}
             />
@@ -587,17 +603,16 @@ export function CheckoutDeliveryGrupal({
         )}
       </div>
 
-      {/* Código de descuento */}
       {codigoDescuentoEnabled && (
-        <div className="space-y-1.5 pt-2 border-t border-border/50">
-          <Label htmlFor="codigo-grupal">Código de descuento <span className="text-muted-foreground font-normal">(opcional)</span></Label>
+        <div className="space-y-2">
+          <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-1">Código de descuento <span className="normal-case font-normal">(opcional)</span></Label>
           {codigoDescuentoId ? (
-            <div className="flex items-center justify-between px-3 py-2 rounded-xl bg-emerald-500/10 border border-emerald-500/30">
-              <div className="flex items-center gap-2">
-                <Tag className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
-                <span className="text-sm font-medium text-emerald-700 dark:text-emerald-300">Descuento: -${montoDescuento.toFixed(0)}</span>
+            <div className="flex items-center justify-between px-4 py-3 rounded-2xl bg-secondary/60">
+              <div className="flex items-center gap-2.5">
+                <Tag className="w-3.5 h-3.5 text-muted-foreground" />
+                <span className="text-sm font-semibold">Descuento aplicado · -${montoDescuento.toFixed(0)}</span>
               </div>
-              <button type="button" onClick={quitarCodigo} className="p-1 rounded hover:bg-emerald-500/20 text-muted-foreground hover:text-destructive">
+              <button type="button" onClick={quitarCodigo} className="p-1.5 rounded-lg hover:bg-secondary/80 text-muted-foreground transition-colors">
                 <X className="w-3.5 h-3.5" />
               </button>
             </div>
@@ -605,56 +620,46 @@ export function CheckoutDeliveryGrupal({
             <div className="flex gap-2">
               <Input
                 id="codigo-grupal"
-                placeholder="Ej: CODIGO10"
-                className="h-10 rounded-xl font-mono uppercase text-sm"
+                placeholder="CODIGO10"
+                className="h-12 rounded-2xl bg-secondary/60 border-0 shadow-none ring-0 focus-visible:ring-0 focus-visible:ring-offset-0 font-mono uppercase text-base"
                 value={codigoInput}
                 onChange={e => { setCodigoInput(e.target.value.toUpperCase()); setCodigoError(null) }}
                 onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), handleValidarCodigo())}
               />
-              <Button type="button" variant="outline" size="sm" className="rounded-xl shrink-0 h-10" onClick={handleValidarCodigo} disabled={validandoCodigo || !codigoInput.trim()}>
-                {validandoCodigo ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : 'Aplicar'}
+              <Button
+                type="button"
+                variant="ghost"
+                className="rounded-2xl shrink-0 h-12 px-5 bg-secondary/60 hover:bg-secondary/80 font-semibold"
+                onClick={handleValidarCodigo}
+                disabled={validandoCodigo || !codigoInput.trim()}
+              >
+                {validandoCodigo ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Aplicar'}
               </Button>
             </div>
           )}
-          {codigoError && <p className="text-xs text-destructive font-medium">{codigoError}</p>}
+          {codigoError && <p className="text-xs text-destructive px-1 font-medium">{codigoError}</p>}
         </div>
       )}
 
-      {/* Métodos de pago */}
       {!isLoadingRestaurante && availablePaymentMethods.length > 0 && (
-        <div className="space-y-3 pt-2 border-t border-border/50 animate-in fade-in slide-in-from-bottom-2">
-          <Label className="text-sm font-bold">Método de pago</Label>
-          <div className="grid grid-cols-2 gap-2">
+        <div className="space-y-2 animate-in fade-in">
+          <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-1">Método de pago</Label>
+          <div className="space-y-1.5">
             {availablePaymentMethods.map(m => {
               const selected = metodoPago === m.id
-              const showAuto = m.automatico && (
-                m.id === 'transferencia_automatica_cucuru' ||
-                m.id === 'transferencia_automatica_talo' ||
-                m.id === 'mercadopago_bricks' ||
-                m.id === 'mercadopago_checkout'
-              )
               return (
-                <div
+                <button
                   key={m.id}
-                  className={`relative flex flex-col items-center justify-center gap-1 p-3 border-2 rounded-xl cursor-pointer hover:bg-secondary/50 transition-colors ${selected
-                    ? m.id === 'cash' ? 'border-emerald-500 bg-emerald-500/5'
-                      : m.id.startsWith('mercadopago') ? 'border-[#009EE3] bg-[#009EE3]/5'
-                      : 'border-purple-500 bg-purple-500/5'
-                    : 'border-border'}`}
+                  type="button"
+                  className={`w-full flex items-center justify-between px-4 py-3.5 rounded-2xl transition-all duration-200 ${selected ? 'bg-primary/10' : 'bg-secondary/50 hover:bg-secondary/80'}`}
                   onClick={() => setMetodoPago(m.id)}
                 >
-                  {showAuto && (
-                    <div className="absolute -top-2 bg-linear-to-r from-purple-600 to-indigo-600 text-white text-[8px] font-extrabold px-1.5 py-0.5 rounded-full shadow-sm flex items-center gap-0.5">
-                      <Zap className="w-2.5 h-2.5 fill-current" />
-                      AUTO
-                    </div>
-                  )}
-                  {m.id === 'mercadopago_checkout' && <Wallet className={`w-5 h-5 mt-1 ${selected ? 'text-[#009EE3]' : 'text-muted-foreground'}`} />}
-                  {m.id === 'mercadopago_bricks' && <CreditCard className={`w-5 h-5 mt-1 ${selected ? 'text-[#009EE3]' : 'text-muted-foreground'}`} />}
-                  <Label className="cursor-pointer font-semibold text-center text-xs leading-tight px-1">
-                    {paymentTitle(m)}
-                  </Label>
-                </div>
+                  <div className="flex items-center gap-3">
+                    {paymentIcon(m)}
+                    <span className="text-sm font-semibold">{paymentTitle(m)}</span>
+                  </div>
+                  {selected && <Check className="w-4 h-4 text-primary shrink-0" />}
+                </button>
               )
             })}
           </div>
@@ -682,104 +687,117 @@ export function CheckoutDeliveryGrupal({
   }, [onTituloChange, estoyEditando, modo, paso, checkoutData, tipoPedido])
 
   const readOnly = (
-    <div className="bg-secondary/40 p-4 rounded-2xl border border-border space-y-4">
-      <div className="flex items-center justify-between gap-2">
-        <span className="text-sm font-medium text-muted-foreground">Datos guardados</span>
-        <Button variant="outline" size="sm" onClick={handleIniciarEdicion} className="text-xs h-8 shrink-0">
-          <Pencil className="w-3.5 h-3.5 mr-1" />
+    <div className="space-y-3">
+      <div className="flex items-center justify-between px-1">
+        <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Datos guardados</span>
+        <button type="button" onClick={handleIniciarEdicion} className="flex items-center gap-1.5 text-sm font-semibold text-primary">
+          <Pencil className="w-3.5 h-3.5" />
           Editar
-        </Button>
+        </button>
       </div>
-      <div className="space-y-3">
-        <div className="grid grid-cols-2 gap-2">
-          <div className={`flex items-center justify-center p-2 rounded-lg border bg-muted/30 ${checkoutData?.tipoPedido === 'delivery' ? 'border-primary/30' : 'border-border'}`}>
-            <span className="text-xs font-medium text-muted-foreground">Delivery</span>
-          </div>
-          <div className={`flex items-center justify-center p-2 rounded-lg border bg-muted/30 ${checkoutData?.tipoPedido === 'takeaway' ? 'border-primary/30' : 'border-border'}`}>
-            <span className="text-xs font-medium text-muted-foreground">Take Away</span>
-          </div>
+      <div className="bg-secondary/40 rounded-2xl overflow-hidden">
+        <div className="px-4 py-3.5">
+          <p className="text-xs text-muted-foreground mb-0.5">Tipo</p>
+          <p className="text-sm font-semibold">{checkoutData?.tipoPedido === 'delivery' ? 'Delivery' : 'Take Away'}</p>
         </div>
-        <div>
+        <div className="h-px bg-background mx-4" />
+        <div className="px-4 py-3.5">
           <p className="text-xs text-muted-foreground mb-0.5">Nombre</p>
           <p className="text-sm font-semibold">{checkoutData?.nombre}</p>
         </div>
-        <div>
+        <div className="h-px bg-background mx-4" />
+        <div className="px-4 py-3.5">
           <p className="text-xs text-muted-foreground mb-0.5">Celular</p>
           <p className="text-sm font-semibold">{checkoutData?.telefono}</p>
         </div>
         {checkoutData?.tipoPedido === 'delivery' && checkoutData.direccion && (
-          <div>
-            <p className="text-xs text-muted-foreground mb-0.5">Dirección</p>
-            <p className="text-sm font-semibold">{checkoutData.direccion}</p>
-            {checkoutData.tipoDomicilio && (
-              <p className="text-xs text-muted-foreground capitalize mt-0.5">{checkoutData.tipoDomicilio}</p>
-            )}
-            {(checkoutData.deliveryFee ?? 0) > 0 && (
-              <p className="text-xs text-emerald-600/80 dark:text-emerald-400/80 mt-0.5">
-                Envío: ${checkoutData.deliveryFee.toFixed(0)}{checkoutData.zonaNombre ? ` (${checkoutData.zonaNombre})` : ''}
-              </p>
-            )}
-          </div>
+          <>
+            <div className="h-px bg-background mx-4" />
+            <div className="px-4 py-3.5">
+              <p className="text-xs text-muted-foreground mb-0.5">Dirección</p>
+              <p className="text-sm font-semibold">{checkoutData.direccion}</p>
+              {checkoutData.tipoDomicilio && (
+                <p className="text-xs text-muted-foreground capitalize mt-0.5">{checkoutData.tipoDomicilio}</p>
+              )}
+              {(checkoutData.deliveryFee ?? 0) > 0 && (
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Envío: ${checkoutData.deliveryFee.toFixed(0)}{checkoutData.zonaNombre ? ` · ${checkoutData.zonaNombre}` : ''}
+                </p>
+              )}
+            </div>
+          </>
         )}
         {checkoutData?.metodoPago && (
-          <div>
-            <p className="text-xs text-muted-foreground mb-0.5">Método de pago</p>
-            <p className="text-sm font-semibold">{checkoutData.metodoPago.replace(/_/g, ' ')}</p>
-          </div>
+          <>
+            <div className="h-px bg-background mx-4" />
+            <div className="px-4 py-3.5">
+              <p className="text-xs text-muted-foreground mb-0.5">Método de pago</p>
+              <p className="text-sm font-semibold capitalize">{checkoutData.metodoPago.replace(/_/g, ' ')}</p>
+            </div>
+          </>
         )}
         {checkoutData?.horarioProgramado && (
-          <div className="flex items-center gap-1.5">
-            <Clock className="w-3.5 h-3.5 text-muted-foreground" />
-            <p className="text-xs text-muted-foreground">Programado para las <span className="font-semibold text-foreground">{checkoutData.horarioProgramado}</span></p>
-          </div>
+          <>
+            <div className="h-px bg-background mx-4" />
+            <div className="px-4 py-3.5 flex items-center gap-2">
+              <Clock className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+              <p className="text-sm">Programado para las <span className="font-semibold">{checkoutData.horarioProgramado}</span></p>
+            </div>
+          </>
         )}
         {(checkoutData?.montoDescuento ?? 0) > 0 && (
-          <p className="text-xs text-emerald-600/80 dark:text-emerald-400/80">
-            Descuento: -${(checkoutData?.montoDescuento ?? 0).toFixed(0)}
-          </p>
+          <>
+            <div className="h-px bg-background mx-4" />
+            <div className="px-4 py-3.5">
+              <p className="text-xs text-muted-foreground mb-0.5">Descuento</p>
+              <p className="text-sm font-semibold">-${(checkoutData?.montoDescuento ?? 0).toFixed(0)}</p>
+            </div>
+          </>
         )}
         {checkoutData?.notas && (
-          <div>
-            <p className="text-xs text-muted-foreground mb-0.5">Notas</p>
-            <p className="text-sm text-muted-foreground line-clamp-2">{checkoutData.notas}</p>
-          </div>
+          <>
+            <div className="h-px bg-background mx-4" />
+            <div className="px-4 py-3.5">
+              <p className="text-xs text-muted-foreground mb-0.5">Notas</p>
+              <p className="text-sm text-muted-foreground line-clamp-2">{checkoutData.notas}</p>
+            </div>
+          </>
         )}
       </div>
     </div>
   )
 
   const totalSummary = (
-    <div className="bg-secondary/50 rounded-xl p-4 border border-border/50 space-y-2">
+    <div className="bg-secondary/40 rounded-2xl px-4 py-4 space-y-2.5">
       <div className="flex justify-between text-sm">
-        <span className="text-muted-foreground">Subtotal ({totalItems} items)</span>
-        <span className="font-medium">${itemsTotal}</span>
+        <span className="text-muted-foreground">Subtotal · {totalItems} items</span>
+        <span className="font-semibold">${itemsTotal}</span>
       </div>
       {checkoutData?.tipoPedido === 'delivery' && (checkoutData.deliveryFee ?? 0) > 0 && (
         <div className="flex justify-between text-sm">
           <span className="text-muted-foreground">Delivery</span>
-          <span className="font-medium">${checkoutData.deliveryFee.toFixed(2)}</span>
+          <span className="font-semibold">${checkoutData.deliveryFee.toFixed(2)}</span>
         </div>
       )}
       {(checkoutData?.montoDescuento ?? montoDescuento) > 0 && (
         <div className="flex justify-between text-sm">
-          <span className="text-emerald-600 dark:text-emerald-400 font-medium">Descuento</span>
-          <span className="text-emerald-600 dark:text-emerald-400 font-medium">-${(checkoutData?.montoDescuento ?? montoDescuento).toFixed(2)}</span>
+          <span className="text-muted-foreground">Descuento</span>
+          <span className="font-semibold">-${(checkoutData?.montoDescuento ?? montoDescuento).toFixed(2)}</span>
         </div>
       )}
-      <div className="flex justify-between font-bold text-base pt-2 border-t border-border/50">
+      <div className="flex justify-between font-bold text-base pt-2.5">
         <span>Total</span>
         <span>${checkoutData?.total || total.toFixed(2)}</span>
       </div>
     </div>
   )
 
-  // ===== Botón de acción del footer (depende del estado) =====
   const accionDisabled = tipoPedido === 'delivery' && (fueraDeZona || (isCheckingZona && (modo === 'completo' || pasos[paso] === 'ubicacion')))
 
   let footerButton: React.ReactNode
   if (alguienEditando) {
     footerButton = (
-      <Button disabled className="w-full h-12 rounded-xl font-bold text-base">
+      <Button disabled className="w-full h-12 rounded-2xl font-bold text-base">
         <Loader2 className="w-4 h-4 mr-2 animate-spin" />
         {editSemaphore?.clienteNombre} está editando...
       </Button>
@@ -788,7 +806,7 @@ export function CheckoutDeliveryGrupal({
     const esUltimo = modo === 'pasos' ? paso === pasos.length - 1 : true
     footerButton = (
       <Button
-        className="w-full h-12 rounded-xl font-bold text-base shadow-md"
+        className="w-full h-12 rounded-2xl font-bold text-base"
         onClick={modo === 'pasos' ? handleSiguiente : handleGuardarEdicion}
         disabled={accionDisabled}
       >
@@ -797,7 +815,7 @@ export function CheckoutDeliveryGrupal({
     )
   } else if (checkoutData) {
     footerButton = datosCompletos ? (
-      <Button className="w-full h-12 rounded-xl font-bold text-base shadow-md" onClick={handleConfirmarPedido}>
+      <Button className="w-full h-12 rounded-2xl font-bold text-base" onClick={handleConfirmarPedido}>
         Confirmar Pedido
       </Button>
     ) : (
@@ -805,7 +823,7 @@ export function CheckoutDeliveryGrupal({
     )
   } else {
     footerButton = (
-      <Button className="w-full h-12 rounded-xl font-bold text-base shadow-md" onClick={handleIniciarEdicion}>
+      <Button className="w-full h-12 rounded-2xl font-bold text-base" onClick={handleIniciarEdicion}>
         <Pencil className="w-4 h-4 mr-2" />
         Completar datos de envío
       </Button>
@@ -816,9 +834,9 @@ export function CheckoutDeliveryGrupal({
 
   return (
     <div className={`flex flex-col ${compacto ? '' : 'flex-1 min-h-0'}`}>
-      {/* Barra superior: atrás + progreso */}
       <div className="shrink-0 flex items-center gap-3 px-5 pt-3 pb-1">
         <button
+          type="button"
           onClick={handleAtras}
           className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-secondary transition-colors shrink-0"
           aria-label="Atrás"
@@ -831,7 +849,7 @@ export function CheckoutDeliveryGrupal({
               {pasos.map((_, i) => (
                 <div
                   key={i}
-                  className={`h-1.5 rounded-full flex-1 transition-colors ${i <= paso ? 'bg-primary' : 'bg-secondary'}`}
+                  className={`h-1 rounded-full flex-1 transition-all duration-300 ${i <= paso ? 'bg-primary' : 'bg-secondary'}`}
                 />
               ))}
             </div>
@@ -844,13 +862,11 @@ export function CheckoutDeliveryGrupal({
         )}
       </div>
 
-
-      {/* Cuerpo: scrolleable en 'completo', ajustado al contenido en 'pasos' */}
-      <div className={compacto ? 'px-5 py-3 space-y-4' : 'flex-1 overflow-y-auto px-5 py-3 space-y-4 min-h-0'}>
+      <div className={compacto ? 'px-5 py-4 space-y-5' : 'flex-1 overflow-y-auto px-5 py-4 space-y-5 min-h-0'}>
         {alguienEditando && (
-          <div className="flex items-center gap-2 px-3 py-2 bg-amber-500/10 rounded-xl border border-amber-500/30">
-            <Loader2 className="w-4 h-4 animate-spin text-amber-600 dark:text-amber-400 shrink-0" />
-            <span className="text-sm font-medium text-amber-700 dark:text-amber-300">
+          <div className="flex items-center gap-2.5 px-4 py-3 bg-secondary/60 rounded-2xl">
+            <Loader2 className="w-4 h-4 animate-spin text-muted-foreground shrink-0" />
+            <span className="text-sm font-medium text-muted-foreground">
               {editSemaphore?.clienteNombre} está editando
             </span>
           </div>
@@ -890,11 +906,10 @@ export function CheckoutDeliveryGrupal({
         )}
       </div>
 
-      {/* Footer fijo */}
-      <div className={`p-4 border-t border-border bg-background space-y-2 ${compacto ? 'sticky bottom-0 z-10' : 'shrink-0'}`}>
-        <div className="flex justify-between items-center">
-          <span className="text-muted-foreground text-sm">Total</span>
-          <span className="text-xl font-black tracking-tight">${checkoutData?.total || total.toFixed(2)}</span>
+      <div className={`px-5 pb-5 pt-4 bg-background space-y-3 ${compacto ? 'sticky bottom-0 z-10' : 'shrink-0'}`}>
+        <div className="flex justify-between items-baseline">
+          <span className="text-sm text-muted-foreground">Total</span>
+          <span className="text-2xl font-black tracking-tight">${checkoutData?.total || total.toFixed(2)}</span>
         </div>
         {footerButton}
       </div>

@@ -169,13 +169,13 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder }: Pr
                   produciendo el efecto de zoom. */}
               <motion.div
                 className="absolute inset-x-0 top-0 z-0 overflow-hidden bg-secondary"
-                animate={{ height: stage === 'select' ? IMG_H : '100%' }}
+                animate={{ height: stage === 'select' ? IMG_H : stage2Height }}
                 transition={SPRING}
               >
                 <motion.div
                   className="h-full w-full"
                   animate={{ scale: stage === 'extras' ? 1.06 : 1 }}
-                  transition={SPRING}
+                  transition={{ type: 'tween', duration: 0.6, ease: 'easeOut' }}
                 >
                   {product.imagenUrl ? (
                     <img
@@ -343,7 +343,14 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder }: Pr
                     className="absolute inset-0 z-20 flex flex-col text-white"
                   >
                     {/* Capa de vidrio esmerilado */}
-                    <div className="absolute inset-0 bg-black/60 backdrop-blur-2xl" />
+                    <motion.div
+                      className="absolute inset-0 bg-black/60"
+                      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                      initial={{ backdropFilter: 'blur(0px)', WebkitBackdropFilter: 'blur(0px)' } as any}
+                      animate={{ backdropFilter: 'blur(40px)', WebkitBackdropFilter: 'blur(40px)' } as any}
+                      exit={{ backdropFilter: 'blur(0px)', WebkitBackdropFilter: 'blur(0px)' } as any}
+                      transition={{ duration: 0.45 }}
+                    />
 
                     {/* Contenido por encima del vidrio */}
                     <div className="relative z-10 flex h-full flex-col">

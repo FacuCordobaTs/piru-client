@@ -1,12 +1,11 @@
-import { useState, useEffect, useLayoutEffect, useCallback, useRef, type Dispatch, type SetStateAction } from 'react'
-import { flushSync } from 'react-dom'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useNavigate, useParams } from 'react-router'
 import { Button } from '@/components/ui/button'
 import { Sheet, SheetContent } from '@/components/ui/sheet'
 import { toast } from 'sonner'
 import {
     Trash2, Maximize2, Minimize2, Loader2,
-    Package, Receipt, UtensilsCrossed, Utensils, Clock, Sparkles, Check, X, Users, ChevronRight
+    Package, Receipt, UtensilsCrossed, Utensils, Clock, Check, X, Users, ChevronRight
 } from 'lucide-react'
 import { ProductDetailDrawer } from '@/components/ProductDetailDrawer'
 import { ThemeToggle } from '@/components/ThemeToggle'
@@ -81,200 +80,6 @@ function checkIsOpen(horarios: HorarioTurno[]): { abierto: boolean; proximaApert
     return { abierto: false, proximaApertura: mejor?.texto || null }
 }
 
-const DELIVERY_ADD_CLONE_TOAST_ID = 'web-delivery-add-clone'
-
-const agregadoFlashUntilByLineId = new Map<string, number>()
-const AGREGADO_FLASH_MS = 600
-
-const CLONE_TOAST_SWIPE_DISMISS_PX = 72
-
-function DeliveryAddCloneToast({
-    template,
-    puntosCliente,
-    setCartItems,
-    bumpCart,
-}: {
-    template: any
-    puntosCliente: number | null
-    setCartItems: Dispatch<SetStateAction<any[]>>
-    bumpCart: () => void
-}) {
-    const lineId = String(template.id)
-    const [flashEndTs, setFlashEndTs] = useState<number | null>(null)
-    const [dragX, setDragX] = useState(0)
-    const [isDragging, setIsDragging] = useState(false)
-    const swipeRef = useRef<{ startX: number; pointerId: number | null; active: boolean }>({
-        startX: 0,
-        pointerId: null,
-        active: false,
-    })
-
-    const dismissCloneToast = useCallback(() => {
-        toast.dismiss(DELIVERY_ADD_CLONE_TOAST_ID)
-    }, [])
-
-    const showAgregado = flashEndTs != null && Date.now() < flashEndTs
-
-    useLayoutEffect(() => {
-        const until = agregadoFlashUntilByLineId.get(lineId)
-        if (until != null && Date.now() < until) {
-            setFlashEndTs(until)
-        }
-    }, [lineId])
-
-    useEffect(() => {
-        if (flashEndTs == null || Date.now() >= flashEndTs) return
-        const ms = Math.max(0, flashEndTs - Date.now())
-        const id = window.setTimeout(() => {
-            agregadoFlashUntilByLineId.delete(lineId)
-            setFlashEndTs(null)
-        }, ms)
-        return () => window.clearTimeout(id)
-    }, [flashEndTs, lineId])
-
-    const startAgregadoFlash = () => {
-        const end = Date.now() + AGREGADO_FLASH_MS
-        agregadoFlashUntilByLineId.set(lineId, end)
-        setFlashEndTs(end)
-    }
-
-    const addIdenticalLine = () => {
-        if (showAgregado) return
-        let added = false
-        flushSync(() => {
-            setCartItems((prev) => {
-                if (template.esCanjePuntos) {
-                    const puntosOcupados = prev.reduce(
-                        (sum, item) =>
-                            sum + (item.esCanjePuntos ? item.puntosNecesarios * item.cantidad : 0),
-                        0
-                    )
-                    const costo = (template.puntosNecesarios || 0) * (template.cantidad || 1)
-                    if ((puntosCliente || 0) - puntosOcupados - costo < 0) {
-                        toast.error('No tienes suficientes puntos para agregar este producto.')
-                        return prev
-                    }
-                }
-                added = true
-                const clone = {
-                    ...template,
-                    id: Math.random().toString(36).substring(2, 11),
-                }
-                return [...prev, clone]
-            })
-        })
-        if (added) {
-            startAgregadoFlash()
-            bumpCart()
-        }
-    }
-
-    const onSwipePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
-        if ((e.target as HTMLElement).closest('[data-clone-toast-no-swipe]')) return
-        if (e.button !== 0) return
-        swipeRef.current = { startX: e.clientX, pointerId: e.pointerId, active: true }
-        setIsDragging(true)
-        e.currentTarget.setPointerCapture(e.pointerId)
-    }
-
-    const onSwipePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
-        if (!swipeRef.current.active || swipeRef.current.pointerId !== e.pointerId) return
-        setDragX(e.clientX - swipeRef.current.startX)
-    }
-
-    const endSwipe = (e: React.PointerEvent<HTMLDivElement>) => {
-        if (!swipeRef.current.active) return
-        const { startX, pointerId: wasId } = swipeRef.current
-        const dx = e.clientX - startX
-        swipeRef.current = { startX: 0, pointerId: null, active: false }
-        setIsDragging(false)
-        if (wasId != null) {
-            try {
-                e.currentTarget.releasePointerCapture(wasId)
-            } catch {
-                /* already released */
-            }
-        }
-        if (Math.abs(dx) >= CLONE_TOAST_SWIPE_DISMISS_PX) {
-            dismissCloneToast()
-            setDragX(0)
-            return
-        }
-        setDragX(0)
-    }
-
-    const dragOpacity = 1 - Math.min(Math.abs(dragX) / 180, 0.38)
-
-    return (
-        <div
-            role="presentation"
-            onPointerDown={onSwipePointerDown}
-            onPointerMove={onSwipePointerMove}
-            onPointerUp={endSwipe}
-            onPointerCancel={endSwipe}
-            style={{
-                transform: `translateX(${dragX}px)`,
-                opacity: dragOpacity,
-                transition: isDragging ? 'none' : 'transform 0.22s ease-out, opacity 0.22s ease-out',
-                touchAction: 'none',
-            }}
-            className={`
-                w-[min(100vw-1.25rem,22rem)] sm:w-[min(100vw-2rem,24rem)] cursor-grab active:cursor-grabbing
-                rounded-2xl border border-primary/20 bg-card/95 text-card-foreground shadow-[0_20px_50px_-12px_rgba(0,0,0,0.35),0_0_0_1px_rgba(255,255,255,0.06)_inset]
-                dark:shadow-[0_24px_60px_-12px_rgba(0,0,0,0.65),0_0_0_1px_rgba(255,255,255,0.08)_inset]
-                backdrop-blur-xl overflow-hidden select-none
-            `}
-        >
-            <div className="p-3.5 sm:p-4 space-y-3 relative">
-                <button
-                    type="button"
-                    data-clone-toast-no-swipe
-                    onClick={dismissCloneToast}
-                    className="absolute top-2 right-2 z-10 rounded-full p-1 text-muted-foreground/55 hover:text-muted-foreground hover:bg-muted/50 opacity-80 hover:opacity-100 transition-[opacity,background-color,color] duration-150"
-                    aria-label="Cerrar aviso"
-                >
-                    <X className="w-3.5 h-3.5" strokeWidth={2.25} />
-                </button>
-                <div className="flex gap-3 items-start">
-                    <div className="shrink-0 w-10 h-10 rounded-xl bg-primary/15 flex items-center justify-center text-primary ring-1 ring-primary/25">
-                        <Sparkles className="w-5 h-5" strokeWidth={2.2} />
-                    </div>
-                    <div className="min-w-0 flex-1 space-y-1">
-                        <p className="text-[13px] sm:text-sm font-extrabold leading-tight tracking-tight text-foreground">
-                            ¡Gran elección! 🔥
-                        </p>
-                        <p className="text-xs sm:text-[13px] font-semibold text-primary line-clamp-2 leading-snug">
-                            {template.nombre}
-                        </p>
-                        <p className="text-[11px] text-muted-foreground font-medium">
-                            ¿Otro igual sin volver al menú? Un toque y listo.
-                        </p>
-                    </div>
-                </div>
-                <Button
-                    type="button"
-                    data-clone-toast-no-swipe
-                    size="sm"
-                    onClick={addIdenticalLine}
-                    disabled={showAgregado}
-                    className={`w-full h-11 sm:h-10 rounded-xl font-bold text-sm shadow-md transition-all duration-300 ${
-                        showAgregado
-                            ? 'bg-emerald-500 text-white shadow-emerald-500/25 scale-[1.02] disabled:opacity-100 disabled:pointer-events-none'
-                            : 'shadow-primary/15 bg-primary hover:bg-primary/90 text-primary-foreground active:scale-[0.98]'
-                    }`}
-                >
-                    {showAgregado ? (
-                        <span className="flex items-center justify-center gap-2 animate-in zoom-in-50 duration-200">
-                            <Check className="w-5 h-5" /> ¡Agregado!
-                        </span>
-                    ) : (
-                        '¡Quiero otro igual!'
-                    )}
-                </Button>
-            </div>
-        </div>
-    )
-}
 
 const MenuDelivery = () => {
     const navigate = useNavigate()
@@ -554,21 +359,6 @@ const MenuDelivery = () => {
         }
 
         bumpCart()
-
-        toast.custom(
-            () => (
-                <DeliveryAddCloneToast
-                    template={newItem}
-                    puntosCliente={puntosCliente}
-                    setCartItems={setCartItems}
-                    bumpCart={bumpCart}
-                />
-            ),
-            {
-                id: DELIVERY_ADD_CLONE_TOAST_ID,
-                duration: 14_000,
-            }
-        )
     }
 
     const handleEliminarItem = (itemId: string) => {

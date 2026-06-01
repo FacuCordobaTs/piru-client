@@ -75,7 +75,8 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder }: Pr
   const [ingredientesExcluidos, setIngredientesExcluidos] = useState<number[]>([])
   const [agregadosSeleccionados, setAgregadosSeleccionados] = useState<Agregado[]>([])
   const [varianteSeleccionada, setVarianteSeleccionada] = useState<Variante | null>(null)
-  const [isAdded, setIsAdded] = useState(false)
+  const [addCount, setAddCount] = useState(0)
+  const [showCounter, setShowCounter] = useState(false)
 
   useEffect(() => {
     if (open && product) {
@@ -84,7 +85,8 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder }: Pr
       setAgregadosSeleccionados([])
       setVarianteSeleccionada(null)
       setQuantity(1)
-      setIsAdded(false)
+      setAddCount(0)
+      setShowCounter(false)
     }
   }, [open, product?.id])
 
@@ -115,13 +117,12 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder }: Pr
 
   const handleContinue = () => {
     if (variantBloqueada) return
-    if (needsStage2) setStage('extras')
-    else handleAdd()
+    if (addCount > 0 || !needsStage2) handleAdd()
+    else setStage('extras')
   }
 
   const handleAdd = () => {
     if (!product) return
-    setIsAdded(true)
     onAddToOrder(
       product,
       quantity,
@@ -129,9 +130,12 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder }: Pr
       agregadosSeleccionados.length > 0 ? agregadosSeleccionados : undefined,
       varianteSeleccionada ?? undefined
     )
-    setTimeout(() => {
-      onClose()
-    }, 600)
+    const newCount = addCount + 1
+    setAddCount(newCount)
+    if (newCount >= 2) {
+      setShowCounter(true)
+      setTimeout(() => setShowCounter(false), 700)
+    }
   }
 
   const timeLeft = tieneDescuento ? formatTimeLeft(product?.descuentoFechaFin ?? null) : null
@@ -297,32 +301,70 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder }: Pr
                       </div>
 
                       {/* Botón continuar */}
-                      <div className="shrink-0 px-6 pb-7 pt-2">
+                      <div className="shrink-0 px-6 pb-7 pt-2 space-y-2">
                         <button
                           type="button"
                           onClick={handleContinue}
-                          disabled={isAdded || variantBloqueada}
+                          disabled={variantBloqueada}
                           className={cn(
-                            'h-14 w-full rounded-2xl text-[17px] font-semibold transition-all duration-300 active:scale-[0.98]',
-                            isAdded
+                            'relative h-14 w-full overflow-hidden rounded-2xl text-[17px] font-semibold transition-all duration-300 active:scale-[0.98]',
+                            addCount > 0
                               ? 'bg-emerald-500 text-white'
                               : variantBloqueada
                                 ? 'bg-foreground/10 text-muted-foreground'
                                 : 'bg-primary text-primary-foreground'
                           )}
                         >
-                          {isAdded ? (
-                            <span className="flex items-center justify-center gap-2">
-                              <Check className="h-5 w-5" /> ¡Agregado!
-                            </span>
-                          ) : variantBloqueada ? (
-                            'Elegí una opción'
-                          ) : needsStage2 ? (
-                            'Continuar'
-                          ) : (
-                            `Agregar · $${total.toFixed(2)}`
-                          )}
+                          <AnimatePresence mode="wait">
+                            {showCounter ? (
+                              <motion.span
+                                key={`x${addCount}`}
+                                initial={{ scale: 0.4, opacity: 0 }}
+                                animate={{ scale: 1.1, opacity: 1 }}
+                                exit={{ scale: 1.5, opacity: 0 }}
+                                transition={{ duration: 0.25 }}
+                                className="absolute inset-0 flex items-center justify-center font-black text-2xl"
+                              >
+                                x{addCount}
+                              </motion.span>
+                            ) : addCount > 0 ? (
+                              <motion.span
+                                key="repeat"
+                                initial={{ opacity: 0, y: 8 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                exit={{ opacity: 0, y: -8 }}
+                                transition={{ duration: 0.2 }}
+                                className="absolute inset-0 flex items-center justify-center gap-2"
+                              >
+                                <Check className="h-5 w-5" /> Agregar otro igual
+                              </motion.span>
+                            ) : variantBloqueada ? (
+                              <motion.span key="blocked" className="absolute inset-0 flex items-center justify-center">
+                                Elegí una opción
+                              </motion.span>
+                            ) : needsStage2 ? (
+                              <motion.span key="continue" className="absolute inset-0 flex items-center justify-center">
+                                Continuar
+                              </motion.span>
+                            ) : (
+                              <motion.span key="add" className="absolute inset-0 flex items-center justify-center">
+                                Agregar · ${total.toFixed(2)}
+                              </motion.span>
+                            )}
+                          </AnimatePresence>
                         </button>
+                        {addCount > 0 && (
+                          <motion.button
+                            type="button"
+                            onClick={onClose}
+                            initial={{ opacity: 0, y: 8 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ duration: 0.25 }}
+                            className="h-14 w-full rounded-2xl text-[17px] font-semibold bg-secondary text-foreground transition-all duration-300 active:scale-[0.98]"
+                          >
+                            Cerrar
+                          </motion.button>
+                        )}
                       </div>
                     </div>
                   </motion.div>
@@ -443,24 +485,60 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder }: Pr
                       </div>
 
                       {/* Footer: agregar */}
-                      <div className="flex shrink-0 items-center gap-3 px-5 pb-7 pt-2">
+                      <div className="flex shrink-0 flex-col gap-2 px-5 pb-7 pt-2">
                         <button
                           type="button"
                           onClick={handleAdd}
-                          disabled={isAdded}
                           className={cn(
-                            'flex h-14 flex-1 items-center justify-center rounded-2xl text-[17px] font-semibold transition-all duration-300 active:scale-[0.98]',
-                            isAdded ? 'bg-emerald-500 text-white' : 'bg-primary text-primary-foreground'
+                            'relative h-14 w-full overflow-hidden rounded-2xl text-[17px] font-semibold transition-all duration-300 active:scale-[0.98]',
+                            addCount > 0 ? 'bg-emerald-500 text-white' : 'bg-primary text-primary-foreground'
                           )}
                         >
-                          {isAdded ? (
-                            <span className="flex items-center justify-center gap-2">
-                              <Check className="h-5 w-5" /> ¡Agregado!
-                            </span>
-                          ) : (
-                            `Agregar`
-                          )}
+                          <AnimatePresence mode="wait">
+                            {showCounter ? (
+                              <motion.span
+                                key={`x${addCount}`}
+                                initial={{ scale: 0.4, opacity: 0 }}
+                                animate={{ scale: 1.1, opacity: 1 }}
+                                exit={{ scale: 1.5, opacity: 0 }}
+                                transition={{ duration: 0.25 }}
+                                className="absolute inset-0 flex items-center justify-center font-black text-2xl"
+                              >
+                                x{addCount}
+                              </motion.span>
+                            ) : addCount > 0 ? (
+                              <motion.span
+                                key="repeat"
+                                initial={{ opacity: 0, y: 8 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                exit={{ opacity: 0, y: -8 }}
+                                transition={{ duration: 0.2 }}
+                                className="absolute inset-0 flex items-center justify-center gap-2"
+                              >
+                                <Check className="h-5 w-5" /> Agregar otro igual
+                              </motion.span>
+                            ) : (
+                              <motion.span
+                                key="add"
+                                className="absolute inset-0 flex items-center justify-center"
+                              >
+                                Agregar
+                              </motion.span>
+                            )}
+                          </AnimatePresence>
                         </button>
+                        {addCount > 0 && (
+                          <motion.button
+                            type="button"
+                            onClick={onClose}
+                            initial={{ opacity: 0, y: 8 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ duration: 0.25 }}
+                            className="h-14 w-full rounded-2xl text-[17px] font-semibold bg-secondary text-foreground transition-all duration-300 active:scale-[0.98]"
+                          >
+                            Cerrar
+                          </motion.button>
+                        )}
                       </div>
                     </div>
                   </motion.div>

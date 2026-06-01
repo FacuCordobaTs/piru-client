@@ -194,8 +194,6 @@ const Menu = () => {
         varianteNombre: varianteSeleccionada?.nombre,
       },
     })
-    // Abrir el carrito automáticamente tras agregar un producto
-    setTimeout(() => abrirCarrito(), 350)
   }
 
   const handleEliminarItem = (itemPedidoId: number) => {

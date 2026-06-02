@@ -39,6 +39,17 @@ const Menu = () => {
   const [mostrarCheckoutEnCarrito, setMostrarCheckoutEnCarrito] = useState(false)
   const [tituloCheckout, setTituloCheckout] = useState('¿Cómo lo querés?')
 
+  const compartirLink = useCallback(() => {
+    const mensaje = `Armemos un pedido juntos en ${restaurante?.nombre || 'el restaurante'} 🍽️`
+    const url = window.location.href
+    if (navigator.share) {
+      navigator.share({ title: mensaje, text: mensaje, url }).catch(() => {})
+    } else {
+      navigator.clipboard.writeText(`${mensaje}\n${url}`)
+      toast.success('¡Link copiado al portapapeles!')
+    }
+  }, [restaurante?.nombre])
+
   const abrirCarrito = useCallback(() => {
     window.history.pushState({ drawer: 'carrito' }, '')
     setCarritoAbierto(true)
@@ -564,14 +575,11 @@ const Menu = () => {
           {/* Botón compartir sala */}
           {window.location.pathname.includes('/sala/') && (
             <button
-              onClick={() => {
-                navigator.clipboard.writeText(window.location.href)
-                toast.success('¡Link copiado al portapapeles!')
-              }}
+              onClick={compartirLink}
               className="w-full flex items-center justify-center gap-2.5 py-3 px-4 rounded-xl border-2 border-dashed border-primary/30 text-primary hover:bg-primary/5 active:bg-primary/10 transition-colors text-sm font-semibold"
             >
               <LinkIcon className="w-4 h-4" />
-              Invitá a tus amigos — copiá el link
+              Invitá a tus amigos
             </button>
           )}
         </section>
@@ -955,14 +963,11 @@ const Menu = () => {
 
             {/* Botón compartir */}
             <button
-              onClick={() => {
-                navigator.clipboard.writeText(window.location.href)
-                toast.success('¡Link copiado al portapapeles!')
-              }}
+              onClick={compartirLink}
               className="w-full flex items-center justify-center gap-2.5 py-3 px-4 rounded-xl border-2 border-dashed border-primary/30 text-primary hover:bg-primary/5 active:bg-primary/10 transition-colors text-sm font-semibold"
             >
               <LinkIcon className="w-4 h-4" />
-              Copiar link para compartir
+              Compartir link con amigos
             </button>
 
             {/* CTA principal */}

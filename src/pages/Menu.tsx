@@ -9,7 +9,7 @@ import { toast } from 'sonner'
 import {
   Trash2, Maximize2, Minimize2,
   Wifi, WifiOff, Package, ChefHat, UtensilsCrossed, Receipt, Utensils,
-  Check, X, Users, Loader2, Link as LinkIcon
+  Check, X, Users, Loader2, Share2
 } from 'lucide-react'
 import { ProductDetailDrawer } from '@/components/ProductDetailDrawer'
 import { ThemeToggle } from '@/components/ThemeToggle'
@@ -578,7 +578,7 @@ const Menu = () => {
               onClick={compartirLink}
               className="w-full flex items-center justify-center gap-2.5 py-3 px-4 rounded-xl border-2 border-dashed border-primary/30 text-primary hover:bg-primary/5 active:bg-primary/10 transition-colors text-sm font-semibold"
             >
-              <LinkIcon className="w-4 h-4" />
+              <Share2 className="w-4 h-4" />
               Invitá a tus amigos
             </button>
           )}
@@ -966,7 +966,7 @@ const Menu = () => {
               onClick={compartirLink}
               className="w-full flex items-center justify-center gap-2.5 py-3 px-4 rounded-xl border-2 border-dashed border-primary/30 text-primary hover:bg-primary/5 active:bg-primary/10 transition-colors text-sm font-semibold"
             >
-              <LinkIcon className="w-4 h-4" />
+              <Share2 className="w-4 h-4" />
               Compartir link con amigos
             </button>
 

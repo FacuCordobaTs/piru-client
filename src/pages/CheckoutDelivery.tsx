@@ -389,6 +389,8 @@ const CheckoutDelivery = () => {
                     deliveryFee: data.data.deliveryFee,
                     zonaNombre: data.data.zonaNombre,
                     direccion: tipoPedido === 'delivery' ? direccion : null,
+                    lat: tipoPedido === 'delivery' ? lat : null,
+                    lng: tipoPedido === 'delivery' ? lng : null,
                     montoDescuento: montoDescuento > 0 ? montoDescuento : undefined,
                     horarioProgramado: programarPedido ? horarioProgramado : undefined,
                 }))

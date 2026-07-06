@@ -4,12 +4,13 @@ import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { toast } from 'sonner'
-import { MapPin, Store, Truck, AlertTriangle, Loader2, Pencil, X, Tag, Home, Building2, Clock, CreditCard, Wallet, Banknote, ChevronLeft, Check } from 'lucide-react'
+import { MapPin, Store, Truck, AlertTriangle, Loader2, Pencil, X, Tag, Home, Building2, Clock, CreditCard, Wallet, Banknote, ChevronLeft, Check, Zap } from 'lucide-react'
 import { AddressAutocomplete } from '@/components/AddressAutocomplete'
 import { AddressMapPreview } from '@/components/AddressMapPreview'
 import type { CheckoutDeliveryData, CheckoutEditSemaphore } from '@/store/mesaStore'
 
 type MetodoPublico = { id: string; label: string; automatico: boolean }
+type FranjaHorario = { id: number; nombre: string; horaInicio: string; horaFin: string }
 
 type PasoCheckout = 'tipo' | 'datos' | 'ubicacion' | 'extras'
 
@@ -33,6 +34,8 @@ interface CheckoutDeliveryGrupalProps {
   onTituloChange?: (titulo: string) => void
   /** Texto personalizado para el botón del último paso (default: 'Guardar datos') */
   labelGuardar?: string
+  /** El local está cerrado ahora mismo. Si solo se puede pedir por estar habilitados los pedidos programados, obliga a elegir un horario (no se puede pedir "para ahora"). */
+  localCerrado?: boolean
 }
 
 export function CheckoutDeliveryGrupal({
@@ -51,6 +54,7 @@ export function CheckoutDeliveryGrupal({
   onVolverCarrito,
   onTituloChange,
   labelGuardar,
+  localCerrado = false,
 }: CheckoutDeliveryGrupalProps) {
   const [tipoPedido, setTipoPedido] = useState<'delivery' | 'takeaway'>(checkoutData?.tipoPedido || 'delivery')
   const [nombre, setNombre] = useState(checkoutData?.nombre || localStorage.getItem('cliente_nombre') || '')
@@ -71,6 +75,7 @@ export function CheckoutDeliveryGrupal({
   const [availablePaymentMethods, setAvailablePaymentMethods] = useState<MetodoPublico[]>([])
   const [restauranteData, setRestauranteData] = useState<any>(null)
   const [isLoadingRestaurante, setIsLoadingRestaurante] = useState(false)
+  const [franjas, setFranjas] = useState<FranjaHorario[]>([])
 
   const [zonaDeliveryFee, setZonaDeliveryFee] = useState<number | null>(checkoutData ? checkoutData.deliveryFee : null)
   const [zonaNombre, setZonaNombre] = useState<string | null>(checkoutData?.zonaNombre ?? null)
@@ -109,6 +114,7 @@ export function CheckoutDeliveryGrupal({
           const s = Array.isArray(data.data.sucursales) ? data.data.sucursales : []
           setSucursales(s)
           if (s.length === 1) setSucursalSeleccionada(s[0].id)
+          if (Array.isArray(data.data.franjas)) setFranjas(data.data.franjas)
           const delEn = r.deliveryEnabled !== false
           const tkEn = r.takeawayEnabled !== false
           if (delEn && !tkEn) setTipoPedido('delivery')
@@ -276,8 +282,9 @@ export function CheckoutDeliveryGrupal({
       toast.error('Seleccioná un local de retiro')
       return
     }
-    if (programarPedido && !horarioProgramado.trim()) {
-      toast.error('Ingresa el horario para tu pedido')
+    const requiereHorarioProgramado = usarFranjas ? franjaObligatoria : (programacionObligatoria || programarPedido)
+    if (requiereHorarioProgramado && !horarioProgramado.trim()) {
+      toast.error(usarFranjas ? 'Seleccioná un horario de entrega' : (localCerrado ? 'El local está cerrado, indicá a qué hora querés tu pedido' : 'Ingresa el horario para tu pedido'))
       return
     }
 
@@ -306,7 +313,7 @@ export function CheckoutDeliveryGrupal({
       codigoDescuentoId: codigoDescuentoId ?? null,
       montoDescuento,
       metodoPago: metodoPago ?? null,
-      horarioProgramado: programarPedido ? horarioProgramado : '',
+      horarioProgramado: usarFranjas ? horarioProgramado : ((programacionObligatoria || programarPedido) ? horarioProgramado : ''),
       sucursalId,
     }
 
@@ -361,7 +368,8 @@ export function CheckoutDeliveryGrupal({
       }
     }
     if (k === 'extras') {
-      if (programarPedido && !horarioProgramado.trim()) { toast.error('Ingresa el horario para tu pedido'); return false }
+      const requiere = usarFranjas ? franjaObligatoria : (programacionObligatoria || programarPedido)
+      if (requiere && !horarioProgramado.trim()) { toast.error(usarFranjas ? 'Seleccioná un horario de entrega' : (localCerrado ? 'El local está cerrado, indicá a qué hora querés tu pedido' : 'Ingresa el horario para tu pedido')); return false }
     }
     return true
   }
@@ -405,6 +413,13 @@ export function CheckoutDeliveryGrupal({
 
   const delEn = restauranteData ? restauranteData.deliveryEnabled !== false : true
   const tkEn = restauranteData ? restauranteData.takeawayEnabled !== false : true
+  const permitirProgramar = !!restauranteData?.permitirPedidosProgramados
+  const usarFranjas = !!restauranteData?.usarFranjasHorario
+  // Si el local está cerrado y solo se puede pedir porque están habilitados los pedidos programados,
+  // el cliente está obligado a elegir un horario (no puede pedir "para ahora"), igual que con soloPedidosProgramados.
+  // La opción "Lo antes posible" solo existe cuando NO es obligatorio programar (local abierto y se puede pedir para ahora).
+  const programacionObligatoria = permitirProgramar && (!!restauranteData?.soloPedidosProgramados || localCerrado)
+  const franjaObligatoria = usarFranjas && programacionObligatoria
 
   const inputCls = "h-12 rounded-2xl bg-secondary/60 border-0 shadow-none ring-0 focus-visible:ring-0 focus-visible:ring-offset-0 text-base px-4"
 
@@ -577,24 +592,61 @@ export function CheckoutDeliveryGrupal({
         />
       </div>
 
-      <div className="space-y-2">
-        <button
-          type="button"
-          className={`w-full flex items-center justify-between px-4 py-3.5 rounded-2xl transition-all duration-200 ${programarPedido ? 'bg-primary/10' : 'bg-secondary/50 hover:bg-secondary/80'}`}
-          onClick={() => { setProgramarPedido(!programarPedido); if (programarPedido) setHorarioProgramado('') }}
-        >
-          <div className="flex items-center gap-3 text-left">
-            <Clock className={`w-4 h-4 shrink-0 ${programarPedido ? 'text-primary' : 'text-muted-foreground'}`} />
-            <div>
-              <p className="text-sm font-semibold">Programar para después</p>
-              <p className="text-xs text-muted-foreground">Indicá a qué hora querés recibirlo</p>
-            </div>
+      {restauranteData?.permitirPedidosProgramados && (
+        usarFranjas ? (
+          <div className="space-y-2">
+            <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-1">
+              Horario de entrega {franjaObligatoria && <span className="text-destructive">*</span>}
+            </Label>
+            <p className="text-xs text-muted-foreground px-1">
+              {franjaObligatoria ? 'Seleccioná un horario para continuar con tu pedido' : 'Elegí cuándo querés recibirlo'}
+            </p>
+            {/* "Lo antes posible" solo cuando el local está abierto y se puede pedir para ahora */}
+            {!programacionObligatoria && (
+              <button
+                type="button"
+                onClick={() => setHorarioProgramado('')}
+                className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-2xl transition-all duration-200 ${horarioProgramado === '' ? 'bg-primary/10' : 'bg-secondary/50 hover:bg-secondary/80'}`}
+              >
+                <Zap className={`w-4 h-4 shrink-0 ${horarioProgramado === '' ? 'text-primary' : 'text-muted-foreground'}`} />
+                <span className={`text-sm font-semibold ${horarioProgramado === '' ? 'text-primary' : 'text-foreground'}`}>Lo antes posible</span>
+                {horarioProgramado === '' && <Check className="w-4 h-4 text-primary shrink-0 ml-auto" />}
+              </button>
+            )}
+            {franjas.length > 0 ? (
+              <div className="grid grid-cols-2 gap-2">
+                {franjas.map(f => {
+                  const valor = `${f.horaInicio}-${f.horaFin}`
+                  const selected = horarioProgramado === valor
+                  return (
+                    <button
+                      key={f.id}
+                      type="button"
+                      onClick={() => setHorarioProgramado(selected && !franjaObligatoria ? '' : valor)}
+                      className={`flex flex-col items-center justify-center p-3 rounded-2xl transition-all duration-200 ${selected ? 'bg-primary/10' : 'bg-secondary/50 hover:bg-secondary/80'}`}
+                    >
+                      <span className={`font-semibold text-sm ${selected ? 'text-primary' : 'text-foreground'}`}>{f.nombre}</span>
+                      <span className="text-xs text-muted-foreground">{f.horaInicio} – {f.horaFin}</span>
+                    </button>
+                  )
+                })}
+              </div>
+            ) : (
+              <div className="px-4 py-3 bg-secondary/50 rounded-2xl text-sm text-muted-foreground">
+                No hay horarios disponibles por el momento.
+              </div>
+            )}
           </div>
-          {programarPedido && <Check className="w-4 h-4 text-primary shrink-0" />}
-        </button>
-        {programarPedido && (
-          <div className="animate-in fade-in slide-in-from-top-2 space-y-2">
-            <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-1">¿A qué hora?</Label>
+        ) : programacionObligatoria ? (
+          <div className="space-y-2">
+            <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-1">
+              Horario de entrega <span className="text-destructive">*</span>
+            </Label>
+            <p className="text-xs text-muted-foreground px-1">
+              {localCerrado
+                ? 'El local está cerrado. Indicá a qué hora querés recibir tu pedido.'
+                : 'Indicá a qué hora querés recibir tu pedido.'}
+            </p>
             <input
               id="horario-grupal"
               type="time"
@@ -603,8 +655,42 @@ export function CheckoutDeliveryGrupal({
               onChange={e => setHorarioProgramado(e.target.value)}
             />
           </div>
-        )}
-      </div>
+        ) : (
+          <div className="space-y-2">
+            <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-1">¿Cuándo lo querés?</Label>
+            <div className="bg-secondary/60 rounded-2xl p-1 grid grid-cols-2 gap-1">
+              <button
+                type="button"
+                className={`flex items-center justify-center gap-2 py-4 rounded-xl transition-all duration-200 cursor-pointer ${!programarPedido ? 'bg-background shadow-sm' : ''}`}
+                onClick={() => { setProgramarPedido(false); setHorarioProgramado('') }}
+              >
+                <Zap className={`w-4 h-4 ${!programarPedido ? 'text-primary' : 'text-muted-foreground'}`} />
+                <span className={`text-sm font-semibold ${!programarPedido ? 'text-foreground' : 'text-muted-foreground'}`}>Lo antes posible</span>
+              </button>
+              <button
+                type="button"
+                className={`flex items-center justify-center gap-2 py-4 rounded-xl transition-all duration-200 cursor-pointer ${programarPedido ? 'bg-background shadow-sm' : ''}`}
+                onClick={() => setProgramarPedido(true)}
+              >
+                <Clock className={`w-4 h-4 ${programarPedido ? 'text-primary' : 'text-muted-foreground'}`} />
+                <span className={`text-sm font-semibold ${programarPedido ? 'text-foreground' : 'text-muted-foreground'}`}>Programar</span>
+              </button>
+            </div>
+            {programarPedido && (
+              <div className="animate-in fade-in slide-in-from-top-2 space-y-2">
+                <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-1">¿A qué hora?</Label>
+                <input
+                  id="horario-grupal"
+                  type="time"
+                  className="w-full h-12 rounded-2xl bg-secondary/60 px-4 text-base font-semibold text-foreground border-0 outline-none"
+                  value={horarioProgramado}
+                  onChange={e => setHorarioProgramado(e.target.value)}
+                />
+              </div>
+            )}
+          </div>
+        )
+      )}
 
       {codigoDescuentoEnabled && (
         <div className="space-y-2">

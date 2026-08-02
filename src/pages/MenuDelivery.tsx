@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { useNavigate, useParams } from 'react-router'
+import { useNavigate, useParams, useSearchParams } from 'react-router'
 import { Button } from '@/components/ui/button'
 import { Sheet, SheetContent } from '@/components/ui/sheet'
 import { toast } from 'sonner'
@@ -84,6 +84,8 @@ function checkIsOpen(horarios: HorarioTurno[]): { abierto: boolean; proximaApert
 const MenuDelivery = () => {
     const navigate = useNavigate()
     const { username } = useParams()
+    const [searchParams, setSearchParams] = useSearchParams()
+    const repAplicadoRef = useRef(false)
 
     const [carritoAbierto, setCarritoAbierto] = useState(false)
     const [selectedProduct, setSelectedProduct] = useState<any>(null)
@@ -211,6 +213,60 @@ const MenuDelivery = () => {
         setCarritoAbierto(true)
         if (!mostrarCheckoutEnCarrito) setExpandido(true)
     }, [mostrarCheckoutEnCarrito])
+
+    // Deep link con carrito precargado (tarea 4.3 · Motor de Recompra). Los mensajes del motor
+    // (p. ej. recupero de dormidos) abren la tienda con `?rep=12x2-15x1` = el pedido de siempre del
+    // cliente. Lo resolvemos contra los productos ya cargados, armamos el carrito solo y lo abrimos:
+    // del antojo al pago sin volver a elegir nada. Se aplica una sola vez y limpia el query param.
+    useEffect(() => {
+        if (repAplicadoRef.current) return
+        if (productos.length === 0) return
+        const rep = searchParams.get('rep')
+        if (!rep) return
+        repAplicadoRef.current = true
+
+        const pares = rep.split('-').map(p => {
+            const [idStr, qtyStr] = p.split('x')
+            return { id: Number(idStr), qty: Math.max(1, Math.min(99, Number(qtyStr) || 1)) }
+        }).filter(p => Number.isFinite(p.id) && p.id > 0)
+
+        const nuevos: any[] = []
+        for (const par of pares) {
+            const producto = productos.find(p => p.id === par.id)
+            if (!producto) continue
+            if (producto.disponible === false) continue
+            if (producto.puntosNecesarios > 0) continue // el canje por puntos no se precarga
+            const basePrecio = parseFloat(producto.precio)
+            let precioFinal = basePrecio
+            if (producto.descuento && producto.descuento > 0) precioFinal = basePrecio * (1 - producto.descuento / 100)
+            nuevos.push({
+                id: Math.random().toString(36).substr(2, 9),
+                productoId: producto.id,
+                nombre: producto.nombre,
+                precio: precioFinal.toFixed(2),
+                precioOriginal: producto.precio,
+                descuento: producto.descuento || 0,
+                imagenUrl: producto.imagenUrl,
+                cantidad: par.qty,
+                ingredientesExcluidos: [],
+                ingredientesExcluidosNombres: [],
+                agregados: [],
+                esCanjePuntos: false,
+                puntosNecesarios: 0,
+                puntosGanados: producto.puntosGanados
+            })
+        }
+
+        // Limpiamos el query param para que no se reaplique al navegar / recargar.
+        searchParams.delete('rep')
+        setSearchParams(searchParams, { replace: true })
+
+        if (nuevos.length > 0) {
+            setCartItems(nuevos)
+            toast.success('Te dejamos listo tu pedido de siempre 🛒')
+            setTimeout(() => abrirCarrito(), 500)
+        }
+    }, [productos])
 
     const cerrarCarrito = useCallback(() => {
         setCarritoAbierto(false)
@@ -448,6 +504,7 @@ const MenuDelivery = () => {
                     direccion: tipoPedido === 'delivery' ? data.direccion : null,
                     montoDescuento: data.montoDescuento > 0 ? data.montoDescuento : undefined,
                     horarioProgramado: data.horarioProgramado || undefined,
+                    notas: data.notas || undefined,
                 }))
                 navigate(`/${username}/success`)
             } else {

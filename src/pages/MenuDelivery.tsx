@@ -356,6 +356,17 @@ const MenuDelivery = () => {
         abrirProductoDrawer()
     }
 
+    // Lista ordenada de productos "hermanos" para poder saltar de uno a otro dentro
+    // del drawer (mismo orden en que se ven en pantalla). El canje por puntos queda
+    // fuera: es un flujo aparte (`intentandoCanjear`) que no se navega.
+    const productosNavegables: any[] = selectedProduct?.intentandoCanjear
+        ? []
+        : selectedCategory === 'All'
+            ? categoriasOrdenadas.flatMap(c => productosPorCategoria[c] || [])
+            : selectedCategory === 'Canje Puntos'
+                ? []
+                : productosFiltrados
+
     const agregarAlPedido = (producto: any, cantidad: number = 1, ingredientesExcluidos?: number[], agregados?: any[], varianteSeleccionada?: any) => {
         let ingExNombres: string[] = []
         if (ingredientesExcluidos && ingredientesExcluidos.length > 0) {
@@ -1039,6 +1050,8 @@ const MenuDelivery = () => {
                 open={drawerOpen}
                 onClose={cerrarProductoDrawer}
                 onAddToOrder={agregarAlPedido}
+                siblings={productosNavegables}
+                onNavigate={(p) => setSelectedProduct(p)}
             />
 
             <MisPedidosDrawer

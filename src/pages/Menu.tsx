@@ -626,7 +626,6 @@ const Menu = () => {
                           key={producto.id}
                           producto={producto}
                           onClick={() => abrirDetalleProducto(producto)}
-                          disenoAlternativo={restaurante?.disenoAlternativo!}
                         />
                       ))}
                       {/* Spacer for last item padding */}
@@ -650,7 +649,6 @@ const Menu = () => {
                       key={producto.id}
                       producto={producto}
                       onClick={() => abrirDetalleProducto(producto)}
-                      disenoAlternativo={restaurante?.disenoAlternativo!}
                       fullWidth
                     />
                   ))}
@@ -993,106 +991,59 @@ const EmptyState = () => (
   </div>
 )
 
-const ProductoCard = ({ producto, onClick, fullWidth, disenoAlternativo }: { producto: any, onClick: () => void, fullWidth?: boolean, disenoAlternativo?: boolean }) => {
+const ProductoCard = ({ producto, onClick, fullWidth }: { producto: any, onClick: () => void, fullWidth?: boolean }) => {
   const tieneDescuento = !!(producto.descuento && producto.descuento > 0)
   const precioOriginal = parseFloat(producto.precio)
   const precioFinal = tieneDescuento ? precioOriginal * (1 - producto.descuento / 100) : precioOriginal
 
-  if (disenoAlternativo) {
-      return (
-          <div
-              className={`group relative flex flex-col ${fullWidth ? 'w-full' : 'w-48 shrink-0'} h-[260px] rounded-[24px] bg-card border border-border/50 shadow-md hover:shadow-xl transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] overflow-hidden ${!fullWidth ? 'snap-start' : ''}`}
-              onClick={onClick}
-          >
-              <div className="w-full h-[130px] shrink-0 bg-zinc-900 relative">
-                  {producto.imagenUrl ? (
-                      <img
-                          src={producto.imagenUrl}
-                          alt={producto.nombre}
-                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700 ease-out"
-                      />
-                  ) : (
-                      <div className="w-full h-full flex items-center justify-center bg-linear-to-br from-zinc-800 to-zinc-900">
-                          <Utensils className="w-10 h-10 text-primary" />
-                      </div>
-                  )}
-                  {tieneDescuento && (
-                      <div className="absolute top-2.5 left-2.5 z-10">
-                          <span className="bg-emerald-500 text-white text-[10px] font-extrabold px-2 py-0.5 rounded-full shadow-lg uppercase tracking-wide">
-                              {producto.descuento}% OFF
-                          </span>
-                      </div>
-                  )}
-              </div>
-
-              <div className="p-3.5 flex flex-col flex-1 bg-card">
-                  <div className="flex-1">
-                      <h3 className="font-bold text-[14px] line-clamp-2 text-foreground leading-tight">
-                          {producto.nombre}
-                      </h3>
-                      {producto.descripcion && (
-                          <p className="mt-1 text-xs text-muted-foreground line-clamp-2 leading-snug font-medium">
-                              {producto.descripcion}
-                          </p>
-                      )}
-                  </div>
-
-                  <div className="flex items-baseline gap-1.5 mt-2">
-                      <span className={`font-black text-[17px] ${tieneDescuento ? 'text-emerald-600 dark:text-emerald-400' : 'text-primary'}`}>
-                          ${precioFinal.toFixed(0)}
-                      </span>
-                      {tieneDescuento && (
-                          <span className="text-[11px] font-semibold text-muted-foreground line-through opacity-70">
-                              ${precioOriginal.toFixed(0)}
-                          </span>
-                      )}
-                  </div>
-              </div>
-          </div>
-      )
-  }
-
+  // Diseño sólido (único): el glassmorphism quedó discontinuado.
   return (
       <div
-          className={`group relative ${fullWidth ? 'w-full' : 'w-44 shrink-0'} h-52 rounded-3xl overflow-hidden cursor-pointer ${!fullWidth ? 'snap-start' : ''} shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-[1.02] active:scale-[0.98]`}
+          className={`group relative flex flex-col ${fullWidth ? 'w-full' : 'w-48 shrink-0'} h-[260px] rounded-[24px] bg-card border border-border/50 shadow-md hover:shadow-xl transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] overflow-hidden ${!fullWidth ? 'snap-start' : ''}`}
           onClick={onClick}
       >
-          <div className="absolute inset-0 bg-zinc-900">
+          <div className="w-full h-[130px] shrink-0 bg-zinc-900 relative">
               {producto.imagenUrl ? (
                   <img
                       src={producto.imagenUrl}
                       alt={producto.nombre}
-                      className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700 ease-out"
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700 ease-out"
                   />
               ) : (
                   <div className="w-full h-full flex items-center justify-center bg-linear-to-br from-zinc-800 to-zinc-900">
-                      <Utensils className="w-12 h-12 text-primary" />
+                      <Utensils className="w-10 h-10 text-primary" />
+                  </div>
+              )}
+              {tieneDescuento && (
+                  <div className="absolute top-2.5 left-2.5 z-10">
+                      <span className="bg-emerald-500 text-white text-[10px] font-extrabold px-2 py-0.5 rounded-full shadow-lg uppercase tracking-wide">
+                          {producto.descuento}% OFF
+                      </span>
                   </div>
               )}
           </div>
-          <div className="absolute inset-0 bg-linear-to-t from-black/90 via-transparent to-transparent" />
-          {tieneDescuento && (
-              <div className="absolute top-2.5 left-2.5 z-10">
-                  <span className="bg-emerald-500 text-white text-[10px] font-extrabold px-2 py-0.5 rounded-full shadow-lg uppercase tracking-wide">
-                      {producto.descuento}% OFF
-                  </span>
-              </div>
-          )}
-          <div className="absolute bottom-0 left-0 right-0 p-3.5">
-              <div className="rounded-2xl p-3 bg-white/70 dark:bg-white/10 backdrop-blur-md border border-white/30 dark:border-white/10 shadow-[0_4px_30px_rgba(0,0,0,0.1)]">
-                  <h3 className="font-semibold text-sm text-zinc-900 dark:text-white truncate leading-tight">
+
+          <div className="p-3.5 flex flex-col flex-1 bg-card">
+              <div className="flex-1">
+                  <h3 className="font-bold text-[14px] line-clamp-2 text-foreground leading-tight">
                       {producto.nombre}
                   </h3>
-                  <div className="flex items-baseline gap-2 mt-0.5">
-                      <span className={`font-bold text-lg ${tieneDescuento ? 'text-emerald-600 dark:text-emerald-400' : 'text-zinc-800 dark:text-white/90'}`}>
-                          ${precioFinal.toFixed(0)}
+                  {producto.descripcion && (
+                      <p className="mt-1 text-xs text-muted-foreground line-clamp-2 leading-snug font-medium">
+                          {producto.descripcion}
+                      </p>
+                  )}
+              </div>
+
+              <div className="flex items-baseline gap-1.5 mt-2">
+                  <span className={`font-black text-[17px] ${tieneDescuento ? 'text-emerald-600 dark:text-emerald-400' : 'text-primary'}`}>
+                      ${precioFinal.toFixed(0)}
+                  </span>
+                  {tieneDescuento && (
+                      <span className="text-[11px] font-semibold text-muted-foreground line-through opacity-70">
+                          ${precioOriginal.toFixed(0)}
                       </span>
-                      {tieneDescuento && (
-                          <span className="text-xs text-zinc-500 dark:text-white/40 line-through">
-                              ${precioOriginal.toFixed(0)}
-                          </span>
-                      )}
-                  </div>
+                  )}
               </div>
           </div>
       </div>

@@ -79,6 +79,14 @@ const MAX_VISIBLE_VARIANTS = 3
 // Base etapa 2: imagen + padding de la hoja + botón agregar
 const STAGE2_BASE_H = IMG_H + 168
 
+// ── Variante SIN IMAGEN: diseño plano (sin foto ni hoja superpuesta) ──
+// Espeja el card text-only de MenuDelivery: nombre/precio en texto foreground, todo al ras.
+// Alto del header de texto (badges + nombre + precio) que reemplaza a la imagen.
+const FLAT_HEADER_H = 120
+// Bases equivalentes a las de arriba pero descontando la imagen y sumando el header de texto.
+const FLAT_STAGE1_BASE_H = STAGE1_BASE_H - IMG_H + FLAT_HEADER_H
+const FLAT_STAGE2_BASE_H = STAGE2_BASE_H - IMG_H + FLAT_HEADER_H
+
 // Al navegar entre productos, la tarjeta entrante llega desde el lado del gesto y la
 // saliente se va con un leve parallax. `dir` = +1 (siguiente) / -1 (anterior).
 const navVariants = {
@@ -115,6 +123,8 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder, sibl
   const tieneAgregados = !!(product?.agregados && product.agregados.length > 0)
   const tieneVariantes = !!(product?.variantes && product.variantes.length > 0)
   const needsStage2 = tieneIngredientes || tieneAgregados
+  // Producto sin foto → diseño plano (espeja el card text-only del menú).
+  const sinImagen = !product?.imagenUrl
 
   // ── Navegación entre productos ──
   const lista = siblings ?? []
@@ -203,11 +213,14 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder, sibl
   const variantCount = product?.variantes?.length ?? 0
   const vh = typeof window !== 'undefined' ? window.innerHeight : 800
 
+  const stage1Base = sinImagen ? FLAT_STAGE1_BASE_H : STAGE1_BASE_H
+  const stage2Base = sinImagen ? FLAT_STAGE2_BASE_H : STAGE2_BASE_H
+
   // Etapa 1: mínimo equivalente a 1 variante visible, crece hasta 3, techo en 85vh
   const stage1Height = Math.min(
     Math.max(
-      STAGE1_BASE_H + LABEL_H + ROW_H,
-      STAGE1_BASE_H + (tieneVariantes ? LABEL_H + Math.min(variantCount, MAX_VISIBLE_VARIANTS) * ROW_H : 0)
+      stage1Base + LABEL_H + ROW_H,
+      stage1Base + (tieneVariantes ? LABEL_H + Math.min(variantCount, MAX_VISIBLE_VARIANTS) * ROW_H : 0)
     ),
     Math.round(vh * 0.85)
   )
@@ -216,14 +229,16 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder, sibl
   const extrasRows = (tieneIngredientes ? product!.ingredientes!.length : 0) + (tieneAgregados ? product!.agregados!.length : 0)
   const extrasLabels = (tieneIngredientes ? 1 : 0) + (tieneAgregados ? 1 : 0)
   const stage2Height = Math.min(
-    STAGE2_BASE_H + extrasLabels * LABEL_H + extrasRows * ROW_H,
+    stage2Base + extrasLabels * LABEL_H + extrasRows * ROW_H,
     Math.round(vh * 0.9)
   )
 
   const drawerHeight = stage === 'select' ? stage1Height : stage2Height
 
   const rowBtn = 'flex items-center justify-between rounded-2xl px-4 py-3.5 text-left transition-colors'
-  const navBtn = 'flex h-9 w-9 items-center justify-center rounded-full bg-black/35 text-white backdrop-blur-md transition-all active:scale-90 active:bg-black/55'
+  // Flechas de navegación que flanquean el botón principal — mismo alto/redondeo que el
+  // botón, en tono secundario para no competir con la acción primaria.
+  const navFlankBtn = 'flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-secondary text-foreground transition-all active:scale-[0.98] disabled:opacity-35 disabled:active:scale-100'
 
   return (
     <Drawer open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
@@ -237,7 +252,7 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder, sibl
             <>
               {/* Asa de arrastre — fija, no se desliza con el producto */}
               <div className="pointer-events-none absolute inset-x-0 top-2.5 z-40 flex justify-center">
-                <div className="h-1.5 w-10 rounded-full bg-white/60" />
+                <div className={cn('h-1.5 w-10 rounded-full', sinImagen ? 'bg-foreground/20' : 'bg-white/60')} />
               </div>
 
               {/* Controles de navegación entre productos — fijos sobre la imagen */}
@@ -251,42 +266,13 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder, sibl
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0, y: -6 }}
                         transition={{ duration: 0.2 }}
-                        className="absolute right-3 top-3.5 z-40 rounded-full bg-black/35 px-2.5 py-1 text-[11px] font-semibold tabular-nums text-white backdrop-blur-md"
+                        className={cn(
+                          'absolute right-3 top-3.5 z-40 rounded-full px-2.5 py-1 text-[11px] font-semibold tabular-nums',
+                          sinImagen ? 'bg-foreground/10 text-foreground' : 'bg-black/35 text-white backdrop-blur-md'
+                        )}
                       >
                         {currentIndex + 1} / {lista.length}
                       </motion.div>
-                    )}
-                    {hasPrev && (
-                      <motion.button
-                        key="prev"
-                        type="button"
-                        onClick={() => irA(-1)}
-                        initial={{ opacity: 0, x: -8 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        exit={{ opacity: 0, x: -8 }}
-                        transition={{ duration: 0.2 }}
-                        aria-label="Producto anterior"
-                        className={cn(navBtn, 'absolute left-3 z-40')}
-                        style={{ top: IMG_H / 2 - 18 }}
-                      >
-                        <ChevronLeft className="h-5 w-5" />
-                      </motion.button>
-                    )}
-                    {hasNext && (
-                      <motion.button
-                        key="next"
-                        type="button"
-                        onClick={() => irA(1)}
-                        initial={{ opacity: 0, x: 8 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        exit={{ opacity: 0, x: 8 }}
-                        transition={{ duration: 0.2 }}
-                        aria-label="Producto siguiente"
-                        className={cn(navBtn, 'absolute right-3 z-40')}
-                        style={{ top: IMG_H / 2 - 18 }}
-                      >
-                        <ChevronRight className="h-5 w-5" />
-                      </motion.button>
                     )}
                   </>
                 )}
@@ -307,32 +293,26 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder, sibl
                   transition={NAV_SLIDE}
                   className="absolute inset-0"
                 >
-                  {/* CAPA DE IMAGEN — altura fija en ambas etapas */}
-                  <div className="absolute inset-x-0 top-0 z-0 overflow-hidden bg-secondary" style={{ height: IMG_H }}>
-                    {product.imagenUrl ? (
+                  {/* CAPA DE IMAGEN — altura fija en ambas etapas (sólo con foto) */}
+                  {!sinImagen && (
+                    <div className="absolute inset-x-0 top-0 z-0 overflow-hidden bg-secondary" style={{ height: IMG_H }}>
                       <img
-                        src={product.imagenUrl}
+                        src={product.imagenUrl!}
                         alt={product.nombre}
                         draggable={false}
                         className="h-full w-full select-none object-cover"
                       />
-                    ) : (
-                      <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-primary/25 via-primary/10 to-background">
-                        <span className="text-[26vw] font-black leading-none text-primary/15 select-none">
-                          {product.nombre.charAt(0).toUpperCase()}
-                        </span>
-                      </div>
-                    )}
-                    {/* Gradiente inferior — separa el nombre/precio de la imagen. */}
-                    <div
-                      aria-hidden
-                      className="pointer-events-none absolute inset-x-0 bottom-0 h-2/3 bg-gradient-to-t from-black/75 via-black/30 to-transparent"
-                    />
-                  </div>
+                      {/* Gradiente inferior — separa el nombre/precio de la imagen. */}
+                      <div
+                        aria-hidden
+                        className="pointer-events-none absolute inset-x-0 bottom-0 h-2/3 bg-gradient-to-t from-black/75 via-black/30 to-transparent"
+                      />
+                    </div>
+                  )}
 
-                  {/* Botón volver — sólo en extras, sobre la imagen */}
+                  {/* Botón volver — sólo en extras, sobre la imagen (el diseño plano tiene el suyo propio) */}
                   <AnimatePresence>
-                    {stage === 'extras' && (
+                    {!sinImagen && stage === 'extras' && (
                       <motion.button
                         key="back"
                         type="button"
@@ -350,11 +330,15 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder, sibl
 
                   {/* ─────────── COLUMNA DE CONTENIDO ─────────── */}
                   <div className="absolute inset-0 z-10 flex flex-col">
-                    {/* Header sobre la imagen: nombre + precio. Es también el área de swipe
-                        (arrastrá la foto de lado a lado para cambiar de producto). */}
+                    {/* Header: sobre la imagen (con foto) o de texto al ras (sin foto). Es también el
+                        área de swipe (arrastrá de lado a lado para cambiar de producto). */}
                     <motion.div
-                      className={cn('relative shrink-0 select-none', puedeNavegar && 'cursor-grab touch-pan-y active:cursor-grabbing')}
-                      style={{ height: IMG_H }}
+                      className={cn(
+                        'relative shrink-0 select-none',
+                        sinImagen && 'px-6 pt-9',
+                        puedeNavegar && 'cursor-grab touch-pan-y active:cursor-grabbing'
+                      )}
+                      style={sinImagen ? undefined : { height: IMG_H }}
                       drag={puedeNavegar ? 'x' : false}
                       dragDirectionLock
                       dragConstraints={{ left: 0, right: 0 }}
@@ -362,39 +346,92 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder, sibl
                       dragSnapToOrigin
                       onDragEnd={onHeaderDragEnd}
                     >
-                      <div className="absolute inset-x-0 bottom-0 px-6 pb-8">
-                        <div className="mb-2 flex flex-wrap items-center gap-2">
-                          {tieneDescuento && (
-                            <span className="rounded-full bg-emerald-500 px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wide text-white">
-                              {product.descuento}% OFF
-                            </span>
-                          )}
-                          {timeLeft && (
-                            <span className="flex items-center gap-1 rounded-full bg-white/15 px-2 py-0.5 text-[11px] font-semibold text-white backdrop-blur-md">
-                              <Clock className="h-3 w-3" /> Vence en {timeLeft}
-                            </span>
-                          )}
-                        </div>
-                        <div className="flex items-end justify-between gap-4">
-                          <h3 className="text-[28px] font-bold leading-tight tracking-tight text-white drop-shadow-sm">
-                            {product.nombre}
-                          </h3>
-                          <div className="shrink-0 text-right">
-                            {tieneDescuento && (
-                              <p className="text-sm font-medium text-white/60 line-through">
-                                ${totalTachado.toFixed(2)}
-                              </p>
+                      {sinImagen ? (
+                        <>
+                          {/* Botón volver del diseño plano — al ras, no sobre foto */}
+                          <AnimatePresence>
+                            {stage === 'extras' && (
+                              <motion.button
+                                key="back-flat"
+                                type="button"
+                                onClick={() => setStage('select')}
+                                initial={{ opacity: 0, scale: 0.8 }}
+                                animate={{ opacity: 1, scale: 1 }}
+                                exit={{ opacity: 0, scale: 0.8 }}
+                                transition={{ duration: 0.2 }}
+                                className="mb-3 flex h-9 w-9 items-center justify-center rounded-full bg-secondary text-foreground transition-colors active:bg-secondary/70"
+                              >
+                                <ChevronLeft className="h-5 w-5" />
+                              </motion.button>
                             )}
-                            <p className="text-2xl font-bold text-white drop-shadow-sm">
-                              ${total.toFixed(2)}
-                            </p>
+                          </AnimatePresence>
+                          <div className="mb-2 flex flex-wrap items-center gap-2">
+                            {tieneDescuento && (
+                              <span className="rounded-full bg-emerald-500 px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wide text-white">
+                                {product.descuento}% OFF
+                              </span>
+                            )}
+                            {timeLeft && (
+                              <span className="flex items-center gap-1 rounded-full bg-amber-500/10 px-2 py-0.5 text-[11px] font-semibold text-amber-600 dark:text-amber-400">
+                                <Clock className="h-3 w-3" /> Vence en {timeLeft}
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex items-end justify-between gap-4">
+                            <h3 className="text-[26px] font-bold leading-tight tracking-tight text-foreground">
+                              {product.nombre}
+                            </h3>
+                            <div className="shrink-0 text-right">
+                              {tieneDescuento && (
+                                <p className="text-sm font-medium text-muted-foreground line-through">
+                                  ${totalTachado.toFixed(2)}
+                                </p>
+                              )}
+                              <p className="text-2xl font-bold text-primary">
+                                ${total.toFixed(2)}
+                              </p>
+                            </div>
+                          </div>
+                        </>
+                      ) : (
+                        <div className="absolute inset-x-0 bottom-0 px-6 pb-8">
+                          <div className="mb-2 flex flex-wrap items-center gap-2">
+                            {tieneDescuento && (
+                              <span className="rounded-full bg-emerald-500 px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wide text-white">
+                                {product.descuento}% OFF
+                              </span>
+                            )}
+                            {timeLeft && (
+                              <span className="flex items-center gap-1 rounded-full bg-white/15 px-2 py-0.5 text-[11px] font-semibold text-white backdrop-blur-md">
+                                <Clock className="h-3 w-3" /> Vence en {timeLeft}
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex items-end justify-between gap-4">
+                            <h3 className="text-[28px] font-bold leading-tight tracking-tight text-white drop-shadow-sm">
+                              {product.nombre}
+                            </h3>
+                            <div className="shrink-0 text-right">
+                              {tieneDescuento && (
+                                <p className="text-sm font-medium text-white/60 line-through">
+                                  ${totalTachado.toFixed(2)}
+                                </p>
+                              )}
+                              <p className="text-2xl font-bold text-white drop-shadow-sm">
+                                ${total.toFixed(2)}
+                              </p>
+                            </div>
                           </div>
                         </div>
-                      </div>
+                      )}
                     </motion.div>
 
-                    {/* Hoja inferior: el contenido se cruza entre las dos etapas */}
-                    <div className="relative -mt-5 flex min-h-0 flex-1 flex-col rounded-t-[28px] bg-background">
+                    {/* Hoja inferior: el contenido se cruza entre las dos etapas. Con foto se
+                        superpone a la imagen (borde redondeado); sin foto va al ras. */}
+                    <div className={cn(
+                      'relative flex min-h-0 flex-1 flex-col bg-background',
+                      !sinImagen && '-mt-5 rounded-t-[28px]'
+                    )}>
                       {/* Área animada — misma posición y misma lógica de scroll en ambas etapas */}
                       <div className="relative min-h-0 flex-1">
                         <AnimatePresence initial={false}>
@@ -524,14 +561,27 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder, sibl
                         </AnimatePresence>
                       </div>
 
-                      {/* Botón principal — muta entre Continuar y Agregar */}
+                      {/* Botón principal — muta entre Continuar y Agregar.
+                          Cuando se puede navegar entre productos, lo flanquean flechas anterior/siguiente. */}
                       <div className="shrink-0 space-y-2 px-6 pb-7 pt-2">
+                       <div className="flex items-stretch gap-2">
+                        {puedeNavegar && (
+                          <button
+                            type="button"
+                            onClick={() => irA(-1)}
+                            disabled={!hasPrev}
+                            aria-label="Producto anterior"
+                            className={navFlankBtn}
+                          >
+                            <ChevronLeft className="h-5 w-5" />
+                          </button>
+                        )}
                         <button
                           type="button"
                           onClick={handlePrimary}
                           disabled={stage === 'select' && variantBloqueada}
                           className={cn(
-                            'relative h-14 w-full overflow-hidden rounded-2xl text-[17px] font-semibold transition-all duration-300 active:scale-[0.98]',
+                            'relative h-14 min-w-0 flex-1 overflow-hidden rounded-2xl text-[17px] font-semibold transition-all duration-300 active:scale-[0.98]',
                             addCount > 0
                               ? 'bg-emerald-500 text-white'
                               : stage === 'select' && variantBloqueada
@@ -598,6 +648,18 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder, sibl
                             )}
                           </AnimatePresence>
                         </button>
+                        {puedeNavegar && (
+                          <button
+                            type="button"
+                            onClick={() => irA(1)}
+                            disabled={!hasNext}
+                            aria-label="Producto siguiente"
+                            className={navFlankBtn}
+                          >
+                            <ChevronRight className="h-5 w-5" />
+                          </button>
+                        )}
+                       </div>
                         {addCount > 0 && (
                           <motion.button
                             type="button"

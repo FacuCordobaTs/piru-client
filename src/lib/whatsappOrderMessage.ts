@@ -21,6 +21,12 @@ type BuildArgs = {
 
 const money = (n: number): string => `$${Math.round(n).toLocaleString('es-AR')}`
 
+/** Categoría del ítem (varios nombres posibles según el origen). 'Otros' si no la trae. */
+function itemCategoria(it: any): string {
+    const c = (it?.categoria ?? it?.categoriaNombre ?? '').toString().trim()
+    return c || 'Otros'
+}
+
 function paymentLine(orderInfo: any, effectiveMetodo: string, transferenciaAlias?: string | null): string {
     const aliasDinamico = orderInfo.aliasDinamico || orderInfo.cvuDinamico || null
     switch (effectiveMetodo) {
@@ -58,8 +64,7 @@ export function buildWhatsappOrderMessage(orderInfo: any, args: BuildArgs): stri
     if (orderInfo?.nombreCliente) L.push(`👤 ${orderInfo.nombreCliente}`)
     L.push('')
 
-    L.push('*🛒 Productos*')
-    for (const it of items) {
+    const pushItem = (it: any) => {
         const cantidad = it.cantidad ?? 1
         const linea = orderItemLineSubtotalSession(it)
         L.push(`• ${cantidad}x ${orderItemDisplayName(it)} — ${money(linea)}`)
@@ -71,6 +76,27 @@ export function buildWhatsappOrderMessage(orderInfo: any, args: BuildArgs): stri
             const precio = parseFloat(String(ag.precio ?? 0)) || 0
             L.push(`   ↳ Con: ${ag.nombre}${precio > 0 ? ` (+${money(precio)})` : ''}`)
         }
+    }
+
+    // Agrupar por categoría, preservando el orden de aparición de cada categoría.
+    const grupos: { categoria: string; items: any[] }[] = []
+    for (const it of items) {
+        const cat = itemCategoria(it)
+        let g = grupos.find((x) => x.categoria === cat)
+        if (!g) { g = { categoria: cat, items: [] }; grupos.push(g) }
+        g.items.push(it)
+    }
+
+    L.push('*🛒 Productos*')
+    if (grupos.length > 1) {
+        // Solo separamos con encabezados cuando hay más de una categoría (si no, es ruido).
+        grupos.forEach((g, idx) => {
+            if (idx > 0) L.push('')
+            L.push(`_${g.categoria}_`)
+            for (const it of g.items) pushItem(it)
+        })
+    } else {
+        for (const it of items) pushItem(it)
     }
     L.push('')
 

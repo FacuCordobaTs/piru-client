@@ -400,6 +400,7 @@ const MenuDelivery = () => {
         const newItem = {
             id: Math.random().toString(36).substr(2, 9),
             productoId: producto.id,
+            categoria: producto.categoria,
             nombre: nombreFinal,
             precio: precioFinalNumber.toFixed(2),
             precioOriginal: varianteSeleccionada ? varianteSeleccionada.precio : producto.precio,

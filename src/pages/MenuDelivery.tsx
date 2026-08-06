@@ -813,15 +813,15 @@ const MenuDelivery = () => {
                                         <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider px-1">
                                             {categoriaNombre}
                                         </h3>
-                                        <div className="grid grid-cols-2 gap-4 px-1 lg:grid-cols-3 xl:grid-cols-4 lg:gap-5">
+                                        <div className="flex gap-4 overflow-x-auto pb-3 ml-2 scrollbar-hide snap-x snap-mandatory lg:grid lg:grid-cols-3 xl:grid-cols-4 lg:gap-5 lg:ml-0 lg:pb-0 lg:overflow-visible lg:snap-none">
                                             {productosDeCategoria.map((producto: any) => (
                                                 <ProductoCard
                                                     key={producto.id}
                                                     producto={producto}
                                                     onClick={() => abrirDetalleProducto(producto)}
-                                                    fullWidth
                                                 />
                                             ))}
+                                            <div className="min-w-1 shrink-0 lg:hidden" />
                                         </div>
                                     </div>
                                 )

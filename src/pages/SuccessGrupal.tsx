@@ -1,11 +1,18 @@
 import { useState, useEffect, useLayoutEffect, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router'
-import { CheckCircle2, Copy, Loader2, Store, Truck, MapPin, Clock, Users } from 'lucide-react'
+import { CheckCircle2, Copy, Loader2, Store, Truck, MapPin, Clock, Users, MessageCircle } from 'lucide-react'
 import { toast } from 'sonner'
 import { ThemeToggle } from '@/components/ThemeToggle'
+import { buildWhatsappOrderMessage } from '@/lib/whatsappOrderMessage'
 import { initMercadoPago, CardPayment } from '@mercadopago/sdk-react'
 
 const MP_CHECKOUT_LAUNCHED_KEY = 'mpCheckoutLaunchedSalaPedidoId'
+
+function waMeDigits(phone: string | null | undefined): string | null {
+    if (!phone?.trim()) return null
+    const d = phone.replace(/\D/g, '')
+    return d.length >= 8 ? d : null
+}
 
 function getEffectiveMetodo(orderInfo: { metodoPago?: string; aliasDinamico?: string; cvuDinamico?: string } | null): string {
     if (!orderInfo) return ''
@@ -287,6 +294,52 @@ const SuccessGrupal = () => {
     const isMpCheckoutMetodo = effectiveMetodo === 'mercadopago_checkout'
     const isDispatched = pedidoEstado === 'dispatched' || pedidoEstado === 'archived'
 
+    const comprobantesRaw =
+        (restauranteData?.comprobantesWhatsapp && String(restauranteData.comprobantesWhatsapp).trim()) ||
+        (restauranteData?.telefono && String(restauranteData.telefono).trim()) ||
+        ''
+    const whatsappDigits = waMeDigits(comprobantesRaw)
+
+    // Botón "Enviar pedido al WhatsApp": el cliente le manda el detalle completo del pedido grupal
+    // al restaurante desde su propio WhatsApp. Es el canal principal en el plan Básico (donde no
+    // hay avisos automáticos) y no consume el wallet de mensajes de Piru.
+    const whatsappOrderHref = whatsappDigits
+        ? `https://wa.me/${whatsappDigits}?text=${encodeURIComponent(
+            buildWhatsappOrderMessage(orderInfo, {
+                restaurantName: restauranteData?.nombre,
+                restaurantDireccion: restauranteData?.direccion,
+                effectiveMetodo,
+                transferenciaAlias: restauranteData?.transferenciaAlias,
+            })
+        )}`
+        : null
+
+    // Solo el plan Básico (sin avisos automáticos al cliente) muestra el botón manual.
+    // Si el backend aún no envía el flag, se oculta por defecto (no mostrar de más).
+    const mostrarEnvioWhatsapp = restauranteData?.avisosWhatsappClienteEnabled === false
+    const whatsappOrderBlock = (whatsappOrderHref && mostrarEnvioWhatsapp) ? (
+        <div className="flex flex-col items-center text-center gap-4">
+            <div className="w-14 h-14 rounded-full bg-[#25D366]/15 flex items-center justify-center">
+                <MessageCircle className="w-7 h-7 text-[#25D366]" />
+            </div>
+            <div className="space-y-1.5">
+                <h2 className="text-2xl font-bold tracking-tight">Enviá el pedido al local</h2>
+                <p className="text-sm text-muted-foreground leading-relaxed max-w-xs mx-auto">
+                    Falta un paso: mandá el pedido por WhatsApp para que el local lo reciba y empiece a prepararlo.
+                </p>
+            </div>
+            <a
+                href={whatsappOrderHref}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center justify-center gap-2 w-full px-5 py-4 bg-[#25D366] text-white rounded-2xl font-semibold text-base active:scale-[0.98] transition-transform shadow-lg shadow-[#25D366]/25"
+            >
+                <MessageCircle className="w-5 h-5" />
+                Enviar pedido al WhatsApp
+            </a>
+        </div>
+    ) : null
+
     const cachedThemeStr = sessionStorage.getItem(`theme_sala_${orderInfo.token}`)
     const cachedTheme = cachedThemeStr ? JSON.parse(cachedThemeStr) : null
     const primario = restauranteData?.colorPrimario || cachedTheme?.primario
@@ -401,6 +454,13 @@ const SuccessGrupal = () => {
             </div>
 
             <div className="max-w-xl w-full mx-auto px-5 pt-24 flex-1 flex flex-col">
+
+                {/* Acción principal del plan Básico: enviar el pedido al WhatsApp del local */}
+                {whatsappOrderBlock && (
+                    <div className="pt-4 pb-10 border-b border-foreground/5 mb-10">
+                        {whatsappOrderBlock}
+                    </div>
+                )}
 
                 {/* ── PENDING PAYMENT ── */}
                 {status === 'pending_payment' && (

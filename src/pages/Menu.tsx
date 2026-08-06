@@ -8,13 +8,65 @@ import { mesaApi } from '@/lib/api'
 import { toast } from 'sonner'
 import {
   Trash2, Maximize2, Minimize2,
-  Wifi, WifiOff, Package, ChefHat, UtensilsCrossed, Receipt, Utensils,
-  Check, X, Users, Loader2, Share2
+  Wifi, WifiOff, Package, UtensilsCrossed, Receipt, Utensils,
+  Check, X, Users, Loader2, Share2, Clock
 } from 'lucide-react'
 import { ProductDetailDrawer } from '@/components/ProductDetailDrawer'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { CheckoutDeliveryGrupal } from '@/components/CheckoutDeliveryGrupal'
+
+type HorarioTurno = { diaSemana: number; horaApertura: string; horaCierre: string }
+
+// Mismo cálculo de apertura que MenuDelivery: la sala hace pedidos de delivery/takeaway,
+// así que respeta los horarios de atención del local (el flujo de mesa/dine-in no).
+function checkIsOpen(horarios: HorarioTurno[]): { abierto: boolean; proximaApertura: string | null } {
+  if (!horarios || horarios.length === 0) return { abierto: true, proximaApertura: null }
+
+  const now = new Date()
+  const diaHoy = now.getDay() // 0=Dom
+  const diaAyer = (diaHoy + 6) % 7
+  const hhmm = now.getHours() * 60 + now.getMinutes()
+
+  for (const h of horarios) {
+    const apertura = parseInt(h.horaApertura.split(':')[0]) * 60 + parseInt(h.horaApertura.split(':')[1])
+    const cierre = parseInt(h.horaCierre.split(':')[0]) * 60 + parseInt(h.horaCierre.split(':')[1])
+
+    if (cierre > apertura) {
+      if (h.diaSemana === diaHoy && hhmm >= apertura && hhmm < cierre) {
+        return { abierto: true, proximaApertura: null }
+      }
+    } else {
+      // Cruza medianoche: ej 20:00-02:00
+      if (h.diaSemana === diaHoy && hhmm >= apertura) {
+        return { abierto: true, proximaApertura: null }
+      }
+      if (h.diaSemana === diaAyer && hhmm < cierre) {
+        return { abierto: true, proximaApertura: null }
+      }
+    }
+  }
+
+  const DIAS_NOMBRE = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
+  let mejor: { minutos: number; texto: string } | null = null
+
+  for (const h of horarios) {
+    const apertura = parseInt(h.horaApertura.split(':')[0]) * 60 + parseInt(h.horaApertura.split(':')[1])
+    const diasHasta = (h.diaSemana - diaHoy + 7) % 7
+    let minutosHasta = diasHasta * 1440 + (apertura - hhmm)
+    if (minutosHasta <= 0) minutosHasta += 7 * 1440
+
+    if (!mejor || minutosHasta < mejor.minutos) {
+      const esHoy = diasHasta === 0 && apertura > hhmm
+      mejor = {
+        minutos: minutosHasta,
+        texto: esHoy ? `hoy a las ${h.horaApertura}` : `${DIAS_NOMBRE[h.diaSemana]} ${h.horaApertura}`
+      }
+    }
+  }
+
+  return { abierto: false, proximaApertura: mejor?.texto || null }
+}
 
 const Menu = () => {
   const navigate = useNavigate()
@@ -31,6 +83,12 @@ const Menu = () => {
   // ESTADO PARA EL MODAL DE CONFIRMACIÓN GRUPAL
   const [confirmacionGrupalOpen, setConfirmacionGrupalOpen] = useState(false)
 
+  // ESTADO PARA EL FEEDBACK DE ENVÍO EN SOLITARIO
+  // Cuando hay un solo cliente no hay flujo de votación grupal, pero igual existe un delay
+  // entre confirmar y que el WS/poll redirija a la pantalla de éxito. Sin esto el usuario
+  // se queda sin ningún feedback durante esos segundos.
+  const [enviandoSolo, setEnviandoSolo] = useState(false)
+
   // ESTADO PARA EL MODAL DE BIENVENIDA
   const [bienvenidaOpen, setBienvenidaOpen] = useState(false)
 
@@ -38,6 +96,13 @@ const Menu = () => {
   const esSala = typeof window !== 'undefined' && window.location.pathname.includes('/sala/')
   const [mostrarCheckoutEnCarrito, setMostrarCheckoutEnCarrito] = useState(false)
   const [tituloCheckout, setTituloCheckout] = useState('¿Cómo lo querés?')
+
+  // Estado de apertura del local (solo relevante para sala: son pedidos delivery/takeaway).
+  // El join de sala no trae horarios ni la config de pedidos programados, así que la traemos
+  // aparte desde /public/restaurante/:username (igual que MenuDelivery).
+  const [horarios, setHorarios] = useState<HorarioTurno[]>([])
+  const [estadoAbierto, setEstadoAbierto] = useState<{ abierto: boolean; proximaApertura: string | null }>({ abierto: true, proximaApertura: null })
+  const [permitirProgramados, setPermitirProgramados] = useState(false)
 
   const compartirLink = useCallback(() => {
     const mensaje = `Armemos un pedido juntos en ${restaurante?.nombre || 'el restaurante'} 🍽️`
@@ -181,6 +246,13 @@ const Menu = () => {
     abrirProductoDrawer()
   }
 
+  // Lista ordenada de productos "hermanos" para saltar de uno a otro dentro del drawer
+  // (mismo orden en que se ven en pantalla), igual que en MenuDelivery. Alimenta las
+  // flechas anterior/siguiente y el swipe del ProductDetailDrawer.
+  const productosNavegables = selectedCategory === 'All'
+    ? categoriasOrdenadas.flatMap(c => productosPorCategoria[c] || [])
+    : productosFiltrados
+
   const agregarAlPedido = (producto: typeof productos[0] | any, cantidad: number = 1, ingredientesExcluidos?: number[], agregados?: any[], varianteSeleccionada?: any) => {
     if (!clienteNombre) return
     let precioBase = varianteSeleccionada
@@ -222,8 +294,9 @@ const Menu = () => {
     // Si solo hay un cliente, confirmar directamente (compatibilidad)
     if (clientes.length <= 1) {
       sendMessage({ type: 'CONFIRMAR_PEDIDO', payload: {} })
-      toast.success('¡Pedido enviado a cocina!', { icon: <ChefHat className="w-5 h-5" /> })
       cerrarCarrito()
+      // Feedback visible mientras el WS/poll procesa el pedido y redirige a éxito.
+      setEnviandoSolo(true)
       return
     }
 
@@ -288,9 +361,10 @@ const Menu = () => {
   const totalClientes = confirmacionGrupal?.confirmaciones.length ?? 0
   const todosConfirmaron = esSala && totalClientes > 0 && totalConfirmados === totalClientes
 
-  // Fallback: cuando todos confirmaron en sala, poll por el pedido creado (por si el WS no llega)
+  // Fallback: cuando todos confirmaron en sala (o cuando confirma un cliente solo), poll por el
+  // pedido creado por si el WS (SALA_PEDIDO_CREADO) no llega.
   useEffect(() => {
-    if (!todosConfirmaron || !urlQrToken) return
+    if (!(todosConfirmaron || (enviandoSolo && esSala)) || !urlQrToken) return
     const token = urlQrToken
     const poll = async () => {
       try {
@@ -321,7 +395,7 @@ const Menu = () => {
     return () => {
       clearInterval(interval)
     }
-  }, [todosConfirmaron, urlQrToken])
+  }, [todosConfirmaron, enviandoSolo, esSala, urlQrToken])
 
   const todosLosItems = wsState?.items || []
 
@@ -383,6 +457,35 @@ const Menu = () => {
     }
     fetchTheme()
   }, [token, isHydrated, esSala])
+
+  // Traer horarios + config de pedidos programados para saber si el local está abierto (solo sala).
+  useEffect(() => {
+    if (!esSala || !restaurante?.username) return
+    const fetchEstado = async () => {
+      try {
+        const url = import.meta.env.VITE_API_URL || 'http://localhost:3000/api'
+        const res = await fetch(`${url}/public/restaurante/${restaurante.username}`)
+        if (!res.ok) return
+        const data = await res.json()
+        if (data.success && data.data) {
+          setPermitirProgramados(!!data.data.restaurante?.permitirPedidosProgramados)
+          if (Array.isArray(data.data.horarios)) {
+            setHorarios(data.data.horarios)
+            setEstadoAbierto(checkIsOpen(data.data.horarios))
+          }
+        }
+      } catch { /* ignore */ }
+    }
+    fetchEstado()
+  }, [esSala, restaurante?.username])
+
+  useEffect(() => {
+    if (horarios.length === 0) return
+    const interval = setInterval(() => setEstadoAbierto(checkIsOpen(horarios)), 60_000)
+    return () => clearInterval(interval)
+  }, [horarios])
+
+  const localCerrado = esSala && !estadoAbierto.abierto
 
   // Claves de tema: sala/mesa primero; fallback a theme_${username} (como MenuDelivery) por si vino de /alfajor
   const themeKeySalaMesa = token ? (esSala ? `theme_sala_${token}` : `theme_mesa_${token}`) : null
@@ -502,7 +605,7 @@ const Menu = () => {
 
       {/* --- HEADER --- */}
       <div className="sticky top-0 z-20 bg-background/80 backdrop-blur-md border-b border-border/50 supports-backdrop-filter:bg-background/60">
-        <div className="max-w-2xl mx-auto px-4 py-3">
+        <div className="max-w-2xl lg:max-w-5xl xl:max-w-6xl mx-auto px-4 py-3">
           <div className="flex items-center justify-between">
 
             <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-secondary/50">
@@ -517,10 +620,24 @@ const Menu = () => {
         </div>
       </div>
 
-      <div className="max-w-2xl mx-auto px-5 pt-4 space-y-6">
+      {localCerrado && (
+        <div className={permitirProgramados ? "bg-amber-500 text-white" : "bg-red-600 text-white"}>
+          <div className="max-w-2xl lg:max-w-5xl xl:max-w-6xl mx-auto px-5 py-3 flex items-center justify-center gap-2">
+            <Clock className="w-4 h-4 shrink-0" />
+            <p className="text-sm font-semibold text-center">
+              {permitirProgramados
+                ? 'Estamos cerrados. Podés programar tu pedido para después'
+                : `Estamos cerrados${estadoAbierto.proximaApertura ? `. Abrimos ${estadoAbierto.proximaApertura}` : ''}`
+              }
+            </p>
+          </div>
+        </div>
+      )}
+
+      <div className="max-w-2xl lg:max-w-5xl xl:max-w-6xl mx-auto px-5 pt-4 space-y-6">
 
         {/* --- SECCIÓN BIENVENIDA & USUARIOS --- */}
-        <section className="space-y-4">
+        <section className="space-y-4 lg:max-w-2xl lg:mx-auto lg:w-full">
           <div className="flex items-end justify-between px-1">
             <div>
               <p className="text-sm text-muted-foreground font-medium mb-0.5">Bienvenido,</p>
@@ -620,7 +737,7 @@ const Menu = () => {
                     <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider px-1">
                       {categoriaNombre}
                     </h3>
-                    <div className="flex gap-4 overflow-x-auto pb-3  ml-2 scrollbar-hide snap-x snap-mandatory">
+                    <div className="flex gap-4 overflow-x-auto pb-3 ml-2 scrollbar-hide snap-x snap-mandatory lg:grid lg:grid-cols-3 xl:grid-cols-4 lg:gap-5 lg:ml-0 lg:pb-0 lg:overflow-visible lg:snap-none">
                       {productosDeCategoria.map((producto) => (
                         <ProductoCard
                           key={producto.id}
@@ -629,7 +746,7 @@ const Menu = () => {
                         />
                       ))}
                       {/* Spacer for last item padding */}
-                      <div className="min-w-1 shrink-0" />
+                      <div className="min-w-1 shrink-0 lg:hidden" />
                     </div>
                   </div>
                 )
@@ -643,7 +760,7 @@ const Menu = () => {
                 <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider px-1">
                   {selectedCategory}
                 </h3>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 px-1">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 px-1">
                   {productosFiltrados.map((producto) => (
                     <ProductoCard
                       key={producto.id}
@@ -703,7 +820,7 @@ const Menu = () => {
         className={`fixed inset-x-0 bottom-0 z-50 transition-transform duration-300 ease-out ${carritoAbierto ? 'translate-y-0' : 'translate-y-full pointer-events-none'}`}
       >
         <div
-          className={`mx-auto max-w-2xl bg-background rounded-t-3xl shadow-[0_-12px_40px_rgba(0,0,0,0.28)] border-t border-border flex flex-col transition-[height] duration-300 ease-out ${(!mostrarCheckoutEnCarrito || expandido) ? 'overflow-hidden' : 'overflow-y-auto'}`}
+          className={`mx-auto max-w-2xl lg:max-w-lg bg-background rounded-t-3xl shadow-[0_-12px_40px_rgba(0,0,0,0.28)] border-t border-border flex flex-col transition-[height] duration-300 ease-out ${(!mostrarCheckoutEnCarrito || expandido) ? 'overflow-hidden' : 'overflow-y-auto'}`}
           style={!mostrarCheckoutEnCarrito ? { height: alturaCarrito } : expandido ? { height: '85vh' } : { maxHeight: '88vh' }}
         >
           {/* Header */}
@@ -749,6 +866,7 @@ const Menu = () => {
               editSemaphore={checkoutEditSemaphore}
               restauranteDireccion={restaurante?.direccion ?? undefined}
               onTituloChange={setTituloCheckout}
+              localCerrado={localCerrado}
             />
           ) : todosLosItems.length === 0 ? (
             <div className={`flex flex-col items-center justify-center text-center gap-4 opacity-60 px-5 ${expandido ? 'flex-1' : 'py-12'}`}>
@@ -771,7 +889,9 @@ const Menu = () => {
                 </div>
                 <Button
                   className="w-full h-12 rounded-xl font-bold text-base shadow-md"
+                  disabled={localCerrado && !permitirProgramados}
                   onClick={() => {
+                    if (localCerrado && !permitirProgramados) return
                     if (esSala) {
                       setMostrarCheckoutEnCarrito(true)
                       setExpandido(false)
@@ -780,7 +900,7 @@ const Menu = () => {
                     }
                   }}
                 >
-                  Continuar
+                  {localCerrado && !permitirProgramados ? 'Cerrado' : 'Continuar'}
                 </Button>
               </div>
             </>
@@ -793,6 +913,8 @@ const Menu = () => {
         open={drawerOpen}
         onClose={cerrarProductoDrawer}
         onAddToOrder={agregarAlPedido}
+        siblings={productosNavegables as any}
+        onNavigate={(p) => setSelectedProduct(p as any)}
       />
 
 
@@ -920,6 +1042,22 @@ const Menu = () => {
         </DialogContent>
       </Dialog>
 
+      {/* --- OVERLAY DE ENVÍO EN SOLITARIO --- */}
+      {/* Un solo cliente no pasa por la votación grupal, pero igual hay un delay entre confirmar
+          y que el WS/poll redirija a la pantalla de éxito. Este overlay le da feedback de que su
+          pedido se está procesando (equivalente al estado "¡Todos confirmaron!" del flujo grupal). */}
+      <Dialog open={enviandoSolo} onOpenChange={() => { }}>
+        <DialogContent className="max-w-sm rounded-2xl p-4 sm:p-5" onPointerDownOutside={(e) => e.preventDefault()}>
+          <div className="flex flex-col items-center justify-center py-8 gap-4">
+            <Loader2 className="w-12 h-12 text-primary animate-spin" />
+            <DialogTitle className="text-lg font-bold text-center">¡Pedido confirmado!</DialogTitle>
+            <DialogDescription className="text-center text-sm">
+              Estamos preparando tu pedido, te redirigimos en un momento...
+            </DialogDescription>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* --- MODAL DE BIENVENIDA --- */}
       <Dialog open={bienvenidaOpen} onOpenChange={setBienvenidaOpen}>
         <DialogContent className="max-w-sm rounded-3xl p-0 overflow-hidden border-0 shadow-2xl gap-0">
@@ -999,7 +1137,7 @@ const ProductoCard = ({ producto, onClick, fullWidth }: { producto: any, onClick
   // Diseño sólido (único): el glassmorphism quedó discontinuado.
   return (
       <div
-          className={`group relative flex flex-col ${fullWidth ? 'w-full' : 'w-48 shrink-0'} h-[260px] rounded-[24px] bg-card border border-border/50 shadow-md hover:shadow-xl transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] overflow-hidden ${!fullWidth ? 'snap-start' : ''}`}
+          className={`group relative flex flex-col ${fullWidth ? 'w-full' : 'w-48 shrink-0 lg:w-full'} h-[260px] rounded-[24px] bg-card border border-border/50 shadow-md hover:shadow-xl transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] overflow-hidden ${!fullWidth ? 'snap-start' : ''}`}
           onClick={onClick}
       >
           <div className="w-full h-[130px] shrink-0 bg-zinc-900 relative">

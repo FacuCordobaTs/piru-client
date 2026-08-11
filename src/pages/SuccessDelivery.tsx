@@ -543,7 +543,7 @@ const SuccessDelivery = () => {
                                                 </div>
                                                 <Copy className="w-4 h-4 text-muted-foreground shrink-0 ml-3" />
                                             </button>
-                                            {whatsappHref ? (
+                                            {whatsappHref && !mostrarEnvioWhatsapp ? (
                                                 <a
                                                     href={whatsappHref}
                                                     target="_blank"
@@ -552,11 +552,11 @@ const SuccessDelivery = () => {
                                                 >
                                                     Enviar comprobante por WhatsApp
                                                 </a>
-                                            ) : (
+                                            ) : !mostrarEnvioWhatsapp ? (
                                                 <p className="text-sm text-center text-muted-foreground leading-snug">
                                                     Enviá el comprobante a las redes del local o presentalo al retirar.
                                                 </p>
-                                            )}
+                                            ) : null}
                                         </>
                                     ) : (
                                         <p className="text-sm text-muted-foreground">

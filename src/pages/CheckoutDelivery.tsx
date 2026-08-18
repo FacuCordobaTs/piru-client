@@ -327,6 +327,7 @@ const CheckoutDelivery = () => {
                 items: cart.items.map((i: any) => ({
                     productoId: i.productoId,
                     varianteId: i.varianteId,
+                    varianteSecundariaId: i.varianteSecundariaId,
                     cantidad: i.cantidad,
                     ingredientesExcluidos: i.ingredientesExcluidos,
                     agregados: i.agregados || [],

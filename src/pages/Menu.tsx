@@ -15,6 +15,7 @@ import { ProductDetailDrawer } from '@/components/ProductDetailDrawer'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { CheckoutDeliveryGrupal } from '@/components/CheckoutDeliveryGrupal'
+import { redirectPedidoAlWhatsapp } from '@/lib/checkoutWhatsapp'
 
 type HorarioTurno = { diaSemana: number; horaApertura: string; horaCierre: string }
 
@@ -253,12 +254,13 @@ const Menu = () => {
     ? categoriasOrdenadas.flatMap(c => productosPorCategoria[c] || [])
     : productosFiltrados
 
-  const agregarAlPedido = (producto: typeof productos[0] | any, cantidad: number = 1, ingredientesExcluidos?: number[], agregados?: any[], varianteSeleccionada?: any) => {
+  const agregarAlPedido = (producto: typeof productos[0] | any, cantidad: number = 1, ingredientesExcluidos?: number[], agregados?: any[], varianteSeleccionada?: any, varianteSecundariaSeleccionada?: any) => {
     if (!clienteNombre) return
     let precioBase = varianteSeleccionada
       ? parseFloat(String(varianteSeleccionada.precio))
       : parseFloat(String(producto.precio))
-    if (!varianteSeleccionada && producto.descuento && producto.descuento > 0) {
+    precioBase += varianteSecundariaSeleccionada ? parseFloat(String(varianteSecundariaSeleccionada.precio)) : 0
+    if (producto.descuento && producto.descuento > 0) {
       precioBase = precioBase * (1 - producto.descuento / 100)
     }
     const precioAgregados = (agregados || []).reduce((sum: number, ag: any) => sum + parseFloat(ag.precio || '0'), 0)
@@ -275,6 +277,8 @@ const Menu = () => {
         agregados: agregados || [],
         varianteId: varianteSeleccionada?.id,
         varianteNombre: varianteSeleccionada?.nombre,
+        varianteSecundariaId: varianteSecundariaSeleccionada?.id,
+        varianteSecundariaNombre: varianteSecundariaSeleccionada?.nombre,
       },
     })
   }
@@ -290,6 +294,10 @@ const Menu = () => {
   // Iniciar el proceso de confirmación grupal (votación)
   const iniciarConfirmacionPedido = () => {
     if (!clienteNombre || !clienteId) return
+
+    if (restaurante?.avisosWhatsappClienteEnabled === false && urlQrToken) {
+      sessionStorage.setItem(`salaWhatsappInitiator_${urlQrToken}`, '1')
+    }
 
     // Si solo hay un cliente, confirmar directamente (compatibilidad)
     if (clientes.length <= 1) {
@@ -372,7 +380,7 @@ const Menu = () => {
         const res = await fetch(`${url}/public/sala/${token}/order-created`)
         const data = await res.json()
         if (data.success && data.order) {
-          sessionStorage.setItem('salaOrderInfo', JSON.stringify({
+          const orderInfo = {
             token: data.order.token,
             pedidoId: data.order.pedidoId,
             tipoPedido: data.order.tipoPedido,
@@ -385,7 +393,24 @@ const Menu = () => {
             direccion: data.order.direccion,
             metodoPago: data.order.metodoPago || checkoutDeliveryData?.metodoPago || 'transferencia',
             montoDescuento: data.order.montoDescuento ? parseFloat(data.order.montoDescuento) : undefined,
-          }))
+          }
+          sessionStorage.setItem('salaOrderInfo', JSON.stringify(orderInfo))
+          const debeEnviarWhatsapp = restaurante?.avisosWhatsappClienteEnabled === false
+            && sessionStorage.getItem(`salaWhatsappInitiator_${token}`) === '1'
+          if (debeEnviarWhatsapp) {
+            const redirectKey = `salaWhatsappRedirect_${data.order.pedidoId}`
+            if (sessionStorage.getItem(redirectKey) !== '1') {
+              sessionStorage.setItem(redirectKey, '1')
+              const redirected = await redirectPedidoAlWhatsapp(orderInfo, restaurante)
+              if (redirected) {
+                sessionStorage.removeItem(`salaWhatsappInitiator_${token}`)
+                return
+              }
+              sessionStorage.removeItem(redirectKey)
+            } else {
+              return
+            }
+          }
           window.location.href = `/sala/${data.order.token}/success`
         }
       } catch { /* ignore */ }
@@ -395,7 +420,7 @@ const Menu = () => {
     return () => {
       clearInterval(interval)
     }
-  }, [todosConfirmaron, enviandoSolo, esSala, urlQrToken])
+  }, [todosConfirmaron, enviandoSolo, esSala, urlQrToken, restaurante, checkoutDeliveryData?.metodoPago])
 
   const todosLosItems = wsState?.items || []
 
@@ -866,6 +891,7 @@ const Menu = () => {
               editSemaphore={checkoutEditSemaphore}
               restauranteDireccion={restaurante?.direccion ?? undefined}
               onTituloChange={setTituloCheckout}
+              enviarPedidoWhatsapp={restaurante?.avisosWhatsappClienteEnabled === false}
               localCerrado={localCerrado}
             />
           ) : todosLosItems.length === 0 ? (

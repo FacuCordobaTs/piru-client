@@ -20,6 +20,10 @@ interface Restaurante {
   colorPrimario?: string | null
   colorSecundario?: string | null
   username?: string | null
+  telefono?: string | null
+  comprobantesWhatsapp?: string | null
+  transferenciaAlias?: string | null
+  avisosWhatsappClienteEnabled?: boolean
 }
 
 interface Ingrediente {

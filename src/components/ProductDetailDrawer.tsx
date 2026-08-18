@@ -31,6 +31,7 @@ interface Product {
   ingredientes?: Ingrediente[]
   agregados?: Agregado[]
   variantes?: Variante[]
+  variantesSecundarias?: Variante[]
   descuento?: number | null
   descuentoFechaFin?: string | null
 }
@@ -39,7 +40,7 @@ interface ProductDetailDrawerProps {
   product: Product | null
   open: boolean
   onClose: () => void
-  onAddToOrder: (product: Product, quantity: number, ingredientesExcluidos?: number[], agregados?: Agregado[], varianteSeleccionada?: Variante) => void
+  onAddToOrder: (product: Product, quantity: number, ingredientesExcluidos?: number[], agregados?: Agregado[], varianteSeleccionada?: Variante, varianteSecundariaSeleccionada?: Variante) => void
   /** Lista ordenada de productos "hermanos" navegables desde el detalle. Si tiene ≥2
    *  items, se puede pasar al producto anterior/siguiente sin cerrar el drawer. */
   siblings?: Product[]
@@ -97,11 +98,12 @@ const navVariants = {
 
 
 export function ProductDetailDrawer({ product, open, onClose, onAddToOrder, siblings, onNavigate }: ProductDetailDrawerProps) {
-  const [stage, setStage] = useState<'select' | 'extras'>('select')
+  const [stage, setStage] = useState<'primary' | 'secondary' | 'extras'>('primary')
   const [quantity, setQuantity] = useState(1)
   const [ingredientesExcluidos, setIngredientesExcluidos] = useState<number[]>([])
   const [agregadosSeleccionados, setAgregadosSeleccionados] = useState<Agregado[]>([])
   const [varianteSeleccionada, setVarianteSeleccionada] = useState<Variante | null>(null)
+  const [varianteSecundariaSeleccionada, setVarianteSecundariaSeleccionada] = useState<Variante | null>(null)
   const [addCount, setAddCount] = useState(0)
   const [showCounter, setShowCounter] = useState(false)
   // Dirección del último salto entre productos (alimenta la animación de deslizamiento).
@@ -109,10 +111,11 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder, sibl
 
   useEffect(() => {
     if (open && product) {
-      setStage('select')
+      setStage('primary')
       setIngredientesExcluidos([])
       setAgregadosSeleccionados([])
       setVarianteSeleccionada(null)
+      setVarianteSecundariaSeleccionada(null)
       setQuantity(1)
       setAddCount(0)
       setShowCounter(false)
@@ -122,6 +125,7 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder, sibl
   const tieneIngredientes = !!(product?.ingredientes && product.ingredientes.length > 0)
   const tieneAgregados = !!(product?.agregados && product.agregados.length > 0)
   const tieneVariantes = !!(product?.variantes && product.variantes.length > 0)
+  const tieneVariantesSecundarias = !!(product?.variantesSecundarias && product.variantesSecundarias.length > 0)
   const needsStage2 = tieneIngredientes || tieneAgregados
   // Producto sin foto → diseño plano (espeja el card text-only del menú).
   const sinImagen = !product?.imagenUrl
@@ -132,7 +136,7 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder, sibl
   const hasPrev = currentIndex > 0
   const hasNext = currentIndex >= 0 && currentIndex < lista.length - 1
   // Sólo se navega desde la etapa de selección (en "extras" el usuario está personalizando).
-  const puedeNavegar = stage === 'select' && addCount === 0 && currentIndex >= 0 && lista.length > 1
+  const puedeNavegar = stage === 'primary' && addCount === 0 && currentIndex >= 0 && lista.length > 1
 
   const irA = (dir: number) => {
     if (!puedeNavegar) return
@@ -170,12 +174,17 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder, sibl
       prev.find(a => a.id === agregado.id) ? prev.filter(a => a.id !== agregado.id) : [...prev, agregado]
     )
 
-  const variantBloqueada = tieneVariantes && !varianteSeleccionada
+  const variantBloqueada = stage === 'primary'
+    ? tieneVariantes && !varianteSeleccionada
+    : stage === 'secondary'
+      ? tieneVariantesSecundarias && !varianteSecundariaSeleccionada
+      : false
 
   // ── Cálculo de precio ──
-  const precioBase = varianteSeleccionada
+  const precioBasePrimario = varianteSeleccionada
     ? parseFloat(varianteSeleccionada.precio)
     : parseFloat(String(product?.precio ?? 0))
+  const precioBase = precioBasePrimario + (varianteSecundariaSeleccionada ? parseFloat(varianteSecundariaSeleccionada.precio) : 0)
   const tieneDescuento = !!(product?.descuento && product.descuento > 0)
   const precioUnitConDescuento = tieneDescuento ? precioBase * (1 - (product!.descuento! / 100)) : precioBase
   const precioAgregados = agregadosSeleccionados.reduce((sum, ag) => sum + parseFloat(ag.precio || '0'), 0)
@@ -184,8 +193,13 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder, sibl
 
   const handleContinue = () => {
     if (variantBloqueada) return
-    if (addCount > 0 || !needsStage2) handleAdd()
-    else setStage('extras')
+    if (stage === 'primary' && tieneVariantesSecundarias) {
+      setStage('secondary')
+    } else if (addCount > 0 || !needsStage2) {
+      handleAdd()
+    } else {
+      setStage('extras')
+    }
   }
 
   const handleAdd = () => {
@@ -195,7 +209,8 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder, sibl
       quantity,
       ingredientesExcluidos.length > 0 ? ingredientesExcluidos : undefined,
       agregadosSeleccionados.length > 0 ? agregadosSeleccionados : undefined,
-      varianteSeleccionada ?? undefined
+      varianteSeleccionada ?? undefined,
+      varianteSecundariaSeleccionada ?? undefined
     )
     const newCount = addCount + 1
     setAddCount(newCount)
@@ -205,12 +220,13 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder, sibl
     }
   }
 
-  const handlePrimary = () => (stage === 'select' ? handleContinue() : handleAdd())
+  const handlePrimary = () => (stage === 'extras' ? handleAdd() : handleContinue())
 
   const timeLeft = tieneDescuento ? formatTimeLeft(product?.descuentoFechaFin ?? null) : null
 
   // ── Cálculo de altura dinámica del drawer ──
   const variantCount = product?.variantes?.length ?? 0
+  const secondaryVariantCount = product?.variantesSecundarias?.length ?? 0
   const vh = typeof window !== 'undefined' ? window.innerHeight : 800
 
   const stage1Base = sinImagen ? FLAT_STAGE1_BASE_H : STAGE1_BASE_H
@@ -233,7 +249,11 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder, sibl
     Math.round(vh * 0.9)
   )
 
-  const drawerHeight = stage === 'select' ? stage1Height : stage2Height
+  const secondaryHeight = Math.min(
+    stage1Base + LABEL_H + Math.max(1, Math.min(secondaryVariantCount, MAX_VISIBLE_VARIANTS)) * ROW_H,
+    Math.round(vh * 0.85)
+  )
+  const drawerHeight = stage === 'extras' ? stage2Height : stage === 'secondary' ? secondaryHeight : stage1Height
 
   const rowBtn = 'flex items-center justify-between rounded-2xl px-4 py-3.5 text-left transition-colors'
   // Flechas de navegación que flanquean el botón principal — mismo alto/redondeo que el
@@ -312,11 +332,11 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder, sibl
 
                   {/* Botón volver — sólo en extras, sobre la imagen (el diseño plano tiene el suyo propio) */}
                   <AnimatePresence>
-                    {!sinImagen && stage === 'extras' && (
+                    {!sinImagen && stage !== 'primary' && (
                       <motion.button
                         key="back"
                         type="button"
-                        onClick={() => setStage('select')}
+                        onClick={() => setStage(stage === 'extras' && tieneVariantesSecundarias ? 'secondary' : 'primary')}
                         initial={{ opacity: 0, scale: 0.8 }}
                         animate={{ opacity: 1, scale: 1 }}
                         exit={{ opacity: 0, scale: 0.8 }}
@@ -350,11 +370,11 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder, sibl
                         <>
                           {/* Botón volver del diseño plano — al ras, no sobre foto */}
                           <AnimatePresence>
-                            {stage === 'extras' && (
+                            {stage !== 'primary' && (
                               <motion.button
                                 key="back-flat"
                                 type="button"
-                                onClick={() => setStage('select')}
+                                onClick={() => setStage(stage === 'extras' && tieneVariantesSecundarias ? 'secondary' : 'primary')}
                                 initial={{ opacity: 0, scale: 0.8 }}
                                 animate={{ opacity: 1, scale: 1 }}
                                 exit={{ opacity: 0, scale: 0.8 }}
@@ -435,9 +455,9 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder, sibl
                       {/* Área animada — misma posición y misma lógica de scroll en ambas etapas */}
                       <div className="relative min-h-0 flex-1">
                         <AnimatePresence initial={false}>
-                          {stage === 'select' ? (
+                          {stage !== 'extras' ? (
                             <motion.div
-                              key="content-select"
+                              key={`content-${stage}`}
                               initial={{ opacity: 0, x: -40 }}
                               animate={{ opacity: 1, x: 0 }}
                               exit={{ opacity: 0, x: -40 }}
@@ -445,26 +465,26 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder, sibl
                               className="absolute inset-0 flex flex-col"
                             >
                               <div className="min-h-0 flex-1 space-y-6 overflow-y-auto overscroll-contain px-6 pb-4 pt-6">
-                                <p className="text-[15px] leading-relaxed text-foreground/70">
+                                {stage === 'primary' && <p className="text-[15px] leading-relaxed text-foreground/70">
                                   {product.descripcion || 'Sin descripción.'}
-                                </p>
+                                </p>}
 
-                                {tieneVariantes && (
+                                {((stage === 'primary' && tieneVariantes) || (stage === 'secondary' && tieneVariantesSecundarias)) && (
                                   <div className="space-y-1">
                                     <p className="px-1 pb-1 text-[13px] font-medium text-muted-foreground">
-                                      Elegí una opción
+                                      {stage === 'primary' ? 'Elegí una opción' : 'Elegí también una segunda opción'}
                                     </p>
                                     <div
                                       className="flex flex-col gap-0.5 overflow-y-auto overscroll-contain"
                                       style={{ maxHeight: MAX_VISIBLE_VARIANTS * ROW_H }}
                                     >
-                                      {product.variantes!.map((v) => {
-                                        const sel = varianteSeleccionada?.id === v.id
+                                      {(stage === 'primary' ? product.variantes! : product.variantesSecundarias!).map((v) => {
+                                        const sel = (stage === 'primary' ? varianteSeleccionada : varianteSecundariaSeleccionada)?.id === v.id
                                         return (
                                           <button
                                             key={v.id}
                                             type="button"
-                                            onClick={() => setVarianteSeleccionada(v)}
+                                            onClick={() => stage === 'primary' ? setVarianteSeleccionada(v) : setVarianteSecundariaSeleccionada(v)}
                                             className={cn(rowBtn, sel ? 'bg-primary/10' : 'bg-secondary/50')}
                                           >
                                             <span className={cn('text-[15px]', sel ? 'font-semibold text-primary' : 'text-foreground')}>
@@ -472,7 +492,9 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder, sibl
                                             </span>
                                             <span className="flex items-center gap-2">
                                               <span className={cn('text-[15px]', sel ? 'font-semibold text-primary' : 'text-muted-foreground')}>
-                                                ${parseFloat(v.precio).toFixed(2)}
+                                                {stage === 'secondary'
+                                                  ? (parseFloat(v.precio) > 0 ? `+$${parseFloat(v.precio).toFixed(2)}` : 'Sin adicional')
+                                                  : `$${parseFloat(v.precio).toFixed(2)}`}
                                               </span>
                                               {sel && <Check className="h-[18px] w-[18px] text-primary" />}
                                             </span>
@@ -579,12 +601,12 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder, sibl
                         <button
                           type="button"
                           onClick={handlePrimary}
-                          disabled={stage === 'select' && variantBloqueada}
+                          disabled={stage !== 'extras' && variantBloqueada}
                           className={cn(
                             'relative h-14 min-w-0 flex-1 overflow-hidden rounded-2xl text-[17px] font-semibold transition-all duration-300 active:scale-[0.98]',
                             addCount > 0
                               ? 'bg-emerald-500 text-white'
-                              : stage === 'select' && variantBloqueada
+                              : stage !== 'extras' && variantBloqueada
                                 ? 'bg-foreground/10 text-muted-foreground'
                                 : 'bg-primary text-primary-foreground'
                           )}
@@ -612,7 +634,7 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder, sibl
                               >
                                 <Check className="h-5 w-5" /> Agregar otro igual
                               </motion.span>
-                            ) : stage === 'select' && variantBloqueada ? (
+                            ) : stage !== 'extras' && variantBloqueada ? (
                               <motion.span
                                 key="blocked"
                                 initial={{ opacity: 0 }}
@@ -623,9 +645,20 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder, sibl
                               >
                                 Elegí una opción
                               </motion.span>
-                            ) : stage === 'select' && needsStage2 ? (
+                            ) : stage === 'primary' && (tieneVariantesSecundarias || needsStage2) ? (
                               <motion.span
                                 key="continue"
+                                initial={{ opacity: 0, y: 8 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                exit={{ opacity: 0, y: -8 }}
+                                transition={{ duration: 0.2 }}
+                                className="absolute inset-0 flex items-center justify-center"
+                              >
+                                Continuar
+                              </motion.span>
+                            ) : stage === 'secondary' && needsStage2 ? (
+                              <motion.span
+                                key="continue-secondary"
                                 initial={{ opacity: 0, y: 8 }}
                                 animate={{ opacity: 1, y: 0 }}
                                 exit={{ opacity: 0, y: -8 }}

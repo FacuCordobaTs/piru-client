@@ -13,6 +13,7 @@ import { MisPedidosDrawer } from '@/components/MisPedidosDrawer'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { CheckoutDeliveryGrupal } from '@/components/CheckoutDeliveryGrupal'
+import { redirectPedidoAlWhatsapp } from '@/lib/checkoutWhatsapp'
 
 type HorarioTurno = { diaSemana: number; horaApertura: string; horaCierre: string }
 
@@ -367,7 +368,7 @@ const MenuDelivery = () => {
                 ? []
                 : productosFiltrados
 
-    const agregarAlPedido = (producto: any, cantidad: number = 1, ingredientesExcluidos?: number[], agregados?: any[], varianteSeleccionada?: any) => {
+    const agregarAlPedido = (producto: any, cantidad: number = 1, ingredientesExcluidos?: number[], agregados?: any[], varianteSeleccionada?: any, varianteSecundariaSeleccionada?: any) => {
         let ingExNombres: string[] = []
         if (ingredientesExcluidos && ingredientesExcluidos.length > 0) {
             ingExNombres = producto.ingredientes
@@ -386,6 +387,7 @@ const MenuDelivery = () => {
 
         // Calculate discounted price
         let basePrecio = varianteSeleccionada ? parseFloat(varianteSeleccionada.precio) : parseFloat(producto.precio)
+        basePrecio += varianteSecundariaSeleccionada ? parseFloat(varianteSecundariaSeleccionada.precio) : 0
         let precioFinal = basePrecio
         if (!esCanje && producto.descuento && producto.descuento > 0) {
             precioFinal = basePrecio * (1 - producto.descuento / 100)
@@ -394,7 +396,8 @@ const MenuDelivery = () => {
         const precioAgregados = agregados ? agregados.reduce((sum: number, ag: any) => sum + parseFloat(ag.precio || 0), 0) : 0;
         const precioFinalNumber = esCanje ? 0 : precioFinal + precioAgregados;
 
-        const baseNombre = varianteSeleccionada ? `${producto.nombre} - ${varianteSeleccionada.nombre}` : producto.nombre;
+        const nombresVariantes = [varianteSeleccionada?.nombre, varianteSecundariaSeleccionada?.nombre].filter(Boolean).join(' · ')
+        const baseNombre = nombresVariantes ? `${producto.nombre} - ${nombresVariantes}` : producto.nombre;
         const nombreFinal = esCanje ? `${baseNombre} (Canje)` : baseNombre;
 
         const newItem = {
@@ -409,6 +412,8 @@ const MenuDelivery = () => {
             cantidad,
             varianteId: varianteSeleccionada?.id,
             varianteNombre: varianteSeleccionada?.nombre,
+            varianteSecundariaId: varianteSecundariaSeleccionada?.id,
+            varianteSecundariaNombre: varianteSecundariaSeleccionada?.nombre,
             ingredientesExcluidos: ingredientesExcluidos || [],
             ingredientesExcluidosNombres: ingExNombres,
             agregados: agregados || [],
@@ -481,6 +486,7 @@ const MenuDelivery = () => {
                 items: cartItems.map((i: any) => ({
                     productoId: i.productoId,
                     varianteId: i.varianteId,
+                    varianteSecundariaId: i.varianteSecundariaId,
                     cantidad: i.cantidad,
                     ingredientesExcluidos: i.ingredientesExcluidos,
                     agregados: i.agregados || [],
@@ -512,7 +518,7 @@ const MenuDelivery = () => {
                     if (data.lng != null) localStorage.setItem('cliente_lng', String(data.lng))
                 }
                 localStorage.removeItem(`deliveryCart_${username}`)
-                sessionStorage.setItem('deliveryOrderInfo', JSON.stringify({
+                const orderInfo = {
                     pedidoId: result.data.id,
                     tipoPedido,
                     total: result.data.total ? parseFloat(result.data.total) : parseFloat(data.total || '0'),
@@ -527,8 +533,17 @@ const MenuDelivery = () => {
                     montoDescuento: data.montoDescuento > 0 ? data.montoDescuento : undefined,
                     horarioProgramado: data.horarioProgramado || undefined,
                     notas: data.notas || undefined,
-                }))
-                navigate(`/${username}/success`)
+                }
+                sessionStorage.setItem('deliveryOrderInfo', JSON.stringify(orderInfo))
+                if (restaurante.avisosWhatsappClienteEnabled === false) {
+                    const redirected = await redirectPedidoAlWhatsapp(orderInfo, restaurante, result.data.whatsappDestino)
+                    if (!redirected) {
+                        toast.error('No pudimos abrir WhatsApp', { description: 'Podés continuar desde el resumen de tu pedido.' })
+                        navigate(`/${username}/success`)
+                    }
+                } else {
+                    navigate(`/${username}/success`)
+                }
             } else {
                 if (result.code === 'FUERA_DE_ZONA') {
                     toast.error('Fuera de zona', { description: 'Tu dirección está fuera del área de delivery. Probá con otra dirección o elegí Take Away.', duration: 6000 })
@@ -964,9 +979,10 @@ const MenuDelivery = () => {
                             clienteNombre={localStorage.getItem('cliente_nombre') || ''}
                             checkoutData={checkoutDeliveryData}
                             editSemaphore={editSemaphoreLocal}
-                            restauranteDireccion={restaurante?.direccion ?? undefined}
+                            restauranteDireccion={restaurante?.direccionTexto ?? restaurante?.direccion ?? undefined}
                             onTituloChange={setTituloCheckout}
-                            labelGuardar="Confirmar y pedir"
+                            labelGuardar={restaurante?.avisosWhatsappClienteEnabled === false ? 'Enviar pedido al WhatsApp' : 'Confirmar y pedir'}
+                            enviarPedidoWhatsapp={restaurante?.avisosWhatsappClienteEnabled === false}
                             localCerrado={!estadoAbierto.abierto || !!restaurante?.pausadoPorSuscripcion}
                         />
                     ) : cartItems.length === 0 ? (

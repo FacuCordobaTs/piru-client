@@ -108,6 +108,10 @@ export function buildWhatsappOrderMessage(orderInfo: any, args: BuildArgs): stri
     L.push('')
 
     L.push(`*💳 Pago:* ${paymentLine(orderInfo, effectiveMetodo, transferenciaAlias)}`)
+    if (effectiveMetodo === 'mercadopago_checkout' && orderInfo?.mercadoPagoCheckoutUrl) {
+        L.push(`👉 *Para el cliente:* pagá tu pedido desde este link:`)
+        L.push(String(orderInfo.mercadoPagoCheckoutUrl))
+    }
     L.push('')
 
     if (esDelivery) {

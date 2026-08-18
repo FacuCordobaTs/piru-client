@@ -8,13 +8,32 @@ interface AddressAutocompleteProps {
     onChange: (address: string, lat: number | null, lng: number | null) => void
     placeholder?: string
     className?: string
+    /** Ciudades configuradas por el negocio. Una única ciudad también limita las sugerencias de Google. */
+    allowedCities?: string[]
+    /** Coordenadas de las sucursales, usadas para sesgar la búsqueda cuando hay más de una ciudad. */
+    biasLocations?: Array<{ lat: number; lng: number }>
+}
+
+function normalizeCity(value: string): string {
+    return value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase()
+}
+
+function extractCity(components: google.maps.GeocoderAddressComponent[] | undefined): string | null {
+    if (!components) return null
+    for (const type of ['locality', 'postal_town', 'administrative_area_level_2']) {
+        const component = components.find((c) => c.types.includes(type))
+        if (component?.long_name) return component.long_name
+    }
+    return null
 }
 
 export function AddressAutocomplete({
     value,
     onChange,
     placeholder = 'Busca tu dirección...',
-    className
+    className,
+    allowedCities = [],
+    biasLocations = [],
 }: AddressAutocompleteProps) {
     const inputRef = useRef<HTMLInputElement>(null)
     const containerRef = useRef<HTMLDivElement>(null)
@@ -22,6 +41,7 @@ export function AddressAutocomplete({
     const [isFocused, setIsFocused] = useState(false)
     const [internalValue, setInternalValue] = useState(value)
     const [hasSelectedPlace, setHasSelectedPlace] = useState(!!value)
+    const [cityError, setCityError] = useState<string | null>(null)
 
     const isLoaded = useGoogleMapsScript()
 
@@ -30,7 +50,9 @@ export function AddressAutocomplete({
         setInternalValue(value)
     }, [value])
 
-    const stableOnChange = useCallback(onChange, [])
+    const stableOnChange = useCallback(onChange, [onChange])
+    const allowedCitiesKey = allowedCities.map(normalizeCity).sort().join('|')
+    const biasLocationsKey = biasLocations.map((p) => `${p.lat},${p.lng}`).join('|')
 
 const SAN_CRISTOBAL_BOUNDS = {
     north: -30.2800,
@@ -58,6 +80,19 @@ const SAN_CRISTOBAL_BOUNDS = {
 
         const autocomplete = new google.maps.places.Autocomplete(inputRef.current, options)
 
+        const uniqueCities = Array.from(new Set(allowedCities.map((city) => city.trim()).filter(Boolean)))
+        if (uniqueCities.length === 1) {
+            const geocoder = new google.maps.Geocoder()
+            void geocoder.geocode({ address: `${uniqueCities[0]}, Argentina` }).then(({ results }) => {
+                const viewport = results[0]?.geometry?.viewport
+                if (viewport) autocomplete.setOptions({ bounds: viewport, strictBounds: true })
+            }).catch(() => {})
+        } else if (biasLocations.length > 0) {
+            const bounds = new google.maps.LatLngBounds()
+            for (const point of biasLocations) bounds.extend(point)
+            autocomplete.setBounds(bounds)
+        }
+
         autocomplete.addListener('place_changed', () => {
             const place = autocomplete.getPlace()
 
@@ -65,19 +100,35 @@ const SAN_CRISTOBAL_BOUNDS = {
                 const lat = place.geometry.location.lat()
                 const lng = place.geometry.location.lng()
                 const formattedAddress = place.formatted_address || ''
+                const city = extractCity(place.address_components)
+                const allowed = new Set(allowedCities.map(normalizeCity))
+
+                if (allowed.size > 0 && (!city || !allowed.has(normalizeCity(city)))) {
+                    setInternalValue(formattedAddress)
+                    setHasSelectedPlace(false)
+                    setCityError(`Elegí una dirección de ${allowedCities.join(' o ')}`)
+                    stableOnChange(formattedAddress, null, null)
+                    return
+                }
 
                 setInternalValue(formattedAddress)
                 setHasSelectedPlace(true)
+                setCityError(null)
                 stableOnChange(formattedAddress, lat, lng)
             }
         })
 
         autocompleteRef.current = autocomplete
-    }, [isLoaded, stableOnChange])
+        return () => {
+            google.maps.event.clearInstanceListeners(autocomplete)
+            if (autocompleteRef.current === autocomplete) autocompleteRef.current = null
+        }
+    }, [isLoaded, stableOnChange, allowedCitiesKey, biasLocationsKey])
 
     const handleClear = () => {
         setInternalValue('')
         setHasSelectedPlace(false)
+        setCityError(null)
         stableOnChange('', null, null)
         inputRef.current?.focus()
     }
@@ -86,6 +137,7 @@ const SAN_CRISTOBAL_BOUNDS = {
         const val = e.target.value
         setInternalValue(val)
         setHasSelectedPlace(false)
+        setCityError(null)
         // When typing manually, clear lat/lng since it's not a selected place
         stableOnChange(val, null, null)
     }
@@ -171,6 +223,9 @@ const SAN_CRISTOBAL_BOUNDS = {
                         Dirección confirmada
                     </span>
                 </div>
+            )}
+            {cityError && (
+                <p className="text-[11px] text-destructive mt-1.5 ml-1" role="alert">{cityError}</p>
             )}
         </div>
     )

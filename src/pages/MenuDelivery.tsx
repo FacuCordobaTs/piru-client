@@ -536,7 +536,12 @@ const MenuDelivery = () => {
                 }
                 sessionStorage.setItem('deliveryOrderInfo', JSON.stringify(orderInfo))
                 if (restaurante.avisosWhatsappClienteEnabled === false) {
-                    const redirected = await redirectPedidoAlWhatsapp(orderInfo, restaurante, result.data.whatsappDestino)
+                    const redirected = await redirectPedidoAlWhatsapp(
+                        orderInfo,
+                        restaurante,
+                        result.data.whatsappDestino,
+                        result.data.transferenciaAliasDestino,
+                    )
                     if (!redirected) {
                         toast.error('No pudimos abrir WhatsApp', { description: 'Podés continuar desde el resumen de tu pedido.' })
                         navigate(`/${username}/success`)

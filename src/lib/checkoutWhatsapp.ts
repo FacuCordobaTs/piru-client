@@ -24,6 +24,7 @@ export async function redirectPedidoAlWhatsapp(
     orderInfo: OrderInfo,
     restaurante: RestaurantWhatsappData | null | undefined,
     whatsappDestino?: string | null,
+    transferenciaAliasDestino?: string | null,
 ): Promise<boolean> {
     const phone = waMeDigits(whatsappDestino || restaurante?.comprobantesWhatsapp || restaurante?.telefono)
     if (!phone) return false
@@ -58,7 +59,7 @@ export async function redirectPedidoAlWhatsapp(
         restaurantName: restaurante?.nombre,
         restaurantDireccion: restaurante?.direccion,
         effectiveMetodo,
-        transferenciaAlias: restaurante?.transferenciaAlias,
+        transferenciaAlias: transferenciaAliasDestino?.trim() || restaurante?.transferenciaAlias,
     })
     // Evitamos el redirect intermedio de wa.me: en algunos handoffs hacia
     // WhatsApp Desktop degrada caracteres Unicode. El endpoint web recibe el

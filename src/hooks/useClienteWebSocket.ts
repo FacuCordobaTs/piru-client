@@ -452,7 +452,12 @@ export const useClienteWebSocket = (): UseClienteWebSocketReturn => {
                   const redirectKey = `salaWhatsappRedirect_${payload.pedidoId}`
                   if (sessionStorage.getItem(redirectKey) !== '1') {
                     sessionStorage.setItem(redirectKey, '1')
-                    const redirected = await redirectPedidoAlWhatsapp(orderInfo, restauranteActual, payload.whatsappDestino)
+                    const redirected = await redirectPedidoAlWhatsapp(
+                      orderInfo,
+                      restauranteActual,
+                      payload.whatsappDestino,
+                      payload.transferenciaAliasDestino,
+                    )
                     if (redirected) {
                       sessionStorage.removeItem(`salaWhatsappInitiator_${payload.token}`)
                       break

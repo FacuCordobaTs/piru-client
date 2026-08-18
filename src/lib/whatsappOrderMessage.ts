@@ -21,6 +21,24 @@ type BuildArgs = {
 
 const money = (n: number): string => `$${Math.round(n).toLocaleString('es-AR')}`
 
+// Se escriben como escapes ASCII porque algunos pipelines/proxies usados por
+// tiendas desplegadas degradan los caracteres UTF-8 de cuatro bytes a `�` al
+// servir el bundle. En runtime producen exactamente los mismos emojis.
+const EMOJI = {
+    saludo: '\u{1F44B}',
+    pedido: '\u{1F9FE}',
+    cliente: '\u{1F464}',
+    productos: '\u{1F6D2}',
+    resumen: '\u{1F4B0}',
+    pago: '\u{1F4B3}',
+    enlace: '\u{1F449}',
+    delivery: '\u{1F6F5}',
+    ubicacion: '\u{1F4CD}',
+    retiro: '\u{1F3EA}',
+    horario: '\u{23F0}',
+    notas: '\u{1F4DD}',
+} as const
+
 /** Categoría del ítem (varios nombres posibles según el origen). 'Otros' si no la trae. */
 function itemCategoria(it: any): string {
     const c = (it?.categoria ?? it?.categoriaNombre ?? '').toString().trim()
@@ -58,10 +76,10 @@ export function buildWhatsappOrderMessage(orderInfo: any, args: BuildArgs): stri
     const total = parseFloat(String(orderInfo?.total ?? 0)) || 0
 
     const L: string[] = []
-    L.push(`¡Hola${restaurantName ? ` ${restaurantName}` : ''}! 👋 Te paso mi pedido:`)
+    L.push(`¡Hola${restaurantName ? ` ${restaurantName}` : ''}! ${EMOJI.saludo} Te paso mi pedido:`)
     L.push('')
-    if (orderInfo?.pedidoId) L.push(`🧾 *Pedido #${orderInfo.pedidoId}*`)
-    if (orderInfo?.nombreCliente) L.push(`👤 ${orderInfo.nombreCliente}`)
+    if (orderInfo?.pedidoId) L.push(`${EMOJI.pedido} *Pedido #${orderInfo.pedidoId}*`)
+    if (orderInfo?.nombreCliente) L.push(`${EMOJI.cliente} ${orderInfo.nombreCliente}`)
     L.push('')
 
     const pushItem = (it: any) => {
@@ -87,7 +105,7 @@ export function buildWhatsappOrderMessage(orderInfo: any, args: BuildArgs): stri
         g.items.push(it)
     }
 
-    L.push('*🛒 Productos*')
+    L.push(`*${EMOJI.productos} Productos*`)
     if (grupos.length > 1) {
         // Solo separamos con encabezados cuando hay más de una categoría (si no, es ruido).
         grupos.forEach((g, idx) => {
@@ -100,32 +118,32 @@ export function buildWhatsappOrderMessage(orderInfo: any, args: BuildArgs): stri
     }
     L.push('')
 
-    L.push('*💰 Resumen*')
+    L.push(`*${EMOJI.resumen} Resumen*`)
     L.push(`Subtotal: ${money(subtotal)}`)
     if (esDelivery) L.push(`Envío${orderInfo?.zonaNombre ? ` (${orderInfo.zonaNombre})` : ''}: ${deliveryFee === 0 ? 'Gratis' : money(deliveryFee)}`)
     if (descuento > 0) L.push(`Descuento: -${money(descuento)}`)
     L.push(`*Total: ${money(total)}*`)
     L.push('')
 
-    L.push(`*💳 Pago:* ${paymentLine(orderInfo, effectiveMetodo, transferenciaAlias)}`)
+    L.push(`*${EMOJI.pago} Pago:* ${paymentLine(orderInfo, effectiveMetodo, transferenciaAlias)}`)
     if (effectiveMetodo === 'mercadopago_checkout' && orderInfo?.mercadoPagoCheckoutUrl) {
-        L.push(`👉 *Para el cliente:* pagá tu pedido desde este link:`)
+        L.push(`${EMOJI.enlace} *Para el cliente:* pagá tu pedido desde este link:`)
         L.push(String(orderInfo.mercadoPagoCheckoutUrl))
     }
     L.push('')
 
     if (esDelivery) {
-        L.push('*🛵 Entrega:* Delivery')
-        if (orderInfo?.direccion) L.push(`📍 ${orderInfo.direccion}`)
+        L.push(`*${EMOJI.delivery} Entrega:* Delivery`)
+        if (orderInfo?.direccion) L.push(`${EMOJI.ubicacion} ${orderInfo.direccion}`)
     } else {
-        L.push('*🏪 Retiro en el local*')
-        if (restaurantDireccion) L.push(`📍 ${restaurantDireccion}`)
+        L.push(`*${EMOJI.retiro} Retiro en el local*`)
+        if (restaurantDireccion) L.push(`${EMOJI.ubicacion} ${restaurantDireccion}`)
     }
-    if (orderInfo?.horarioProgramado) L.push(`⏰ Programado: ${orderInfo.horarioProgramado}`)
+    if (orderInfo?.horarioProgramado) L.push(`${EMOJI.horario} Programado: ${orderInfo.horarioProgramado}`)
 
     if (orderInfo?.notas) {
         L.push('')
-        L.push(`📝 ${orderInfo.notas}`)
+        L.push(`${EMOJI.notas} ${orderInfo.notas}`)
     }
 
     return L.join('\n')

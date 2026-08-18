@@ -60,6 +60,8 @@ export async function redirectPedidoAlWhatsapp(
         effectiveMetodo,
         transferenciaAlias: restaurante?.transferenciaAlias,
     })
-    window.location.assign(`https://wa.me/${phone}?text=${encodeURIComponent(message)}`)
+    const whatsappUrl = new URL(`https://wa.me/${phone}`)
+    whatsappUrl.searchParams.set('text', message)
+    window.location.assign(whatsappUrl.toString())
     return true
 }

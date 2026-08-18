@@ -21,22 +21,23 @@ type BuildArgs = {
 
 const money = (n: number): string => `$${Math.round(n).toLocaleString('es-AR')}`
 
-// Se escriben como escapes ASCII porque algunos pipelines/proxies usados por
-// tiendas desplegadas degradan los caracteres UTF-8 de cuatro bytes a `�` al
-// servir el bundle. En runtime producen exactamente los mismos emojis.
+// Símbolos del BMP (máximo tres bytes en UTF-8). El handoff web/escritorio de
+// WhatsApp de algunos equipos reemplaza los emojis astrales de cuatro bytes
+// por `�`, aunque la URL original esté bien codificada. Estos símbolos son
+// visuales, legibles y sobreviven ese recorrido completo.
 const EMOJI = {
-    saludo: '\u{1F44B}',
-    pedido: '\u{1F9FE}',
-    cliente: '\u{1F464}',
-    productos: '\u{1F6D2}',
-    resumen: '\u{1F4B0}',
-    pago: '\u{1F4B3}',
-    enlace: '\u{1F449}',
-    delivery: '\u{1F6F5}',
-    ubicacion: '\u{1F4CD}',
-    retiro: '\u{1F3EA}',
-    horario: '\u{23F0}',
-    notas: '\u{1F4DD}',
+    saludo: '\u263A',
+    pedido: '\u2116',
+    cliente: '\u2022',
+    productos: '\u25A3',
+    resumen: '$',
+    pago: '\u25A4',
+    enlace: '\u279C',
+    delivery: '\u279C',
+    ubicacion: '\u2316',
+    retiro: '\u2302',
+    horario: '\u25F7',
+    notas: '\u270E',
 } as const
 
 /** Categoría del ítem (varios nombres posibles según el origen). 'Otros' si no la trae. */

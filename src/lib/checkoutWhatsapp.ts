@@ -60,7 +60,11 @@ export async function redirectPedidoAlWhatsapp(
         effectiveMetodo,
         transferenciaAlias: restaurante?.transferenciaAlias,
     })
-    const whatsappUrl = new URL(`https://wa.me/${phone}`)
+    // Evitamos el redirect intermedio de wa.me: en algunos handoffs hacia
+    // WhatsApp Desktop degrada caracteres Unicode. El endpoint web recibe el
+    // teléfono y el texto directamente.
+    const whatsappUrl = new URL('https://api.whatsapp.com/send')
+    whatsappUrl.searchParams.set('phone', phone)
     whatsappUrl.searchParams.set('text', message)
     window.location.assign(whatsappUrl.toString())
     return true

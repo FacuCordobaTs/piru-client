@@ -6,6 +6,7 @@ import { ThemeToggle } from '@/components/ThemeToggle'
 import { MisPedidosDrawer } from '@/components/MisPedidosDrawer'
 import { OrderSummaryItemDetails } from '@/components/OrderSummaryItemDetails'
 import { AddressMapPreview } from '@/components/AddressMapPreview'
+import { leerTemaRestaurante, RestauranteTheme } from '@/components/RestauranteTheme'
 import { orderItemLineSubtotalSession } from '@/lib/orderSummaryItem'
 import { initMercadoPago, CardPayment } from '@mercadopago/sdk-react'
 
@@ -339,48 +340,8 @@ const SuccessDelivery = () => {
         ? `https://wa.me/${whatsappDigits}?text=${encodeURIComponent(`Hola, te paso el comprobante de mi pedido #${pedidoId} a nombre de ${clienteNombreWhatsapp}.`)}`
         : null
 
-    const cachedThemeStr = sessionStorage.getItem(`theme_${username}`)
-    const cachedTheme = cachedThemeStr ? JSON.parse(cachedThemeStr) : null
-    const primario = restauranteData?.colorPrimario || cachedTheme?.primario
-    const secundario = restauranteData?.colorSecundario || cachedTheme?.secundario
-
-    const themeStyles = (primario && secundario) ? (
-        <style dangerouslySetInnerHTML={{
-            __html: `
-            :root {
-                --background: ${secundario};
-                --foreground: ${primario};
-                --card: ${secundario};
-                --card-foreground: ${primario};
-                --popover: ${secundario};
-                --popover-foreground: ${primario};
-                --primary: ${primario};
-                --primary-foreground: ${secundario};
-                --secondary: ${primario}18;
-                --secondary-foreground: ${primario};
-                --muted: ${primario}15;
-                --muted-foreground: ${primario}99;
-                --border: ${primario}30;
-                --input: ${primario}30;
-            }
-            .dark {
-                --background: ${primario};
-                --foreground: ${secundario};
-                --card: ${primario};
-                --card-foreground: ${secundario};
-                --popover: ${primario};
-                --popover-foreground: ${secundario};
-                --primary: ${secundario};
-                --primary-foreground: ${primario};
-                --secondary: ${secundario}18;
-                --secondary-foreground: ${secundario};
-                --muted: ${secundario}15;
-                --muted-foreground: ${secundario}b3;
-                --border: ${secundario}30;
-                --input: ${secundario}30;
-            }
-        `}} />
-    ) : null
+    const cachedTheme = leerTemaRestaurante(`theme_${username}`)
+    const themeStyles = <RestauranteTheme restaurante={restauranteData} cachedTheme={cachedTheme} />
 
     const isDispatched = pedidoEstado === 'dispatched' || pedidoEstado === 'archived'
 

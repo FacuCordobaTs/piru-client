@@ -126,6 +126,7 @@ const Nombre = () => {
               restaurante: {
                 id: number; nombre: string; imagenUrl: string | null
                 mpConnected: boolean | null; colorPrimario?: string | null; colorSecundario?: string | null
+                usarColorUnico?: boolean | null
                 direccion?: string | null; username?: string | null
               } | null
             }
@@ -161,6 +162,7 @@ const Nombre = () => {
               restaurante: {
                 id: number; nombre: string; imagenUrl: string | null
                 mpConnected: boolean | null; colorPrimario?: string | null; colorSecundario?: string | null
+                usarColorUnico?: boolean | null
               } | null
             }
           }

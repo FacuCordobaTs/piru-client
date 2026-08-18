@@ -7,6 +7,7 @@ import { mesaApi, ApiError } from '@/lib/api'
 import { toast } from 'sonner'
 import { Loader2, Utensils, ChevronRight, Menu, ShoppingBag, Bell, ShoppingCart } from 'lucide-react'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { guardarTemaRestaurante, leerTemaRestaurante, RestauranteTheme } from '@/components/RestauranteTheme'
 
 // Features para el carrusel
 const features = [
@@ -138,12 +139,7 @@ const Nombre = () => {
             setRestaurante(rest || null)
             setDataLoaded(true)
 
-            if (rest?.colorPrimario && rest?.colorSecundario) {
-              sessionStorage.setItem(`theme_sala_${urlQrToken}`, JSON.stringify({
-                primario: rest.colorPrimario,
-                secundario: rest.colorSecundario
-              }))
-            }
+            if (rest) guardarTemaRestaurante(`theme_sala_${urlQrToken}`, rest)
           } else {
             toast.error('Sala no encontrada')
             navigate('/')
@@ -178,12 +174,7 @@ const Nombre = () => {
             setDataLoaded(true)
 
             const rest = response.data.restaurante
-            if (rest?.colorPrimario && rest?.colorSecundario) {
-              sessionStorage.setItem(`theme_mesa_${urlQrToken}`, JSON.stringify({
-                primario: rest.colorPrimario,
-                secundario: rest.colorSecundario
-              }))
-            }
+            if (rest) guardarTemaRestaurante(`theme_mesa_${urlQrToken}`, rest)
           } else {
             toast.error('Error al cargar la mesa')
             navigate('/')
@@ -233,48 +224,8 @@ const Nombre = () => {
 
   const isSala = location.pathname.includes('/sala/')
   const themeKey = urlQrToken ? (isSala ? `theme_sala_${urlQrToken}` : `theme_mesa_${urlQrToken}`) : null
-  const cachedThemeStr = themeKey ? sessionStorage.getItem(themeKey) : null
-  const cachedTheme = cachedThemeStr ? JSON.parse(cachedThemeStr) : null
-  const primario = restaurante?.colorPrimario || cachedTheme?.primario
-  const secundario = restaurante?.colorSecundario || cachedTheme?.secundario
-
-  const themeStyles = (primario && secundario) ? (
-    <style dangerouslySetInnerHTML={{
-      __html: `
-      :root {
-        --background: ${secundario};
-        --foreground: ${primario};
-        --card: ${secundario};
-        --card-foreground: ${primario};
-        --popover: ${secundario};
-        --popover-foreground: ${primario};
-        --primary: ${primario};
-        --primary-foreground: ${secundario};
-        --secondary: ${primario}18;
-        --secondary-foreground: ${primario};
-        --muted: ${primario}15;
-        --muted-foreground: ${primario}99;
-        --border: ${primario}30;
-        --input: ${primario}30;
-      }
-      .dark {
-        --background: ${primario};
-        --foreground: ${secundario};
-        --card: ${primario};
-        --card-foreground: ${secundario};
-        --popover: ${primario};
-        --popover-foreground: ${secundario};
-        --primary: ${secundario};
-        --primary-foreground: ${primario};
-        --secondary: ${secundario}18;
-        --secondary-foreground: ${secundario};
-        --muted: ${secundario}15;
-        --muted-foreground: ${secundario}b3;
-        --border: ${secundario}30;
-        --input: ${secundario}30;
-      }
-    `}} />
-  ) : null
+  const cachedTheme = leerTemaRestaurante(themeKey)
+  const themeStyles = <RestauranteTheme restaurante={restaurante} cachedTheme={cachedTheme} />
 
   // Mostrar cargando mientras se hidrata el store o se carga la mesa
   if (isLoading || !isHydrated || !shouldAskName) {

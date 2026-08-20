@@ -107,16 +107,13 @@ export function buildWhatsappOrderMessage(orderInfo: any, args: BuildArgs): stri
     }
 
     L.push(`*${EMOJI.productos} Productos*`)
-    if (grupos.length > 1) {
-        // Solo separamos con encabezados cuando hay más de una categoría (si no, es ruido).
-        grupos.forEach((g, idx) => {
-            if (idx > 0) L.push('')
-            L.push(`_${g.categoria}_`)
-            for (const it of g.items) pushItem(it)
-        })
-    } else {
-        for (const it of items) pushItem(it)
-    }
+    // Siempre agrupamos por categoría, aunque sea una sola: el encabezado de la
+    // categoría ayuda a leer el pedido en WhatsApp.
+    grupos.forEach((g, idx) => {
+        if (idx > 0) L.push('')
+        L.push(`_${g.categoria}_`)
+        for (const it of g.items) pushItem(it)
+    })
     L.push('')
 
     L.push(`*${EMOJI.resumen} Resumen*`)

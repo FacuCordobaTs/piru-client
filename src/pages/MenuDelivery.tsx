@@ -94,6 +94,29 @@ const MenuDelivery = () => {
     const [drawerOpen, setDrawerOpen] = useState(false)
     const [selectedCategory, setSelectedCategory] = useState<string>('All')
     const [cartAnimation, setCartAnimation] = useState(false)
+    const [scrollDir, setScrollDir] = useState<'up' | 'down' | null>(null)
+    const scrollTimerRef = useRef<number | null>(null)
+
+    // El botón "Ver Pedido" reacciona a la dirección del scroll (efecto contra-scroll):
+    // mientras scrollés hacia arriba baja un poco, mientras scrollés hacia abajo sube un
+    // poco, y al dejar de scrollear (~150ms sin movimiento) vuelve a su posición.
+    useEffect(() => {
+        let lastY = window.scrollY
+        const handleScroll = () => {
+            const y = window.scrollY
+            const delta = y - lastY
+            lastY = y
+            if (Math.abs(delta) < 2) return
+            setScrollDir(delta > 0 ? 'down' : 'up')
+            if (scrollTimerRef.current) window.clearTimeout(scrollTimerRef.current)
+            scrollTimerRef.current = window.setTimeout(() => setScrollDir(null), 150)
+        }
+        window.addEventListener('scroll', handleScroll, { passive: true })
+        return () => {
+            window.removeEventListener('scroll', handleScroll)
+            if (scrollTimerRef.current) window.clearTimeout(scrollTimerRef.current)
+        }
+    }, [])
 
     const [restaurante, setRestaurante] = useState<any>(null)
     const [productos, setProductos] = useState<any[]>([])
@@ -874,6 +897,7 @@ const MenuDelivery = () => {
             dark:bg-white/10 dark:text-white dark:backdrop-blur-xl dark:backdrop-saturate-150
             dark:border dark:border-white/15 dark:shadow-[0_12px_32px_rgba(0,0,0,0.6),inset_0_1px_0_rgba(255,255,255,0.25),inset_0_0_0_1px_rgba(255,255,255,0.15),inset_0_0_16px_rgba(255,255,255,0.1)]
             ${cartAnimation ? 'scale-105' : 'scale-100'}
+            ${scrollDir === 'down' ? '-translate-y-1.5' : scrollDir === 'up' ? 'translate-y-1.5' : 'translate-y-0'}
           `}
                 >
                     <div className={`absolute -top-2 -right-1 bg-red-500 text-white text-[10px] font-bold h-5 min-w-[20px] px-1 flex items-center justify-center rounded-full border-2 border-background z-10 transition-transform duration-300 ${cartAnimation ? 'scale-125' : 'scale-100'}`}>

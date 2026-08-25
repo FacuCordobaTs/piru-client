@@ -137,6 +137,7 @@ const MenuDelivery = () => {
     const [submittingOrder, setSubmittingOrder] = useState(false)
     const checkoutDataRef = useRef<any>(null)
     const isSubmittingRef = useRef(false)
+    const orderAttemptIdRef = useRef<string | null>(null)
 
     // Function to fetch points
     const fetchPuntos = useCallback(async (telefono: string, restauranteId: number) => {
@@ -474,6 +475,7 @@ const MenuDelivery = () => {
         }
 
         setSubmittingOrder(true)
+        let pedidoCreado = false
         try {
             const url = import.meta.env.VITE_API_URL || 'http://localhost:3000/api'
             const tipoPedido = data.tipoPedido as 'delivery' | 'takeaway'
@@ -506,11 +508,16 @@ const MenuDelivery = () => {
             if (data.horarioProgramado) payload.horarioProgramado = data.horarioProgramado
             const res = await fetch(`${url}${endpoint}`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Idempotency-Key': orderAttemptIdRef.current ??=
+                        `${Date.now().toString(36)}_${Math.random().toString(36).slice(2)}_${Math.random().toString(36).slice(2)}`,
+                },
                 body: JSON.stringify(payload)
             })
             const result = await res.json()
             if (result.success) {
+                pedidoCreado = true
                 localStorage.setItem('cliente_nombre', data.nombre)
                 localStorage.setItem('cliente_telefono', data.telefono)
                 if (tipoPedido === 'delivery') {
@@ -560,8 +567,13 @@ const MenuDelivery = () => {
         } catch {
             toast.error('Ocurrió un error al enviar el pedido')
         } finally {
-            setSubmittingOrder(false)
-            isSubmittingRef.current = false
+            // Si el servidor ya creó el pedido, el bloqueo se mantiene hasta que
+            // la navegación (o la apertura de WhatsApp) desmonte esta pantalla.
+            // Liberarlo antes permitía confirmar nuevamente el mismo carrito.
+            if (!pedidoCreado) {
+                setSubmittingOrder(false)
+                isSubmittingRef.current = false
+            }
         }
     }, [restaurante, username, cartItems, navigate, horarios])
 
@@ -571,6 +583,7 @@ const MenuDelivery = () => {
         } else if (msg.type === 'CANCELAR_EDICION_CHECKOUT') {
             setEditSemaphoreLocal(null)
         } else if (msg.type === 'MODIFICAR_CHECKOUT') {
+            orderAttemptIdRef.current = null
             checkoutDataRef.current = msg.payload.updates
             setCheckoutDeliveryData(msg.payload.updates)
         } else if (msg.type === 'ACEPTAR_EDICION_CHECKOUT') {
@@ -853,23 +866,25 @@ const MenuDelivery = () => {
                 <button
                     onClick={abrirCarrito}
                     className={`
-            group relative flex items-center gap-4 pl-5 pr-6 py-3.5 rounded-full 
-            shadow-2xl hover:scale-[1.02] active:scale-95 transition-all duration-300
-            bg-zinc-900 text-white shadow-zinc-900/20
-            dark:bg-white/10 dark:text-white dark:backdrop-blur-xl 
-            dark:border dark:border-white/10 dark:shadow-[0_0_20px_rgba(255,255,255,0.05)]
+            group relative flex items-center gap-4 pl-5 pr-6 py-3.5 rounded-full
+            before:absolute before:inset-0 before:rounded-full before:pointer-events-none before:content-[''] before:bg-linear-to-b before:from-white/25 before:via-white/5 before:to-transparent
+            hover:scale-[1.02] active:scale-95 transition-all duration-300
+            bg-white/20 text-zinc-900 backdrop-blur-xl backdrop-saturate-150 border border-white/40
+            shadow-[0_12px_32px_rgba(0,0,0,0.35),inset_0_1px_0_rgba(255,255,255,0.7),inset_0_0_0_1px_rgba(255,255,255,0.3),inset_0_0_16px_rgba(255,255,255,0.3)]
+            dark:bg-white/10 dark:text-white dark:backdrop-blur-xl dark:backdrop-saturate-150
+            dark:border dark:border-white/15 dark:shadow-[0_12px_32px_rgba(0,0,0,0.6),inset_0_1px_0_rgba(255,255,255,0.25),inset_0_0_0_1px_rgba(255,255,255,0.15),inset_0_0_16px_rgba(255,255,255,0.1)]
             ${cartAnimation ? 'scale-105' : 'scale-100'}
           `}
                 >
                     <div className={`absolute -top-2 -right-1 bg-red-500 text-white text-[10px] font-bold h-5 min-w-[20px] px-1 flex items-center justify-center rounded-full border-2 border-background z-10 transition-transform duration-300 ${cartAnimation ? 'scale-125' : 'scale-100'}`}>
                         {cartItems.length}
                     </div>
-                    <div className="flex items-center gap-2.5">
+                    <div className="relative z-10 flex items-center gap-2.5">
                         <Receipt className="w-5 h-5 text-current opacity-90" />
                         <span className="font-semibold text-sm tracking-wide">Ver Pedido</span>
                     </div>
-                    <div className="h-4 w-px bg-current opacity-20"></div>
-                    <span className="font-bold text-base font-mono">
+                    <div className="relative z-10 h-4 w-px bg-current opacity-20"></div>
+                    <span className="relative z-10 font-bold text-base font-mono">
                         ${totalPedido}
                     </span>
                 </button>
@@ -948,6 +963,7 @@ const MenuDelivery = () => {
                             onTituloChange={setTituloCheckout}
                             labelGuardar={restaurante?.avisosWhatsappClienteEnabled === false ? 'Enviar pedido al WhatsApp' : 'Confirmar y pedir'}
                             enviarPedidoWhatsapp={restaurante?.avisosWhatsappClienteEnabled === false}
+                            submittingOrder={submittingOrder}
                             localCerrado={!estadoAbierto.abierto || !!restaurante?.pausadoPorSuscripcion}
                         />
                     ) : cartItems.length === 0 ? (

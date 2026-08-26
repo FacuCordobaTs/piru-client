@@ -262,6 +262,7 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder, sibl
   const timeLeft = tieneDescuento ? formatTimeLeft(product?.descuentoFechaFin ?? null) : null
   const nombreLength = product?.nombre.trim().length ?? 0
   const nombreFontSize = nombreLength > 90 ? 15 : nombreLength > 65 ? 17 : nombreLength > 45 ? 20 : nombreLength > 30 ? 23 : undefined
+  const nombreLargo = nombreLength > 30
 
   // ── Cálculo de altura dinámica del drawer ──
   const variantCount = product?.variantes?.length ?? 0
@@ -437,14 +438,14 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder, sibl
                               </span>
                             )}
                           </div>
-                          <div className="flex items-end justify-between gap-3">
+                          <div className={cn('flex gap-3', nombreLargo ? 'flex-col items-stretch gap-1' : 'items-end justify-between')}>
                             <h3
                               className="min-w-0 flex-1 break-words text-[26px] font-bold leading-tight tracking-tight text-foreground [overflow-wrap:anywhere]"
                               style={nombreFontSize ? { fontSize: nombreFontSize } : undefined}
                             >
                               {product.nombre}
                             </h3>
-                            <div className="shrink-0 text-right">
+                            <div className={cn('shrink-0 text-right', nombreLargo && 'self-end')}>
                               {tieneDescuento && (
                                 <p className="text-sm font-medium text-muted-foreground line-through">
                                   ${totalTachado.toFixed(2)}
@@ -470,14 +471,14 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder, sibl
                               </span>
                             )}
                           </div>
-                          <div className="flex items-end justify-between gap-3">
+                          <div className={cn('flex gap-3', nombreLargo ? 'flex-col items-stretch gap-1' : 'items-end justify-between')}>
                             <h3
                               className="min-w-0 flex-1 break-words text-[28px] font-bold leading-tight tracking-tight text-white drop-shadow-sm [overflow-wrap:anywhere]"
                               style={nombreFontSize ? { fontSize: nombreFontSize } : undefined}
                             >
                               {product.nombre}
                             </h3>
-                            <div className="shrink-0 text-right">
+                            <div className={cn('shrink-0 text-right', nombreLargo && 'self-end')}>
                               {tieneDescuento && (
                                 <p className="text-sm font-medium text-white/60 line-through">
                                   ${totalTachado.toFixed(2)}

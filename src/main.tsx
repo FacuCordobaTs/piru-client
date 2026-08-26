@@ -114,15 +114,19 @@ const router = createBrowserRouter([
   },
 ]);
 
-createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <ThemeProvider defaultTheme="system" storageKey="piru-ui-theme">
-      <RouterProvider router={router} />
-      <Toaster
-        position="top-center"
-        richColors
-        closeButton
-      />
-    </ThemeProvider>
-  </StrictMode>,
-)
+if (window.location.hostname === 'piru.app' && window.location.pathname === '/') {
+  window.location.replace('https://info.piru.app')
+} else {
+  createRoot(document.getElementById('root')!).render(
+    <StrictMode>
+      <ThemeProvider defaultTheme="system" storageKey="piru-ui-theme">
+        <RouterProvider router={router} />
+        <Toaster
+          position="top-center"
+          richColors
+          closeButton
+        />
+      </ThemeProvider>
+    </StrictMode>,
+  )
+}

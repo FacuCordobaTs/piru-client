@@ -260,6 +260,8 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder, sibl
   const handlePrimary = handleContinue
 
   const timeLeft = tieneDescuento ? formatTimeLeft(product?.descuentoFechaFin ?? null) : null
+  const nombreLength = product?.nombre.trim().length ?? 0
+  const nombreFontSize = nombreLength > 90 ? 15 : nombreLength > 65 ? 17 : nombreLength > 45 ? 20 : nombreLength > 30 ? 23 : undefined
 
   // ── Cálculo de altura dinámica del drawer ──
   const variantCount = product?.variantes?.length ?? 0
@@ -435,8 +437,11 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder, sibl
                               </span>
                             )}
                           </div>
-                          <div className="flex items-end justify-between gap-4">
-                            <h3 className="text-[26px] font-bold leading-tight tracking-tight text-foreground">
+                          <div className="flex items-end justify-between gap-3">
+                            <h3
+                              className="min-w-0 flex-1 break-words text-[26px] font-bold leading-tight tracking-tight text-foreground [overflow-wrap:anywhere]"
+                              style={nombreFontSize ? { fontSize: nombreFontSize } : undefined}
+                            >
                               {product.nombre}
                             </h3>
                             <div className="shrink-0 text-right">
@@ -465,8 +470,11 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder, sibl
                               </span>
                             )}
                           </div>
-                          <div className="flex items-end justify-between gap-4">
-                            <h3 className="text-[28px] font-bold leading-tight tracking-tight text-white drop-shadow-sm">
+                          <div className="flex items-end justify-between gap-3">
+                            <h3
+                              className="min-w-0 flex-1 break-words text-[28px] font-bold leading-tight tracking-tight text-white drop-shadow-sm [overflow-wrap:anywhere]"
+                              style={nombreFontSize ? { fontSize: nombreFontSize } : undefined}
+                            >
                               {product.nombre}
                             </h3>
                             <div className="shrink-0 text-right">

@@ -1211,6 +1211,8 @@ const ProductoCard = ({ producto, onClick, fullWidth }: { producto: any, onClick
     const tieneDescuento = !!(producto.descuento && producto.descuento > 0)
     const precioOriginal = parseFloat(producto.precio)
     const precioFinal = tieneDescuento ? precioOriginal * (1 - producto.descuento / 100) : precioOriginal
+    const nombreLength = String(producto.nombre ?? '').trim().length
+    const nombreClass = nombreLength > 70 ? 'text-[11px]' : nombreLength > 48 ? 'text-xs' : nombreLength > 30 ? 'text-[13px]' : 'text-[15px]'
 
     // ─────────────────────────────────────────────
     // DISEÑO 3: TEXT-ONLY (SIN IMAGEN)
@@ -1223,7 +1225,7 @@ const ProductoCard = ({ producto, onClick, fullWidth }: { producto: any, onClick
             >
                 <div className="flex-1">
                     <div className="flex justify-between items-start gap-3 mb-2">
-                        <h3 className="font-bold text-[15px] leading-snug text-foreground line-clamp-3">
+                        <h3 className={`min-w-0 break-words font-bold leading-snug text-foreground [overflow-wrap:anywhere] ${nombreClass}`}>
                             {producto.nombre}
                         </h3>
                         {tieneDescuento && (
@@ -1264,7 +1266,7 @@ const ProductoCard = ({ producto, onClick, fullWidth }: { producto: any, onClick
     // ─────────────────────────────────────────────
     return (
         <div
-            className={`group relative flex flex-col ${fullWidth ? 'w-full' : 'w-48 shrink-0 lg:w-full'} h-[260px] rounded-[24px] bg-card border border-border/50 shadow-md hover:shadow-xl transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] overflow-hidden ${!fullWidth ? 'snap-start' : ''}`}
+            className={`group relative flex min-h-[260px] flex-col ${fullWidth ? 'w-full' : 'w-48 shrink-0 lg:w-full'} rounded-[24px] bg-card border border-border/50 shadow-md hover:shadow-xl transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] overflow-hidden ${!fullWidth ? 'snap-start' : ''}`}
             onClick={onClick}
         >
             <div className="w-full h-[130px] shrink-0 bg-zinc-900 relative">
@@ -1284,7 +1286,7 @@ const ProductoCard = ({ producto, onClick, fullWidth }: { producto: any, onClick
 
             <div className="p-3.5 flex flex-col flex-1 bg-card">
                 <div className="flex-1">
-                    <h3 className="font-bold text-[14px] line-clamp-2 text-foreground leading-tight">
+                    <h3 className={`break-words font-bold leading-tight text-foreground [overflow-wrap:anywhere] ${nombreClass}`}>
                         {producto.nombre}
                     </h3>
                     {producto.descripcion && (
@@ -1319,7 +1321,7 @@ export default MenuDelivery
 
 const ProductoCanjeCard = ({ producto, onClick }: { producto: any, onClick: () => void }) => (
     <div
-        className="group relative w-full h-24 rounded-2xl overflow-hidden cursor-pointer shadow-sm border border-primary/20 hover:border-primary/50 bg-card hover:bg-secondary/50 transition-all duration-300 flex items-center p-3 gap-4"
+        className="group relative flex min-h-24 w-full cursor-pointer items-center gap-4 overflow-hidden rounded-2xl border border-primary/20 bg-card p-3 shadow-sm transition-all duration-300 hover:border-primary/50 hover:bg-secondary/50"
         onClick={onClick}
     >
         <div className="w-16 h-16 shrink-0 rounded-xl overflow-hidden bg-zinc-900 border border-border/50">
@@ -1330,7 +1332,7 @@ const ProductoCanjeCard = ({ producto, onClick }: { producto: any, onClick: () =
             )}
         </div>
         <div className="flex-1 min-w-0 flex flex-col justify-center">
-            <h3 className="font-semibold text-sm text-foreground truncate">{producto.nombre}</h3>
+            <h3 className="break-words text-sm font-semibold leading-tight text-foreground [overflow-wrap:anywhere]">{producto.nombre}</h3>
             <p className="text-xs text-muted-foreground line-clamp-1">{producto.descripcion || 'Canje de puntos'}</p>
         </div>
         <div className="flex flex-col items-end justify-center px-2">

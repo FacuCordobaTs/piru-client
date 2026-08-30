@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useNavigate, useParams } from 'react-router'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
@@ -12,6 +12,7 @@ import { AddressAutocomplete } from '@/components/AddressAutocomplete'
 import { AddressMapPreview } from '@/components/AddressMapPreview'
 import { MisPedidosDrawer } from '@/components/MisPedidosDrawer'
 import { leerTemaRestaurante, RestauranteTheme } from '@/components/RestauranteTheme'
+import { configurarGtm, contextoParaPedidoMarketing, registrarEventoTrackingUnaVez } from '@/lib/tracking'
 
 type MetodoPublico = { id: string; label: string; automatico: boolean }
 type HorarioTurno = { diaSemana: number; horaApertura: string; horaCierre: string }
@@ -85,6 +86,7 @@ const CheckoutDelivery = () => {
     const [sucursalSeleccionada, setSucursalSeleccionada] = useState<number | null>(null)
     const [sucursalDelivery, setSucursalDelivery] = useState<number | null>(null)
     const [tipoDomicilio, setTipoDomicilio] = useState<'casa' | 'departamento' | null>(null)
+    const checkoutStartRef = useRef<string | null>(null)
     const [piso, setPiso] = useState('')
     const [numeroDepartamento, setNumeroDepartamento] = useState('')
     const codigoDescuentoEnabled = restauranteData?.codigoDescuentoEnabled === true
@@ -97,9 +99,20 @@ const CheckoutDelivery = () => {
                 const data = await response.json()
                 if (data.success && data.data.restaurante) {
                     const r = data.data.restaurante
+                    configurarGtm(r.gtmContainerId)
                     const methods: MetodoPublico[] = Array.isArray(r.metodosPago) ? r.metodosPago : []
                     setAvailablePaymentMethods(methods)
                     setRestauranteData(r)
+                    if (cart?.restauranteId && username) {
+                        const key = `${cart.restauranteId}:${username}`
+                        if (checkoutStartRef.current !== key) {
+                            checkoutStartRef.current = key
+                            registrarEventoTrackingUnaVez(cart.restauranteId, username, 'session_start', 'storefront')
+                            registrarEventoTrackingUnaVez(cart.restauranteId, username, 'checkout_start', 'checkout-route', {
+                                valor: cart.items?.reduce((sum: number, item: any) => sum + (parseFloat(item.precio) * item.cantidad), 0) || 0,
+                            })
+                        }
+                    }
                     const s = Array.isArray(data.data.sucursales) ? data.data.sucursales : []
                     setSucursales(s)
                     if (s.length === 1) setSucursalSeleccionada(s[0].id)
@@ -131,7 +144,7 @@ const CheckoutDelivery = () => {
             }
         }
         if (username) fetchRestaurante()
-    }, [username])
+    }, [username, cart?.restauranteId])
 
 
     useEffect(() => {
@@ -336,6 +349,7 @@ const CheckoutDelivery = () => {
                     esCanjePuntos: i.esCanjePuntos || false
                 }))
             }
+            if (username) Object.assign(payload, contextoParaPedidoMarketing(username))
 
             if (restauranteData?.notificarClientesWhatsapp === true) {
                 payload.notificarWhatsapp = notificarWhatsapp;
@@ -369,6 +383,14 @@ const CheckoutDelivery = () => {
 
             const data = await res.json()
             if (data.success) {
+                if (username) {
+                    registrarEventoTrackingUnaVez(cart.restauranteId, username, 'purchase', `pedido-${data.data.id}`, {
+                        pedidoUnificadoId: data.data.id,
+                        valor: data.data.total ? parseFloat(data.data.total) : total,
+                        items: cart.items,
+                        metadata: { tipoPedido, cantidadItems: cart.items.length },
+                    })
+                }
                 // Save client info for future purchases
                 localStorage.setItem('cliente_nombre', nombre)
                 localStorage.setItem('cliente_telefono', telefono)

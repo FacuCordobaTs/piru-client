@@ -15,6 +15,7 @@ import { Input } from '@/components/ui/input'
 import { CheckoutDeliveryGrupal } from '@/components/CheckoutDeliveryGrupal'
 import { redirectPedidoAlWhatsapp } from '@/lib/checkoutWhatsapp'
 import { guardarTemaRestaurante, leerTemaRestaurante, RestauranteTheme } from '@/components/RestauranteTheme'
+import { configurarGtm, contextoParaPedidoMarketing, registrarEventoTracking, registrarEventoTrackingUnaVez } from '@/lib/tracking'
 
 type HorarioTurno = { diaSemana: number; horaApertura: string; horaCierre: string }
 
@@ -88,6 +89,7 @@ const MenuDelivery = () => {
     const { username } = useParams()
     const [searchParams, setSearchParams] = useSearchParams()
     const repAplicadoRef = useRef(false)
+    const productoAplicadoRef = useRef(false)
 
     const [carritoAbierto, setCarritoAbierto] = useState(false)
     const [selectedProduct, setSelectedProduct] = useState<any>(null)
@@ -161,6 +163,7 @@ const MenuDelivery = () => {
     const checkoutDataRef = useRef<any>(null)
     const isSubmittingRef = useRef(false)
     const orderAttemptIdRef = useRef<string | null>(null)
+    const sessionStartRef = useRef<string | null>(null)
 
     // Function to fetch points
     const fetchPuntos = useCallback(async (telefono: string, restauranteId: number) => {
@@ -199,6 +202,12 @@ const MenuDelivery = () => {
                 if (data.success) {
                     setRestaurante(data.data.restaurante)
                     setProductos(data.data.productos)
+                    configurarGtm(data.data.restaurante.gtmContainerId)
+                    const sessionKey = `${data.data.restaurante.id}:${username}`
+                    if (sessionStartRef.current !== sessionKey) {
+                        sessionStartRef.current = sessionKey
+                        registrarEventoTrackingUnaVez(data.data.restaurante.id, username!, 'session_start', 'storefront')
+                    }
                     if (data.data.horarios) {
                         setHorarios(data.data.horarios)
                         setEstadoAbierto(checkIsOpen(data.data.horarios))
@@ -288,6 +297,23 @@ const MenuDelivery = () => {
             setTimeout(() => abrirCarrito(), 500)
         }
     }, [productos])
+
+    // Un Smart Link puede resolver a un producto. El parámetro es transitorio,
+    // como `rep`, para no volver a abrir el drawer al navegar hacia atrás.
+    useEffect(() => {
+        if (productoAplicadoRef.current || productos.length === 0) return
+        const productoId = Number(searchParams.get('producto'))
+        if (!Number.isInteger(productoId) || productoId <= 0) return
+        productoAplicadoRef.current = true
+        const producto = productos.find((item) => item.id === productoId && item.disponible !== false)
+        const nuevosParams = new URLSearchParams(searchParams)
+        nuevosParams.delete('producto')
+        setSearchParams(nuevosParams, { replace: true })
+        if (producto) {
+            setSelectedProduct(producto)
+            setDrawerOpen(true)
+        }
+    }, [productos, searchParams, setSearchParams])
 
     const cerrarCarrito = useCallback(() => {
         setCarritoAbierto(false)
@@ -381,6 +407,15 @@ const MenuDelivery = () => {
         abrirProductoDrawer()
     }
 
+    useEffect(() => {
+        if (!drawerOpen || !selectedProduct?.id || !restaurante?.id || !username) return
+            registrarEventoTrackingUnaVez(restaurante.id, username, 'product_view', `producto-${selectedProduct.id}`, {
+                productoId: selectedProduct.id,
+                nombreProducto: selectedProduct.nombre,
+                valor: selectedProduct.precio,
+        })
+    }, [drawerOpen, restaurante?.id, selectedProduct?.id, selectedProduct?.precio, username])
+
     // Lista ordenada de productos "hermanos" para poder saltar de uno a otro dentro
     // del drawer (mismo orden en que se ven en pantalla). El canje por puntos queda
     // fuera: es un flujo aparte (`intentandoCanjear`) que no se navega.
@@ -448,6 +483,14 @@ const MenuDelivery = () => {
         }
 
         setCartItems(prev => [...prev, newItem])
+        if (restaurante?.id && username) {
+            registrarEventoTracking(restaurante.id, username, 'add_to_cart', {
+                productoId: producto.id,
+                nombreProducto: producto.nombre,
+                cantidad,
+                valor: (precioFinalNumber * cantidad).toFixed(2),
+            })
+        }
 
         const bumpCart = () => {
             setTimeout(() => {
@@ -520,6 +563,7 @@ const MenuDelivery = () => {
                     esCanjePuntos: i.esCanjePuntos || false
                 })),
                 metodoPago: data.metodoPago,
+                ...contextoParaPedidoMarketing(username),
             }
             if (data.codigoDescuentoId) payload.codigoDescuentoId = data.codigoDescuentoId
             if (tipoPedido === 'delivery') {
@@ -542,6 +586,12 @@ const MenuDelivery = () => {
             const result = await res.json()
             if (result.success) {
                 pedidoCreado = true
+                registrarEventoTrackingUnaVez(restaurante.id, username, 'purchase', `pedido-${result.data.id}`, {
+                    pedidoUnificadoId: result.data.id,
+                    valor: result.data.total ? parseFloat(result.data.total) : parseFloat(data.total || '0'),
+                    items: cartItems,
+                    metadata: { tipoPedido, cantidadItems: cartItems.length },
+                })
                 localStorage.setItem('cliente_nombre', data.nombre)
                 localStorage.setItem('cliente_telefono', data.telefono)
                 if (tipoPedido === 'delivery') {
@@ -1070,6 +1120,12 @@ const MenuDelivery = () => {
                                         if (!estadoAbierto.abierto && !restaurante?.permitirPedidosProgramados) return
                                         setMostrarCheckoutEnCarrito(true)
                                         setExpandido(false)
+                                        if (restaurante?.id && username) {
+                                            registrarEventoTracking(restaurante.id, username, 'checkout_start', {
+                                                valor: totalPedido,
+                                                metadata: { cantidadItems: cartItems.length },
+                                            })
+                                        }
                                     }}
                                 >
                                     {restaurante?.pausadoPorSuscripcion

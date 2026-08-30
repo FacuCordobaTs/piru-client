@@ -108,6 +108,13 @@ export interface CheckoutDeliveryData {
   horarioProgramado?: string
   sucursalId?: number | null
   tipoDomicilio?: 'casa' | 'departamento' | null
+  // Contexto opcional de Growth; el pedido final de sala lo atribuye best-effort.
+  visitorId?: string
+  sesionUuid?: string
+  campaniaSlug?: string
+  recetaToken?: string
+  /** Participante que guardó el checkout; sólo éste emite el purchase de sala. */
+  trackingClienteId?: string
 }
 
 export interface CheckoutEditSemaphore {

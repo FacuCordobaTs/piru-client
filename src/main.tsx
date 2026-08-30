@@ -20,8 +20,10 @@ import CheckoutDelivery from './pages/CheckoutDelivery'
 import SuccessDelivery from './pages/SuccessDelivery'
 import SuccessGrupal from './pages/SuccessGrupal'
 import PedidoStatus from './pages/PedidoStatus'
+import { TrackingBootstrap } from './components/TrackingBootstrap'
+import { CampanaLinkResolver, RecetaLinkResolver } from './pages/MarketingLinkResolver'
 
-const router = createBrowserRouter([
+const rutas = [
   {
     path: "/",
     element: <Welcome />,
@@ -100,6 +102,15 @@ const router = createBrowserRouter([
     path: "/pedido/:id",
     element: <PedidoStatus />,
   },
+  // Deben estar antes de /:username, que es la ruta genérica de tienda.
+  {
+    path: "/:username/c/:slug",
+    element: <CampanaLinkResolver />,
+  },
+  {
+    path: "/:username/r/:token",
+    element: <RecetaLinkResolver />,
+  },
   {
     path: "/:username",
     element: <MenuDelivery />,
@@ -112,7 +123,9 @@ const router = createBrowserRouter([
     path: "/:username/success",
     element: <SuccessDelivery />,
   },
-]);
+]
+
+const router = createBrowserRouter([{ element: <TrackingBootstrap />, children: rutas }])
 
 if (window.location.hostname === 'piru.app' && window.location.pathname === '/') {
   window.location.replace('https://info.piru.app')

@@ -112,6 +112,7 @@ export interface CheckoutDeliveryData {
   visitorId?: string
   sesionUuid?: string
   campaniaSlug?: string
+  campanaId?: number
   recetaToken?: string
   /** Participante que guardó el checkout; sólo éste emite el purchase de sala. */
   trackingClienteId?: string

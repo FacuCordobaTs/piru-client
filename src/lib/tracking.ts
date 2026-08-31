@@ -153,6 +153,7 @@ export function contextoParaPedidoMarketing(username: string) {
     visitorId: obtenerVisitorId(),
     sesionUuid: obtenerSesionTracking(username).sesionUuid,
     ...(contexto?.campaniaSlug ? { campaniaSlug: contexto.campaniaSlug } : {}),
+    ...(contexto?.campanaId ? { campanaId: contexto.campanaId } : {}),
     ...(contexto?.recetaToken ? { recetaToken: contexto.recetaToken } : {}),
   }
 }

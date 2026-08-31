@@ -623,8 +623,9 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaProductoPublica | n
                 ...(data.visitorId ? { visitorId: data.visitorId } : {}),
                 ...(data.sesionUuid ? { sesionUuid: data.sesionUuid } : {}),
                 ...(data.campaniaSlug ? { campaniaSlug: data.campaniaSlug } : {}),
+                ...(data.campanaId ? { campanaId: data.campanaId } : {}),
                 ...(data.recetaToken ? { recetaToken: data.recetaToken } : {}),
-                ...(campana ? { campaniaSlug: campana.slug } : {}),
+                ...(campana ? { campaniaSlug: campana.slug, campanaId: campana.campanaId } : {}),
             }
             if (data.codigoDescuentoId) payload.codigoDescuentoId = data.codigoDescuentoId
             if (tipoPedido === 'delivery') {
@@ -1109,7 +1110,7 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaProductoPublica | n
                             localCerrado={!estadoAbierto.abierto || !!restaurante?.pausadoPorSuscripcion}
                             contextoMarketing={username ? {
                                 ...contextoParaPedidoMarketing(username),
-                                ...(campana ? { campaniaSlug: campana.slug } : {}),
+                                ...(campana ? { campaniaSlug: campana.slug, campanaId: campana.campanaId } : {}),
                             } : undefined}
                             codigoPromocionalInicial={username ? codigoPromocionalMarketing(username) : null}
                         />

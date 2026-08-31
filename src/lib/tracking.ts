@@ -2,7 +2,7 @@ const API_URL = (import.meta.env.VITE_API_URL || 'https://api.piru.app/api').rep
 export const DURACION_SESION_TRACKING_MS = 30 * 60 * 1000
 
 export type TipoEventoTracking = 'session_start' | 'product_view' | 'add_to_cart' | 'checkout_start' | 'purchase'
-export interface ContextoTracking { username: string; campaniaSlug?: string; recetaToken?: string; actualizadoAt: number }
+export interface ContextoTracking { username: string; campaniaSlug?: string; recetaToken?: string; codigoPromocional?: string; actualizadoAt: number }
 interface SesionLocal { sesionUuid: string; ultimaActividadAt: number }
 interface EventoEnCola { restauranteId: number; evento: Record<string, unknown>; intentos: number; reintentarAt: number }
 
@@ -151,6 +151,12 @@ export function contextoParaPedidoMarketing(username: string) {
     ...(contexto?.campaniaSlug ? { campaniaSlug: contexto.campaniaSlug } : {}),
     ...(contexto?.recetaToken ? { recetaToken: contexto.recetaToken } : {}),
   }
+}
+
+/** Beneficio transportado por un Smart Link. La vigencia y el monto siempre se
+ * vuelven a validar en el servidor contra el total real del checkout. */
+export function codigoPromocionalMarketing(username: string): string | null {
+  return obtenerContextoTracking(username)?.codigoPromocional?.trim().toUpperCase() || null
 }
 
 function cola() { const value = leer<EventoEnCola[]>(local(), QUEUE_KEY); return Array.isArray(value) ? value : [] }

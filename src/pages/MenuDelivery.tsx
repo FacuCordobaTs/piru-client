@@ -15,7 +15,7 @@ import { Input } from '@/components/ui/input'
 import { CheckoutDeliveryGrupal } from '@/components/CheckoutDeliveryGrupal'
 import { redirectPedidoAlWhatsapp } from '@/lib/checkoutWhatsapp'
 import { guardarTemaRestaurante, leerTemaRestaurante, RestauranteTheme } from '@/components/RestauranteTheme'
-import { configurarGtm, contextoParaPedidoMarketing, registrarEventoTracking, registrarEventoTrackingUnaVez } from '@/lib/tracking'
+import { codigoPromocionalMarketing, configurarGtm, contextoParaPedidoMarketing, registrarEventoTracking, registrarEventoTrackingUnaVez } from '@/lib/tracking'
 
 type HorarioTurno = { diaSemana: number; horaApertura: string; horaCierre: string }
 
@@ -293,10 +293,21 @@ const MenuDelivery = () => {
 
         if (nuevos.length > 0) {
             setCartItems(nuevos)
+            if (restaurante?.id && username) {
+                for (const item of nuevos) {
+                    registrarEventoTracking(restaurante.id, username, 'add_to_cart', {
+                        productoId: item.productoId,
+                        nombreProducto: item.nombre,
+                        cantidad: item.cantidad,
+                        valor: (Number(item.precio) * item.cantidad).toFixed(2),
+                        metadata: { origen: 'carrito_precargado' },
+                    })
+                }
+            }
             toast.success('Te dejamos listo tu pedido de siempre 🛒')
             setTimeout(() => abrirCarrito(), 500)
         }
-    }, [productos])
+    }, [productos, restaurante?.id, username, searchParams, setSearchParams, abrirCarrito])
 
     // Un Smart Link puede resolver a un producto. El parámetro es transitorio,
     // como `rep`, para no volver a abrir el drawer al navegar hacia atrás.
@@ -1044,6 +1055,8 @@ const MenuDelivery = () => {
                             enviarPedidoWhatsapp={restaurante?.avisosWhatsappClienteEnabled === false}
                             submittingOrder={submittingOrder}
                             localCerrado={!estadoAbierto.abierto || !!restaurante?.pausadoPorSuscripcion}
+                            contextoMarketing={username ? contextoParaPedidoMarketing(username) : undefined}
+                            codigoPromocionalInicial={username ? codigoPromocionalMarketing(username) : null}
                         />
                     ) : cartItems.length === 0 ? (
                         <div className="flex flex-col items-center justify-center text-center gap-4 opacity-60 px-5 py-12">

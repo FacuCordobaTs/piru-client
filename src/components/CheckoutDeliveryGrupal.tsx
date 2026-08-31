@@ -45,6 +45,8 @@ interface CheckoutDeliveryGrupalProps {
   submittingOrder?: boolean
   /** Contexto transitorio del Smart Link para atribuir exclusivamente el pedido final. */
   contextoMarketing?: ReturnType<typeof contextoParaPedidoMarketing>
+  /** Código incluido en un Smart Link; se valida contra el total y se aplica automáticamente. */
+  codigoPromocionalInicial?: string | null
 }
 
 export function CheckoutDeliveryGrupal({
@@ -68,6 +70,7 @@ export function CheckoutDeliveryGrupal({
   enviarPedidoWhatsapp = false,
   submittingOrder = false,
   contextoMarketing,
+  codigoPromocionalInicial,
 }: CheckoutDeliveryGrupalProps) {
   const [tipoPedido, setTipoPedido] = useState<'delivery' | 'takeaway'>(checkoutData?.tipoPedido || 'delivery')
   const [nombre, setNombre] = useState(checkoutData?.nombre || localStorage.getItem('cliente_nombre') || '')
@@ -106,6 +109,7 @@ export function CheckoutDeliveryGrupal({
   const [montoDescuento, setMontoDescuento] = useState(checkoutData?.montoDescuento ?? 0)
   const [validandoCodigo, setValidandoCodigo] = useState(false)
   const [codigoError, setCodigoError] = useState<string | null>(null)
+  const [codigoAutomaticoProcesado, setCodigoAutomaticoProcesado] = useState<string | null>(null)
 
   const [paso, setPaso] = useState(0)
   const pasos: PasoCheckout[] = ['tipo', 'datos', 'ubicacion', 'extras']
@@ -252,8 +256,8 @@ export function CheckoutDeliveryGrupal({
     sendMessage({ type: 'CANCELAR_EDICION_CHECKOUT', payload: { clienteId, clienteNombre } })
   }
 
-  const handleValidarCodigo = async () => {
-    if (!codigoInput.trim() || !restauranteId) return
+  const validarCodigo = useCallback(async (codigo: string, automatico = false) => {
+    if (!codigo.trim() || !restauranteId) return
     setValidandoCodigo(true)
     setCodigoError(null)
     try {
@@ -261,13 +265,14 @@ export function CheckoutDeliveryGrupal({
       const res = await fetch(`${url}/public/descuentos/validar`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ restauranteId, codigo: codigoInput.trim().toUpperCase(), totalCarrito: subtotalConEnvio }),
+        body: JSON.stringify({ restauranteId, codigo: codigo.trim().toUpperCase(), totalCarrito: subtotalConEnvio }),
       })
       const data = await res.json()
       if (data.success && data.data) {
         setCodigoDescuentoId(data.data.codigoDescuentoId)
         setMontoDescuento(parseFloat(data.data.montoDescuento))
-        toast.success(`Código aplicado: -$${parseFloat(data.data.montoDescuento).toFixed(0)}`)
+        setCodigoInput(data.data.codigo)
+        toast.success(`${automatico ? 'Beneficio de la campaña aplicado' : 'Código aplicado'}: -$${parseFloat(data.data.montoDescuento).toFixed(0)}`)
       } else {
         setCodigoError(data.message || 'Código no válido')
         setCodigoDescuentoId(null)
@@ -280,7 +285,17 @@ export function CheckoutDeliveryGrupal({
     } finally {
       setValidandoCodigo(false)
     }
-  }
+  }, [restauranteId, subtotalConEnvio])
+
+  const handleValidarCodigo = () => void validarCodigo(codigoInput)
+
+  useEffect(() => {
+    const codigo = codigoPromocionalInicial?.trim().toUpperCase()
+    if (!codigo || codigoAutomaticoProcesado === codigo || codigoDescuentoId || !codigoDescuentoEnabled) return
+    setCodigoAutomaticoProcesado(codigo)
+    setCodigoInput(codigo)
+    void validarCodigo(codigo, true)
+  }, [codigoPromocionalInicial, codigoAutomaticoProcesado, codigoDescuentoEnabled, codigoDescuentoId, validarCodigo])
 
   const quitarCodigo = () => {
     setCodigoInput('')

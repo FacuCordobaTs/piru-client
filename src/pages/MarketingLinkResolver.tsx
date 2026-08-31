@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router'
 import { contextoParaResolverMarketing, guardarContextoTracking } from '@/lib/tracking'
 
 type Destino = { tipo: 'tienda' } | { tipo: 'producto'; productoId: number } | { tipo: 'carrito'; carritoRep: string }
-type Respuesta = { data?: { encontrada?: boolean; destino?: Destino; contexto?: { campaniaSlug?: string } } }
+type Respuesta = { data?: { encontrada?: boolean; destino?: Destino; contexto?: { campaniaSlug?: string }; beneficio?: { codigoDescuentoId: number; codigo: string } } }
 const API_URL = (import.meta.env.VITE_API_URL || 'https://api.piru.app/api').replace(/\/$/, '')
 
 function urlDestino(username: string, destino?: Destino) {
@@ -27,8 +27,9 @@ function Resolver({ tipo }: { tipo: 'campana' | 'receta' }) {
         window.clearTimeout(timeout)
         if (response.ok) respuesta = await response.json()
       } catch { /* fallback de tienda si el resolver o tracking no está disponible */ }
-      if (tipo === 'campana' && respuesta?.data?.encontrada && respuesta.data.contexto?.campaniaSlug) guardarContextoTracking({ username, campaniaSlug: respuesta.data.contexto.campaniaSlug })
-      if (tipo === 'receta' && respuesta?.data?.encontrada) guardarContextoTracking({ username, recetaToken: token! })
+      const codigoPromocional = respuesta?.data?.beneficio?.codigo
+      if (tipo === 'campana' && respuesta?.data?.encontrada && respuesta.data.contexto?.campaniaSlug) guardarContextoTracking({ username, campaniaSlug: respuesta.data.contexto.campaniaSlug, codigoPromocional })
+      if (tipo === 'receta' && respuesta?.data?.encontrada) guardarContextoTracking({ username, recetaToken: token!, codigoPromocional })
       navigate(urlDestino(username, respuesta?.data?.destino), { replace: true })
     }
     void ejecutar(); return () => abortador.abort()

@@ -12,7 +12,7 @@ import { AddressAutocomplete } from '@/components/AddressAutocomplete'
 import { AddressMapPreview } from '@/components/AddressMapPreview'
 import { MisPedidosDrawer } from '@/components/MisPedidosDrawer'
 import { leerTemaRestaurante, RestauranteTheme } from '@/components/RestauranteTheme'
-import { configurarGtm, contextoParaPedidoMarketing, registrarEventoTrackingUnaVez } from '@/lib/tracking'
+import { codigoPromocionalMarketing, configurarGtm, contextoParaPedidoMarketing, registrarEventoTrackingUnaVez } from '@/lib/tracking'
 
 type MetodoPublico = { id: string; label: string; automatico: boolean }
 type HorarioTurno = { diaSemana: number; horaApertura: string; horaCierre: string }
@@ -77,6 +77,7 @@ const CheckoutDelivery = () => {
     const [montoDescuento, setMontoDescuento] = useState(0)
     const [validandoCodigo, setValidandoCodigo] = useState(false)
     const [codigoError, setCodigoError] = useState<string | null>(null)
+    const [codigoAutomaticoProcesado, setCodigoAutomaticoProcesado] = useState(false)
     const [availablePaymentMethods, setAvailablePaymentMethods] = useState<MetodoPublico[]>([])
     const [metodoPago, setMetodoPago] = useState<string | null>(null)
     const [restauranteData, setRestauranteData] = useState<any>(null)
@@ -229,6 +230,19 @@ const CheckoutDelivery = () => {
             setValidandoCodigo(false)
         }
     }
+
+    useEffect(() => {
+        if (!username || !cart?.restauranteId || !codigoDescuentoEnabled || codigoDescuentoId || codigoAutomaticoProcesado) return
+        const codigo = codigoPromocionalMarketing(username)
+        if (!codigo) return
+        setCodigoAutomaticoProcesado(true)
+        setCodigoInput(codigo)
+    }, [username, cart?.restauranteId, codigoDescuentoEnabled, codigoDescuentoId, codigoAutomaticoProcesado])
+
+    useEffect(() => {
+        if (!codigoAutomaticoProcesado || !codigoInput || codigoDescuentoId || validandoCodigo) return
+        void handleValidarCodigo()
+    }, [codigoAutomaticoProcesado, codigoInput, codigoDescuentoId])
 
     const quitarCodigo = () => {
         setCodigoInput('')

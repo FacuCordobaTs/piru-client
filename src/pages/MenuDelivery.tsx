@@ -85,6 +85,7 @@ function checkIsOpen(horarios: HorarioTurno[]): { abierto: boolean; proximaApert
 
 
 export interface CampanaProductoPublica {
+    campanaId: number
     nombre: string
     slug: string
     productoId: number
@@ -95,6 +96,13 @@ export interface CampanaProductoPublica {
     fechaInicio: string | null
     fechaFin: string | null
 }
+
+const extrasTrackingCampana = (campana: CampanaProductoPublica | null, metadata: Record<string, unknown> = {}) => ({
+    ...(campana ? { touch: { tipo: 'campana' as const, campanaId: campana.campanaId } } : {}),
+    ...((campana || Object.keys(metadata).length) ? {
+        metadata: { ...metadata, ...(campana ? { campaniaSlug: campana.slug } : {}) },
+    } : {}),
+})
 
 const MenuDelivery = ({ campana = null }: { campana?: CampanaProductoPublica | null }) => {
     const navigate = useNavigate()
@@ -331,14 +339,14 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaProductoPublica | n
                         nombreProducto: item.nombre,
                         cantidad: item.cantidad,
                         valor: (Number(item.precio) * item.cantidad).toFixed(2),
-                        metadata: { origen: 'carrito_precargado' },
+                        ...extrasTrackingCampana(campana, { origen: 'carrito_precargado' }),
                     })
                 }
             }
             toast.success('Te dejamos listo tu pedido de siempre 🛒')
             setTimeout(() => abrirCarrito(), 500)
         }
-    }, [productos, restaurante?.id, username, searchParams, setSearchParams, abrirCarrito])
+    }, [productos, restaurante?.id, username, searchParams, setSearchParams, abrirCarrito, campana])
 
     // Un Smart Link puede resolver a un producto. El parámetro es transitorio,
     // como `rep`, para no volver a abrir el drawer al navegar hacia atrás.
@@ -452,12 +460,13 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaProductoPublica | n
 
     useEffect(() => {
         if (!drawerOpen || !selectedProduct?.id || !restaurante?.id || !username) return
-            registrarEventoTrackingUnaVez(restaurante.id, username, 'product_view', `producto-${selectedProduct.id}`, {
-                productoId: selectedProduct.id,
-                nombreProducto: selectedProduct.nombre,
-                valor: selectedProduct.precio,
+        registrarEventoTrackingUnaVez(restaurante.id, username, 'product_view', `producto-${selectedProduct.id}`, {
+            productoId: selectedProduct.id,
+            nombreProducto: selectedProduct.nombre,
+            valor: selectedProduct.precio,
+            ...extrasTrackingCampana(campana),
         })
-    }, [drawerOpen, restaurante?.id, selectedProduct?.id, selectedProduct?.precio, username])
+    }, [drawerOpen, restaurante?.id, selectedProduct?.id, selectedProduct?.precio, username, campana])
 
     // Lista ordenada de productos "hermanos" para poder saltar de uno a otro dentro
     // del drawer (mismo orden en que se ven en pantalla). El canje por puntos queda
@@ -532,6 +541,7 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaProductoPublica | n
                 nombreProducto: producto.nombre,
                 cantidad,
                 valor: (precioFinalNumber * cantidad).toFixed(2),
+                ...extrasTrackingCampana(campana),
             })
         }
 
@@ -607,6 +617,14 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaProductoPublica | n
                 })),
                 metodoPago: data.metodoPago,
                 ...contextoParaPedidoMarketing(username),
+                // CheckoutDeliveryGrupal capturó el contexto cuando se abrió.
+                // Se prioriza esa copia y finalmente la landing actual, para
+                // que storage bloqueado/limpiado no convierta la venta en orgánica.
+                ...(data.visitorId ? { visitorId: data.visitorId } : {}),
+                ...(data.sesionUuid ? { sesionUuid: data.sesionUuid } : {}),
+                ...(data.campaniaSlug ? { campaniaSlug: data.campaniaSlug } : {}),
+                ...(data.recetaToken ? { recetaToken: data.recetaToken } : {}),
+                ...(campana ? { campaniaSlug: campana.slug } : {}),
             }
             if (data.codigoDescuentoId) payload.codigoDescuentoId = data.codigoDescuentoId
             if (tipoPedido === 'delivery') {
@@ -633,7 +651,7 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaProductoPublica | n
                     pedidoUnificadoId: result.data.id,
                     valor: result.data.total ? parseFloat(result.data.total) : parseFloat(data.total || '0'),
                     items: cartItems,
-                    metadata: { tipoPedido, cantidadItems: cartItems.length },
+                    ...extrasTrackingCampana(campana, { tipoPedido, cantidadItems: cartItems.length }),
                 })
                 localStorage.setItem('cliente_nombre', data.nombre)
                 localStorage.setItem('cliente_telefono', data.telefono)
@@ -692,7 +710,7 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaProductoPublica | n
                 isSubmittingRef.current = false
             }
         }
-    }, [restaurante, username, cartItems, navigate, horarios])
+    }, [restaurante, username, cartItems, navigate, horarios, campana])
 
     const handleCheckoutMessage = useCallback((msg: any) => {
         if (msg.type === 'INICIAR_EDICION_CHECKOUT') {
@@ -1089,7 +1107,10 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaProductoPublica | n
                             enviarPedidoWhatsapp={restaurante?.avisosWhatsappClienteEnabled === false}
                             submittingOrder={submittingOrder}
                             localCerrado={!estadoAbierto.abierto || !!restaurante?.pausadoPorSuscripcion}
-                            contextoMarketing={username ? contextoParaPedidoMarketing(username) : undefined}
+                            contextoMarketing={username ? {
+                                ...contextoParaPedidoMarketing(username),
+                                ...(campana ? { campaniaSlug: campana.slug } : {}),
+                            } : undefined}
                             codigoPromocionalInicial={username ? codigoPromocionalMarketing(username) : null}
                         />
                     ) : cartItems.length === 0 ? (
@@ -1170,7 +1191,7 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaProductoPublica | n
                                         if (restaurante?.id && username) {
                                             registrarEventoTracking(restaurante.id, username, 'checkout_start', {
                                                 valor: totalPedido,
-                                                metadata: { cantidadItems: cartItems.length },
+                                                ...extrasTrackingCampana(campana, { cantidadItems: cartItems.length }),
                                             })
                                         }
                                     }}

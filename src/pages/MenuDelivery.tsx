@@ -84,7 +84,19 @@ function checkIsOpen(horarios: HorarioTurno[]): { abierto: boolean; proximaApert
 }
 
 
-const MenuDelivery = () => {
+export interface CampanaProductoPublica {
+    nombre: string
+    slug: string
+    productoId: number
+    descuentoPorcentaje: number
+    limiteUsos: number | null
+    usosActuales: number
+    usosRestantes: number | null
+    fechaInicio: string | null
+    fechaFin: string | null
+}
+
+const MenuDelivery = ({ campana = null }: { campana?: CampanaProductoPublica | null }) => {
     const navigate = useNavigate()
     const { username } = useParams()
     const [searchParams, setSearchParams] = useSearchParams()
@@ -200,13 +212,32 @@ const MenuDelivery = () => {
                 }
                 const data = await res.json()
                 if (data.success) {
+                    const promo = campana
                     setRestaurante(data.data.restaurante)
-                    setProductos(data.data.productos)
+                    setProductos(data.data.productos.map((producto: any) => {
+                        if (!promo || producto.id !== promo.productoId) return producto
+                        const ahora = Date.now()
+                        const inicioProducto = producto.descuentoFechaInicio ? new Date(producto.descuentoFechaInicio).getTime() : null
+                        const finProducto = producto.descuentoFechaFin ? new Date(producto.descuentoFechaFin).getTime() : null
+                        const descuentoProductoActivo = (inicioProducto == null || inicioProducto <= ahora)
+                            && (finProducto == null || finProducto >= ahora)
+                            ? Number(producto.descuento || 0) : 0
+                        const usaOfertaCampana = promo.descuentoPorcentaje >= descuentoProductoActivo
+                        return {
+                            ...producto,
+                            descuento: Math.max(descuentoProductoActivo, promo.descuentoPorcentaje || 0),
+                            descuentoFechaInicio: usaOfertaCampana ? promo.fechaInicio : producto.descuentoFechaInicio,
+                            descuentoFechaFin: usaOfertaCampana ? promo.fechaFin : producto.descuentoFechaFin,
+                        }
+                    }))
                     configurarGtm(data.data.restaurante.gtmContainerId)
                     const sessionKey = `${data.data.restaurante.id}:${username}`
                     if (sessionStartRef.current !== sessionKey) {
                         sessionStartRef.current = sessionKey
-                        registrarEventoTrackingUnaVez(data.data.restaurante.id, username!, 'session_start', 'storefront')
+                        // El resolver de /c/:slug ya creó/actualizó la sesión y
+                        // sumó el contador compacto; no insertamos un evento de
+                        // apertura adicional por cada visita de campaña.
+                        if (!campana) registrarEventoTrackingUnaVez(data.data.restaurante.id, username!, 'session_start', 'storefront')
                     }
                     if (data.data.horarios) {
                         setHorarios(data.data.horarios)
@@ -228,7 +259,7 @@ const MenuDelivery = () => {
         if (username) {
             fetchRestaurante()
         }
-    }, [username])
+    }, [username, campana])
 
     useEffect(() => {
         if (horarios.length === 0) return
@@ -412,6 +443,7 @@ const MenuDelivery = () => {
 
     const categoriasOrdenadas = Object.keys(productosPorCategoria).sort(compararCategorias)
     const mostrarProductosEnGrid = categoriasOrdenadas.length >= 1 && categoriasOrdenadas.length <= 3
+    const productoCampana = campana ? productos.find((producto) => producto.id === campana.productoId) ?? null : null
 
     const abrirDetalleProducto = (producto: any) => {
         setSelectedProduct(producto)
@@ -806,7 +838,9 @@ const MenuDelivery = () => {
                     </div>
                 </section>
 
-                {restaurante?.orderGroupEnabled !== false && (
+                {productoCampana && campana ? (
+                    <CampanaProductoHero campana={campana} producto={productoCampana} onClick={() => abrirDetalleProducto(productoCampana)} />
+                ) : restaurante?.orderGroupEnabled !== false && (
                     <section
                         role="button"
                         aria-label="Crear pedido entre amigos"
@@ -1265,6 +1299,27 @@ const AvatarStack = ({ grande }: { grande?: boolean }) => {
                 <Plus className={icono} />
             </div>
         </div>
+    )
+}
+
+const CampanaProductoHero = ({ campana, producto, onClick }: { campana: CampanaProductoPublica; producto: any; onClick: () => void }) => {
+    const precioOriginal = Number(producto.precio || 0)
+    const descuento = Math.max(0, Number(producto.descuento || campana.descuentoPorcentaje || 0))
+    const precioFinal = precioOriginal * (1 - descuento / 100)
+    return (
+        <section className="overflow-hidden rounded-3xl border border-primary/25 bg-gradient-to-br from-primary/15 via-primary/5 to-background shadow-lg lg:mx-auto lg:max-w-3xl">
+            <button type="button" onClick={onClick} className="grid w-full text-left sm:grid-cols-[minmax(220px,0.9fr)_1.1fr]">
+                {producto.imagenUrl ? <img src={producto.imagenUrl} alt={producto.nombre} className="h-56 w-full object-cover sm:h-full sm:min-h-64" /> : <div className="flex min-h-44 items-center justify-center bg-primary/10"><Utensils className="h-14 w-14 text-primary/50" /></div>}
+                <div className="flex flex-col justify-center p-6 sm:p-8">
+                    <div className="flex flex-wrap items-center gap-2"><span className="rounded-full bg-primary px-3 py-1 text-[11px] font-extrabold uppercase tracking-wider text-primary-foreground">Oferta especial</span>{campana.usosRestantes != null && <span className="text-xs font-semibold text-muted-foreground">Quedan {campana.usosRestantes}</span>}</div>
+                    <p className="mt-4 text-xs font-semibold uppercase tracking-[0.16em] text-primary">{campana.nombre}</p>
+                    <h2 className="mt-1 text-2xl font-black leading-tight text-foreground sm:text-3xl">{producto.nombre}</h2>
+                    {producto.descripcion && <p className="mt-2 line-clamp-3 text-sm leading-relaxed text-muted-foreground">{producto.descripcion}</p>}
+                    <div className="mt-5 flex items-end gap-3"><span className="text-3xl font-black text-primary">${precioFinal.toFixed(0)}</span>{descuento > 0 && <><span className="pb-1 text-sm font-semibold text-muted-foreground line-through">${precioOriginal.toFixed(0)}</span><span className="mb-1 rounded-md bg-emerald-500/15 px-2 py-1 text-xs font-extrabold text-emerald-700 dark:text-emerald-400">{descuento}% OFF</span></>}</div>
+                    <div className="mt-5 flex items-center justify-between gap-3"><div className="text-xs font-medium text-muted-foreground">{campana.fechaFin && formatTimeLeft(campana.fechaFin) ? `Termina en ${formatTimeLeft(campana.fechaFin)}` : 'Disponible desde este link'}</div><span className="inline-flex items-center gap-1.5 rounded-full bg-primary px-4 py-2 text-xs font-bold text-primary-foreground">Ver producto <Plus className="h-4 w-4" /></span></div>
+                </div>
+            </button>
+        </section>
     )
 }
 

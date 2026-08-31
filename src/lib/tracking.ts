@@ -131,6 +131,10 @@ export function guardarContextoTracking(contexto: Omit<ContextoTracking, 'actual
   guardar(sesion(), `${CONTEXT_PREFIX}${username}`, { ...contexto, username, actualizadoAt: Date.now() } satisfies ContextoTracking)
 }
 
+export function limpiarContextoTracking(username: string) {
+  try { sesion()?.removeItem(`${CONTEXT_PREFIX}${nombre(username)}`) } catch { /* best-effort */ }
+}
+
 /** Contexto de Smart Link transitorio: vive sólo durante la sesión del navegador. */
 export function obtenerContextoTracking(username: string): ContextoTracking | null {
   const contexto = leer<ContextoTracking>(sesion(), `${CONTEXT_PREFIX}${nombre(username)}`)

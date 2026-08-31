@@ -4,7 +4,7 @@ import MenuDelivery, { type CampanaProductoPublica } from './MenuDelivery'
 import { contextoParaResolverMarketing, guardarContextoTracking, limpiarContextoTracking } from '@/lib/tracking'
 
 type Destino = { tipo: 'tienda' } | { tipo: 'producto'; productoId: number } | { tipo: 'carrito'; carritoRep: string }
-type Respuesta = { data?: { encontrada?: boolean; destino?: Destino; contexto?: { campaniaSlug?: string }; beneficio?: { codigoDescuentoId: number; codigo: string }; campana?: CampanaProductoPublica } }
+type Respuesta = { data?: { encontrada?: boolean; destino?: Destino; contexto?: { campaniaSlug?: string; campanaId?: number }; beneficio?: { codigoDescuentoId: number; codigo: string }; campana?: CampanaProductoPublica } }
 const API_URL = (import.meta.env.VITE_API_URL || 'https://api.piru.app/api').replace(/\/$/, '')
 
 function urlDestino(username: string, destino?: Destino) {
@@ -40,7 +40,7 @@ export function CampanaLinkResolver() {
       if (!activo) return
       window.clearTimeout(timeout)
       if (respuesta?.data?.encontrada && respuesta.data.contexto?.campaniaSlug) {
-        guardarContextoTracking({ username, campaniaSlug: respuesta.data.contexto.campaniaSlug })
+        guardarContextoTracking({ username, campaniaSlug: respuesta.data.contexto.campaniaSlug, campanaId: respuesta.data.contexto.campanaId })
         setCampana(respuesta.data.campana ?? null)
       } else limpiarContextoTracking(username)
       setResuelta(true)

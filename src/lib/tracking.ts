@@ -2,7 +2,7 @@ const API_URL = (import.meta.env.VITE_API_URL || 'https://api.piru.app/api').rep
 export const DURACION_SESION_TRACKING_MS = 30 * 60 * 1000
 
 export type TipoEventoTracking = 'session_start' | 'product_view' | 'add_to_cart' | 'checkout_start' | 'purchase'
-export interface ContextoTracking { username: string; campaniaSlug?: string; recetaToken?: string; codigoPromocional?: string; actualizadoAt: number }
+export interface ContextoTracking { username: string; campaniaSlug?: string; campanaId?: number; recetaToken?: string; codigoPromocional?: string; actualizadoAt: number }
 interface SesionLocal { sesionUuid: string; ultimaActividadAt: number }
 interface EventoEnCola { restauranteId: number; evento: Record<string, unknown>; intentos: number; reintentarAt: number }
 
@@ -175,7 +175,8 @@ export function registrarEventoTracking(restauranteId: number, username: string,
   // El token de receta sólo vive en el contexto transitorio. Nunca se incluye
   // en eventos: el backend persiste exclusivamente su hash en marketing_enlace.
   const metadata = { ...(extras.metadata as Record<string, unknown> | undefined), ...(contexto?.campaniaSlug ? { campaniaSlug: contexto.campaniaSlug } : {}) }
-  const evento = { eventoUuid: uuid(), sesionUuid: obtenerSesionTracking(username).sesionUuid, visitorId: obtenerVisitorId(), tipo, ocurridoAt: new Date().toISOString(), ...extras, ...(Object.keys(metadata).length ? { metadata } : {}) }
+  const touch = contexto?.campanaId ? { tipo: 'campana' as const, campanaId: contexto.campanaId } : undefined
+  const evento = { eventoUuid: uuid(), sesionUuid: obtenerSesionTracking(username).sesionUuid, visitorId: obtenerVisitorId(), tipo, ocurridoAt: new Date().toISOString(), ...extras, ...(touch ? { touch } : {}), ...(Object.keys(metadata).length ? { metadata } : {}) }
   guardarCola([...cola(), { restauranteId, evento, intentos: 0, reintentarAt: 0 }]); void enviarEventosPendientes()
 }
 

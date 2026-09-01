@@ -17,6 +17,7 @@ const QUEUE_KEY = 'piru_marketing_queue_v1'
 const MAX_COLA = 100
 const MAX_INTENTOS = 5
 let flushEnCurso = false
+let reintentoTimer: number | null = null
 let contenedorGtmActivo: string | null = null
 
 declare global {
@@ -168,6 +169,34 @@ function cola() { const value = leer<EventoEnCola[]>(local(), QUEUE_KEY); return
 function guardarCola(value: EventoEnCola[]) { guardar(local(), QUEUE_KEY, value.slice(-MAX_COLA)) }
 function reintento(intentos: number) { return Math.min(60_000, 1_000 * 2 ** Math.max(0, intentos - 1)) }
 
+function programarReintento() {
+  if (typeof window === 'undefined') return
+  if (reintentoTimer != null) window.clearTimeout(reintentoTimer)
+  const pendientes = cola()
+  if (!pendientes.length) { reintentoTimer = null; return }
+  const proximo = Math.min(...pendientes.map((item) => item.reintentarAt))
+  reintentoTimer = window.setTimeout(() => {
+    reintentoTimer = null
+    void enviarEventosPendientes()
+  }, Math.max(0, proximo - Date.now()))
+}
+
+/** Último intento no bloqueante al ocultar/cerrar la tienda. La cola no se
+ * borra: si el beacon no llega, el siguiente ingreso la vuelve a enviar y el
+ * UUID del evento evita duplicados en el backend. */
+function enviarPendientesConBeacon() {
+  if (typeof navigator === 'undefined' || typeof navigator.sendBeacon !== 'function') return
+  const pendientes = cola()
+  for (const restauranteId of new Set(pendientes.map((item) => item.restauranteId))) {
+    const eventos = pendientes.filter((item) => item.restauranteId === restauranteId).slice(0, 20).map((item) => item.evento)
+    if (!eventos.length) continue
+    // text/plain evita un preflight CORS que podría no completarse durante
+    // pagehide; Request.json() del backend parsea el contenido igualmente.
+    const body = new Blob([JSON.stringify({ restauranteId, eventos })], { type: 'text/plain;charset=UTF-8' })
+    try { navigator.sendBeacon(`${API_URL}/public/marketing/events`, body) } catch { /* se conserva la cola */ }
+  }
+}
+
 /** Encola primero: ninguna interacción del cliente espera a la telemetría. */
 export function registrarEventoTracking(restauranteId: number, username: string, tipo: TipoEventoTracking, extras: Record<string, unknown> = {}) {
   if (!Number.isInteger(restauranteId) || restauranteId <= 0) return
@@ -210,8 +239,24 @@ export async function enviarEventosPendientes(): Promise<void> {
       guardarCola(original.map((x) => {
         if (!ids.has(x.evento.eventoUuid as string)) return x
         const intentos = x.intentos + 1
-        return intentos >= MAX_INTENTOS ? null : { ...x, intentos, reintentarAt: ahora + reintento(intentos) }
-      }).filter((x): x is EventoEnCola => x !== null))
+        // Los eventos representan acciones comerciales reales. No se descartan
+        // por cerrar WhatsApp, perder señal o agotar reintentos temporales.
+        return { ...x, intentos: Math.min(intentos, MAX_INTENTOS), reintentarAt: ahora + reintento(intentos) }
+      }))
     }
-  } finally { flushEnCurso = false }
+  } finally { flushEnCurso = false; programarReintento() }
+}
+
+if (typeof window !== 'undefined') {
+  const global = window as Window & { __piruTrackingLifecycle?: boolean }
+  if (!global.__piruTrackingLifecycle) {
+    global.__piruTrackingLifecycle = true
+    window.addEventListener('online', () => void enviarEventosPendientes())
+    window.addEventListener('pagehide', enviarPendientesConBeacon)
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'hidden') enviarPendientesConBeacon()
+      else void enviarEventosPendientes()
+    })
+    window.setTimeout(() => void enviarEventosPendientes(), 0)
+  }
 }

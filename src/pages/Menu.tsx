@@ -17,7 +17,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { CheckoutDeliveryGrupal } from '@/components/CheckoutDeliveryGrupal'
 import { redirectPedidoAlWhatsapp } from '@/lib/checkoutWhatsapp'
 import { guardarTemaRestaurante, leerTemaRestaurante, RestauranteTheme } from '@/components/RestauranteTheme'
-import { configurarGtm, contextoParaPedidoMarketing, registrarEventoTracking, registrarEventoTrackingUnaVez } from '@/lib/tracking'
+import { configurarGtm, contextoParaPedidoMarketing, registrarEventoTrackingUnaVez } from '@/lib/tracking'
 
 type HorarioTurno = { diaSemana: number; horaApertura: string; horaCierre: string }
 
@@ -279,14 +279,6 @@ const Menu = () => {
     }
     const precioAgregados = (agregados || []).reduce((sum: number, ag: any) => sum + parseFloat(ag.precio || '0'), 0)
     const precioUnitario = (precioBase + precioAgregados).toFixed(2)
-    if (esSala && restaurante?.id && restaurante.username) {
-      registrarEventoTracking(restaurante.id, restaurante.username, 'add_to_cart', {
-        productoId: producto.id,
-        nombreProducto: producto.nombre,
-        cantidad,
-        valor: (Number(precioUnitario) * cantidad).toFixed(2),
-      })
-    }
     sendMessage({
       type: 'AGREGAR_ITEM',
       payload: {
@@ -904,12 +896,6 @@ const Menu = () => {
                   onClick={() => {
                     if (localCerrado && !permitirProgramados) return
                     if (esSala) {
-                      if (restaurante?.id && restaurante.username) {
-                        registrarEventoTracking(restaurante.id, restaurante.username, 'checkout_start', {
-                          valor: totalPedido,
-                          metadata: { cantidadItems: todosLosItems.length, grupal: true },
-                        })
-                      }
                       setMostrarCheckoutEnCarrito(true)
                       setExpandido(false)
                     } else {

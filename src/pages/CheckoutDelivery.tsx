@@ -109,9 +109,6 @@ const CheckoutDelivery = () => {
                         if (checkoutStartRef.current !== key) {
                             checkoutStartRef.current = key
                             registrarEventoTrackingUnaVez(cart.restauranteId, username, 'session_start', 'storefront')
-                            registrarEventoTrackingUnaVez(cart.restauranteId, username, 'checkout_start', 'checkout-route', {
-                                valor: cart.items?.reduce((sum: number, item: any) => sum + (parseFloat(item.precio) * item.cantidad), 0) || 0,
-                            })
                         }
                     }
                     const s = Array.isArray(data.data.sucursales) ? data.data.sucursales : []

@@ -1,7 +1,7 @@
 const API_URL = (import.meta.env.VITE_API_URL || 'https://api.piru.app/api').replace(/\/$/, '')
 export const DURACION_SESION_TRACKING_MS = 30 * 60 * 1000
 
-export type TipoEventoTracking = 'session_start' | 'product_view' | 'add_to_cart' | 'checkout_start' | 'purchase'
+export type TipoEventoTracking = 'session_start' | 'product_view' | 'purchase'
 export interface ContextoTracking { username: string; campaniaSlug?: string; campanaId?: number; recetaToken?: string; codigoPromocional?: string; actualizadoAt: number }
 interface SesionLocal { sesionUuid: string; ultimaActividadAt: number }
 interface EventoEnCola { restauranteId: number; evento: Record<string, unknown>; intentos: number; reintentarAt: number }
@@ -96,7 +96,7 @@ function publicarEnDataLayer(tipo: TipoEventoTracking, extras: Record<string, un
   if (valor != null) ecommerce.value = valor
   ecommerce.currency = typeof extras.moneda === 'string' ? extras.moneda : 'ARS'
 
-  const evento = tipo === 'product_view' ? 'view_item' : tipo === 'checkout_start' ? 'begin_checkout' : tipo
+  const evento = tipo === 'product_view' ? 'view_item' : tipo
   if (tipo === 'purchase') {
     const pedidoId = extras.pedidoUnificadoId
     if (pedidoId == null) return
@@ -197,7 +197,22 @@ function enviarPendientesConBeacon() {
   }
 }
 
-/** Encola primero: ninguna interacción del cliente espera a la telemetría. */
+/** Envía un evento individual inmediatamente y sin preflight. La persistencia
+ * primaria queda en el backend; localStorage sólo conserva la cola creada por
+ * bundles anteriores para poder drenarla durante la transición. */
+function enviarEventoInmediato(restauranteId: number, evento: Record<string, unknown>) {
+  if (typeof window === 'undefined') return
+  const payload = JSON.stringify({ restauranteId, eventos: [evento] })
+  const body = new Blob([payload], { type: 'text/plain;charset=UTF-8' })
+  try {
+    if (typeof navigator.sendBeacon === 'function' && navigator.sendBeacon(`${API_URL}/public/marketing/events`, body)) return
+  } catch { /* cae al fetch keepalive */ }
+  void fetch(`${API_URL}/public/marketing/events`, {
+    method: 'POST', headers: { 'Content-Type': 'text/plain;charset=UTF-8' }, body: payload, keepalive: true,
+  }).catch(() => { /* el checkout nunca depende de analítica */ })
+}
+
+/** Cada interacción se persiste en el servidor en el momento en que ocurre. */
 export function registrarEventoTracking(restauranteId: number, username: string, tipo: TipoEventoTracking, extras: Record<string, unknown> = {}) {
   if (!Number.isInteger(restauranteId) || restauranteId <= 0) return
   publicarEnDataLayer(tipo, extras)
@@ -207,7 +222,7 @@ export function registrarEventoTracking(restauranteId: number, username: string,
   const metadata = { ...(extras.metadata as Record<string, unknown> | undefined), ...(contexto?.campaniaSlug ? { campaniaSlug: contexto.campaniaSlug } : {}) }
   const touch = contexto?.campanaId ? { tipo: 'campana' as const, campanaId: contexto.campanaId } : undefined
   const evento = { eventoUuid: uuid(), sesionUuid: obtenerSesionTracking(username).sesionUuid, visitorId: obtenerVisitorId(), tipo, ocurridoAt: new Date().toISOString(), ...extras, ...(touch ? { touch } : {}), ...(Object.keys(metadata).length ? { metadata } : {}) }
-  guardarCola([...cola(), { restauranteId, evento, intentos: 0, reintentarAt: 0 }]); void enviarEventosPendientes()
+  enviarEventoInmediato(restauranteId, evento)
 }
 
 /** Evita duplicados semánticos por montaje doble, navegación o reintentos de UI.

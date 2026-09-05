@@ -15,7 +15,7 @@ import { Input } from '@/components/ui/input'
 import { CheckoutDeliveryGrupal } from '@/components/CheckoutDeliveryGrupal'
 import { redirectPedidoAlWhatsapp } from '@/lib/checkoutWhatsapp'
 import { guardarTemaRestaurante, leerTemaRestaurante, RestauranteTheme } from '@/components/RestauranteTheme'
-import { codigoPromocionalMarketing, configurarGtm, contextoParaPedidoMarketing, registrarEventoTracking, registrarEventoTrackingUnaVez } from '@/lib/tracking'
+import { codigoPromocionalMarketing, configurarGtm, contextoParaPedidoMarketing, registrarEventoTrackingUnaVez } from '@/lib/tracking'
 
 type HorarioTurno = { diaSemana: number; horaApertura: string; horaCierre: string }
 
@@ -332,17 +332,6 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaProductoPublica | n
 
         if (nuevos.length > 0) {
             setCartItems(nuevos)
-            if (restaurante?.id && username) {
-                for (const item of nuevos) {
-                    registrarEventoTracking(restaurante.id, username, 'add_to_cart', {
-                        productoId: item.productoId,
-                        nombreProducto: item.nombre,
-                        cantidad: item.cantidad,
-                        valor: (Number(item.precio) * item.cantidad).toFixed(2),
-                        ...extrasTrackingCampana(campana, { origen: 'carrito_precargado' }),
-                    })
-                }
-            }
             toast.success('Te dejamos listo tu pedido de siempre 🛒')
             setTimeout(() => abrirCarrito(), 500)
         }
@@ -535,15 +524,6 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaProductoPublica | n
         }
 
         setCartItems(prev => [...prev, newItem])
-        if (restaurante?.id && username) {
-            registrarEventoTracking(restaurante.id, username, 'add_to_cart', {
-                productoId: producto.id,
-                nombreProducto: producto.nombre,
-                cantidad,
-                valor: (precioFinalNumber * cantidad).toFixed(2),
-                ...extrasTrackingCampana(campana),
-            })
-        }
 
         const bumpCart = () => {
             setTimeout(() => {
@@ -1189,12 +1169,6 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaProductoPublica | n
                                         if (!estadoAbierto.abierto && !restaurante?.permitirPedidosProgramados) return
                                         setMostrarCheckoutEnCarrito(true)
                                         setExpandido(false)
-                                        if (restaurante?.id && username) {
-                                            registrarEventoTracking(restaurante.id, username, 'checkout_start', {
-                                                valor: totalPedido,
-                                                ...extrasTrackingCampana(campana, { cantidadItems: cartItems.length }),
-                                            })
-                                        }
                                     }}
                                 >
                                     {restaurante?.pausadoPorSuscripcion

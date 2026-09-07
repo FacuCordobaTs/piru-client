@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router'
-import MenuDelivery, { type CampanaProductoPublica } from './MenuDelivery'
+import MenuDelivery, { type CampanaPublica } from './MenuDelivery'
 import { contextoParaResolverMarketing, guardarContextoTracking, limpiarContextoTracking } from '@/lib/tracking'
 
 type Destino = { tipo: 'tienda' } | { tipo: 'producto'; productoId: number } | { tipo: 'carrito'; carritoRep: string }
-type Respuesta = { data?: { encontrada?: boolean; destino?: Destino; contexto?: { campaniaSlug?: string; campanaId?: number }; beneficio?: { codigoDescuentoId: number; codigo: string }; campana?: CampanaProductoPublica } }
+type Respuesta = { data?: { encontrada?: boolean; destino?: Destino; contexto?: { campaniaSlug?: string; campanaId?: number }; beneficio?: { codigoDescuentoId: number; codigo: string }; campana?: CampanaPublica } }
 const API_URL = (import.meta.env.VITE_API_URL || 'https://api.piru.app/api').replace(/\/$/, '')
 
 function urlDestino(username: string, destino?: Destino) {
@@ -27,7 +27,7 @@ async function resolverLink(username: string, endpoint: 'campanas' | 'recetas', 
 export function CampanaLinkResolver() {
   const { username, slug } = useParams()
   const [resuelta, setResuelta] = useState(false)
-  const [campana, setCampana] = useState<CampanaProductoPublica | null>(null)
+  const [campana, setCampana] = useState<CampanaPublica | null>(null)
 
   useEffect(() => {
     if (!username || !slug) { setResuelta(true); return }

@@ -12,10 +12,55 @@ import { ThemeToggle } from '@/components/ThemeToggle'
 import { MisPedidosDrawer } from '@/components/MisPedidosDrawer'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
-import { CheckoutDeliveryGrupal } from '@/components/CheckoutDeliveryGrupal'
+import { CheckoutDeliveryGrupal, etiquetaVarianteMedallon } from '@/components/CheckoutDeliveryGrupal'
 import { redirectPedidoAlWhatsapp } from '@/lib/checkoutWhatsapp'
 import { guardarTemaRestaurante, leerTemaRestaurante, RestauranteTheme } from '@/components/RestauranteTheme'
 import { codigoPromocionalMarketing, configurarGtm, contextoParaPedidoMarketing, registrarEventoTrackingUnaVez } from '@/lib/tracking'
+
+type PedidoHistorico = {
+    id: number
+    tipo: 'delivery' | 'takeaway'
+    estado: string
+    nombreCliente: string | null
+    direccion: string | null
+    latitud: string | null
+    longitud: string | null
+    sucursalId: number | null
+    metodoPago: string | null
+    items: {
+        productoId: number
+        cantidad: number | null
+        varianteId: number | null
+        varianteSecundariaId: number | null
+        ingredientesExcluidos: unknown
+        agregados: unknown
+        nota: string | null
+        esCanjePuntos: boolean | null
+    }[]
+}
+
+const firmaPedido = (pedido: PedidoHistorico) => pedido.items
+    .map(item => JSON.stringify({
+        productoId: item.productoId,
+        cantidad: item.cantidad ?? 1,
+        varianteId: item.varianteId ?? null,
+        varianteSecundariaId: item.varianteSecundariaId ?? null,
+        ingredientesExcluidos: Array.isArray(item.ingredientesExcluidos) ? [...item.ingredientesExcluidos].map(Number).sort((a, b) => a - b) : [],
+        agregados: Array.isArray(item.agregados) ? item.agregados.map((a: any) => Number(a?.id)).filter(Number.isFinite).sort((a: number, b: number) => a - b) : [],
+        nota: item.nota?.trim() || null,
+        esCanjePuntos: !!item.esCanjePuntos,
+    }))
+    .sort()
+    .join('|')
+
+const nombreMetodoPago = (metodo: string) => ({
+    cash: 'efectivo',
+    manual_transfer: 'transferencia',
+    transferencia_automatica_cucuru: 'transferencia',
+    transferencia_automatica_talo: 'transferencia',
+    mercadopago_checkout: 'Mercado Pago',
+    mercadopago_bricks: 'tarjeta',
+}[metodo] || metodo.replace(/_/g, ' '))
 
 type HorarioTurno = { diaSemana: number; horaApertura: string; horaCierre: string }
 
@@ -84,11 +129,13 @@ function checkIsOpen(horarios: HorarioTurno[]): { abierto: boolean; proximaApert
 }
 
 
-export interface CampanaProductoPublica {
+/** Contexto público de un Smart Link. Una campaña normal no tiene producto ni
+ * oferta, pero conserva el mismo touch para atribuir visitas y pedidos. */
+export interface CampanaPublica {
     campanaId: number
     nombre: string
     slug: string
-    productoId: number
+    productoId: number | null
     descuentoPorcentaje: number
     limiteUsos: number | null
     usosActuales: number
@@ -97,14 +144,54 @@ export interface CampanaProductoPublica {
     fechaFin: string | null
 }
 
-const extrasTrackingCampana = (campana: CampanaProductoPublica | null, metadata: Record<string, unknown> = {}) => ({
+export type CampanaProductoPublica = CampanaPublica
+
+type ItemCarritoPrearmado = {
+    productoId: number
+    cantidad: number
+    varianteId?: number
+    varianteSecundariaId?: number
+    agregadoIds: number[]
+}
+
+/** Acepta los links históricos `12x2-15x1` y el formato v2 de campañas. */
+function parseCarritoPrearmado(rep: string): ItemCarritoPrearmado[] {
+    if (/^\d+x\d+(?:-\d+x\d+)*$/.test(rep)) {
+        return rep.split('-').map((parte) => {
+            const [productoId, cantidad] = parte.split('x').map(Number)
+            return { productoId, cantidad, agregadoIds: [] }
+        })
+    }
+    if (!rep.startsWith('v2:')) return []
+    try {
+        const bruto: unknown = JSON.parse(rep.slice(3))
+        if (!Array.isArray(bruto)) return []
+        return bruto.flatMap((item): ItemCarritoPrearmado[] => {
+            if (!item || typeof item !== 'object') return []
+            const raw = item as Record<string, unknown>
+            if (!Number.isInteger(raw.p) || !Number.isInteger(raw.q) || (raw.q as number) < 1) return []
+            if (raw.v !== undefined && !Number.isInteger(raw.v)) return []
+            if (raw.s !== undefined && !Number.isInteger(raw.s)) return []
+            if (raw.a !== undefined && (!Array.isArray(raw.a) || raw.a.some((id) => !Number.isInteger(id)))) return []
+            return [{
+                productoId: raw.p as number,
+                cantidad: Math.min(99, raw.q as number),
+                ...(raw.v === undefined ? {} : { varianteId: raw.v as number }),
+                ...(raw.s === undefined ? {} : { varianteSecundariaId: raw.s as number }),
+                agregadoIds: (raw.a ?? []) as number[],
+            }]
+        })
+    } catch { return [] }
+}
+
+const extrasTrackingCampana = (campana: CampanaPublica | null, metadata: Record<string, unknown> = {}) => ({
     ...(campana ? { touch: { tipo: 'campana' as const, campanaId: campana.campanaId } } : {}),
     ...((campana || Object.keys(metadata).length) ? {
         metadata: { ...metadata, ...(campana ? { campaniaSlug: campana.slug } : {}) },
     } : {}),
 })
 
-const MenuDelivery = ({ campana = null }: { campana?: CampanaProductoPublica | null }) => {
+const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) => {
     const navigate = useNavigate()
     const { username } = useParams()
     const [searchParams, setSearchParams] = useSearchParams()
@@ -142,6 +229,7 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaProductoPublica | n
 
     const [restaurante, setRestaurante] = useState<any>(null)
     const [productos, setProductos] = useState<any[]>([])
+    const [sucursales, setSucursales] = useState<{ id: number }[]>([])
     const [loading, setLoading] = useState(true)
     const [horarios, setHorarios] = useState<HorarioTurno[]>([])
     const [estadoAbierto, setEstadoAbierto] = useState<{ abierto: boolean; proximaApertura: string | null }>({ abierto: true, proximaApertura: null })
@@ -184,6 +272,8 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaProductoPublica | n
     const isSubmittingRef = useRef(false)
     const orderAttemptIdRef = useRef<string | null>(null)
     const sessionStartRef = useRef<string | null>(null)
+    const recomendacionIntentadaRef = useRef<string | null>(null)
+    const [esPedidoHabitual, setEsPedidoHabitual] = useState(false)
 
     // Function to fetch points
     const fetchPuntos = useCallback(async (telefono: string, restauranteId: number) => {
@@ -220,8 +310,9 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaProductoPublica | n
                 }
                 const data = await res.json()
                 if (data.success) {
-                    const promo = campana
+                    const promo = campana?.productoId != null ? campana : null
                     setRestaurante(data.data.restaurante)
+                    setSucursales(Array.isArray(data.data.sucursales) ? data.data.sucursales : [])
                     setProductos(data.data.productos.map((producto: any) => {
                         if (!promo || producto.id !== promo.productoId) return producto
                         const ahora = Date.now()
@@ -283,10 +374,10 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaProductoPublica | n
         if (!mostrarCheckoutEnCarrito) setExpandido(true)
     }, [mostrarCheckoutEnCarrito])
 
-    // Deep link con carrito precargado (tarea 4.3 · Motor de Recompra). Los mensajes del motor
-    // (p. ej. recupero de dormidos) abren la tienda con `?rep=12x2-15x1` = el pedido de siempre del
-    // cliente. Lo resolvemos contra los productos ya cargados, armamos el carrito solo y lo abrimos:
-    // del antojo al pago sin volver a elegir nada. Se aplica una sola vez y limpia el query param.
+    // El link de recompra histórico usa `12x2-15x1`; una campaña de carrito
+    // usa `v2:` y conserva variantes (incluso dobles) y extras. En ambos casos
+    // se vuelve a resolver todo contra el menú actual: ningún precio, nombre u
+    // opción desactualizada viaja confiada en el link.
     useEffect(() => {
         if (repAplicadoRef.current) return
         if (productos.length === 0) return
@@ -294,32 +385,44 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaProductoPublica | n
         if (!rep) return
         repAplicadoRef.current = true
 
-        const pares = rep.split('-').map(p => {
-            const [idStr, qtyStr] = p.split('x')
-            return { id: Number(idStr), qty: Math.max(1, Math.min(99, Number(qtyStr) || 1)) }
-        }).filter(p => Number.isFinite(p.id) && p.id > 0)
+        const pares = parseCarritoPrearmado(rep)
 
         const nuevos: any[] = []
         for (const par of pares) {
-            const producto = productos.find(p => p.id === par.id)
+            const producto = productos.find(p => p.id === par.productoId)
             if (!producto) continue
             if (producto.disponible === false) continue
             if (producto.puntosNecesarios > 0) continue // el canje por puntos no se precarga
-            const basePrecio = parseFloat(producto.precio)
-            let precioFinal = basePrecio
-            if (producto.descuento && producto.descuento > 0) precioFinal = basePrecio * (1 - producto.descuento / 100)
+            const variante = par.varianteId == null ? undefined : producto.variantes?.find((item: any) => item.id === par.varianteId)
+            const varianteSecundaria = par.varianteSecundariaId == null ? undefined : producto.variantesSecundarias?.find((item: any) => item.id === par.varianteSecundariaId)
+            // Una campaña v2 siempre guarda las variantes requeridas. Si el menú
+            // cambió, omitimos sólo ese item antes que crear una orden inválida.
+            if (rep.startsWith('v2:') && ((producto.variantes?.length && !variante) || (producto.variantesSecundarias?.length && !varianteSecundaria))) continue
+            const agregados = (producto.agregados ?? []).filter((item: any) => par.agregadoIds.includes(item.id))
+            const basePrecio = variante ? parseFloat(variante.precio) : parseFloat(producto.precio)
+            const baseConSecundaria = basePrecio + (varianteSecundaria ? parseFloat(varianteSecundaria.precio) : 0)
+            const precioConDescuento = producto.descuento && producto.descuento > 0
+                ? baseConSecundaria * (1 - producto.descuento / 100)
+                : baseConSecundaria
+            const precioFinal = precioConDescuento + agregados.reduce((total: number, agregado: any) => total + parseFloat(agregado.precio || 0), 0)
+            const variantesNombre = [variante?.nombre, varianteSecundaria?.nombre].filter(Boolean).join(' · ')
             nuevos.push({
                 id: Math.random().toString(36).substr(2, 9),
                 productoId: producto.id,
-                nombre: producto.nombre,
+                categoria: producto.categoria,
+                nombre: variantesNombre ? `${producto.nombre} - ${variantesNombre}` : producto.nombre,
                 precio: precioFinal.toFixed(2),
-                precioOriginal: producto.precio,
+                precioOriginal: variante ? variante.precio : producto.precio,
                 descuento: producto.descuento || 0,
                 imagenUrl: producto.imagenUrl,
-                cantidad: par.qty,
+                cantidad: par.cantidad,
+                varianteId: variante?.id,
+                varianteNombre: variante?.nombre,
+                varianteSecundariaId: varianteSecundaria?.id,
+                varianteSecundariaNombre: varianteSecundaria?.nombre,
                 ingredientesExcluidos: [],
                 ingredientesExcluidosNombres: [],
-                agregados: [],
+                agregados,
                 esCanjePuntos: false,
                 puntosNecesarios: 0,
                 puntosGanados: producto.puntosGanados
@@ -327,12 +430,13 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaProductoPublica | n
         }
 
         // Limpiamos el query param para que no se reaplique al navegar / recargar.
-        searchParams.delete('rep')
-        setSearchParams(searchParams, { replace: true })
+        const nuevosParams = new URLSearchParams(searchParams)
+        nuevosParams.delete('rep')
+        setSearchParams(nuevosParams, { replace: true })
 
         if (nuevos.length > 0) {
             setCartItems(nuevos)
-            toast.success('Te dejamos listo tu pedido de siempre 🛒')
+            toast.success('Te dejamos el carrito listo 🛒')
             setTimeout(() => abrirCarrito(), 500)
         }
     }, [productos, restaurante?.id, username, searchParams, setSearchParams, abrirCarrito, campana])
@@ -354,6 +458,153 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaProductoPublica | n
         }
     }, [productos, searchParams, setSearchParams])
 
+    useEffect(() => {
+        const recomendacionKey = restaurante?.id && username ? `${restaurante.id}:${username}` : null
+        if (loading || !recomendacionKey || productos.length === 0 || recomendacionIntentadaRef.current === recomendacionKey) return
+        // Un Smart Link tiene prioridad sobre una recomendación basada en historial.
+        if (campana || repAplicadoRef.current || productoAplicadoRef.current || searchParams.has('rep') || searchParams.has('producto')) return
+        if (!estadoAbierto.abierto || restaurante.soloPedidosProgramados || restaurante.pausadoPorSuscripcion) return
+        recomendacionIntentadaRef.current = recomendacionKey
+
+        const telefono = localStorage.getItem('cliente_telefono')?.trim()
+        // En producción nunca se pisa un carrito que el cliente ya empezó.
+        if (!telefono || (!import.meta.env.DEV && cartItems.length > 0)) return
+
+        const cargarPedidoHabitual = async () => {
+            try {
+                const url = import.meta.env.VITE_API_URL || 'http://localhost:3000/api'
+                const res = await fetch(`${url}/public/restaurante/${restaurante.id}/mis-pedidos/${encodeURIComponent(telefono)}`)
+                if (!res.ok) return
+                const response = await res.json()
+                const pedidos: PedidoHistorico[] = Array.isArray(response.data)
+                    ? response.data.filter((pedido: PedidoHistorico) => pedido.estado !== 'cancelled' && pedido.items?.length > 0)
+                    : []
+                if (pedidos.length === 0 || (!import.meta.env.DEV && pedidos.length < 2)) return
+
+                const grupos = new Map<string, PedidoHistorico[]>()
+                pedidos.forEach(pedido => {
+                    const firma = firmaPedido(pedido)
+                    if (!firma) return
+                    grupos.set(firma, [...(grupos.get(firma) || []), pedido])
+                })
+                const grupoHabitual = [...grupos.values()].sort((a, b) => b.length - a.length)[0]
+                if (!grupoHabitual || (!import.meta.env.DEV && grupoHabitual.length < 2)) return
+
+                const pedido = grupoHabitual[0]
+                const metodosDisponibles = new Set((restaurante.metodosPago || []).map((metodo: any) => metodo.id))
+                if (!pedido.nombreCliente?.trim() || !pedido.metodoPago || !metodosDisponibles.has(pedido.metodoPago)) return
+                if (pedido.tipo === 'delivery' && restaurante.deliveryEnabled === false) return
+                if (pedido.tipo === 'takeaway' && restaurante.takeawayEnabled === false) return
+
+                let deliveryFee = 0
+                let zonaNombre: string | null = null
+                let sucursalId = pedido.sucursalId ?? null
+                const lat = pedido.latitud == null ? null : Number(pedido.latitud)
+                const lng = pedido.longitud == null ? null : Number(pedido.longitud)
+                if (pedido.tipo === 'delivery') {
+                    if (!pedido.direccion?.trim()) return
+                    if (restaurante.direccionSoloTexto === true) {
+                        deliveryFee = Number(restaurante.deliveryFee || 0)
+                    } else {
+                        if (!Number.isFinite(lat) || !Number.isFinite(lng)) return
+                        const zonaRes = await fetch(`${url}/public/restaurante/${restaurante.id}/check-zona?lat=${lat}&lng=${lng}`)
+                        const zona = await zonaRes.json()
+                        if (!zonaRes.ok || !zona.success || zona.code === 'FUERA_DE_ZONA') return
+                        deliveryFee = Number(zona.deliveryFee || 0)
+                        zonaNombre = zona.zonaNombre || null
+                        sucursalId = zona.sucursalId ?? null
+                    }
+                } else if (sucursales.length > 0) {
+                    const sucursal = sucursales.find(s => s.id === pedido.sucursalId) || (sucursales.length === 1 ? sucursales[0] : null)
+                    if (!sucursal) return
+                    sucursalId = sucursal.id
+                }
+
+                const itemsReconstruidos = pedido.items.map((item, index) => {
+                    const producto = productos.find((productoActual: any) => productoActual.id === item.productoId)
+                    if (!producto || item.esCanjePuntos) return null
+                    const variante = item.varianteId ? producto.variantes?.find((opcion: any) => opcion.id === item.varianteId) : null
+                    const varianteSecundaria = item.varianteSecundariaId ? producto.variantesSecundarias?.find((opcion: any) => opcion.id === item.varianteSecundariaId) : null
+                    if ((producto.variantes?.length && !variante) || (producto.variantesSecundarias?.length && !varianteSecundaria)) return null
+
+                    const idsAgregados = Array.isArray(item.agregados) ? item.agregados.map((agregado: any) => Number(agregado?.id)) : []
+                    const agregados = idsAgregados.map(id => producto.agregados?.find((agregado: any) => agregado.id === id)).filter(Boolean)
+                    if (agregados.length !== idsAgregados.length) return null
+                    const excluidos = Array.isArray(item.ingredientesExcluidos) ? item.ingredientesExcluidos.map(Number) : []
+                    const ingredientesExcluidosNombres = excluidos.map(id => producto.ingredientes?.find((ingrediente: any) => ingrediente.id === id)?.nombre).filter(Boolean)
+                    if (ingredientesExcluidosNombres.length !== excluidos.length) return null
+
+                    let precio = variante ? Number(variante.precio) : Number(producto.precio)
+                    precio += varianteSecundaria ? Number(varianteSecundaria.precio) : 0
+                    if (producto.descuento > 0) precio *= (1 - producto.descuento / 100)
+                    precio += agregados.reduce((suma: number, agregado: any) => suma + Number(agregado.precio || 0), 0)
+                    const variantesNombre = [variante?.nombre, varianteSecundaria?.nombre].filter(Boolean).join(' · ')
+                    return {
+                        id: `habitual-${pedido.id}-${index}`,
+                        productoId: producto.id,
+                        categoria: producto.categoria,
+                        productoNombre: producto.nombre,
+                        tieneSelectorMedallon: producto.agregados?.some((agregado: any) => etiquetaVarianteMedallon(agregado.nombre) !== null) ?? false,
+                        nombre: variantesNombre ? `${producto.nombre} - ${variantesNombre}` : producto.nombre,
+                        precio: precio.toFixed(2),
+                        precioOriginal: variante?.precio || producto.precio,
+                        descuento: producto.descuento || 0,
+                        imagenUrl: producto.imagenUrl,
+                        cantidad: item.cantidad ?? 1,
+                        varianteId: variante?.id,
+                        varianteNombre: variante?.nombre,
+                        varianteSecundariaId: varianteSecundaria?.id,
+                        varianteSecundariaNombre: varianteSecundaria?.nombre,
+                        ingredientesExcluidos: excluidos,
+                        ingredientesExcluidosNombres,
+                        agregados,
+                        nota: item.nota?.trim() || undefined,
+                        esCanjePuntos: false,
+                        puntosNecesarios: 0,
+                        puntosGanados: producto.puntosGanados,
+                    }
+                })
+                if (itemsReconstruidos.some(Boolean) && itemsReconstruidos.some(item => item === null)) return
+                const items = itemsReconstruidos.filter(Boolean) as any[]
+                if (items.length === 0) return
+
+                const itemsTotal = items.reduce((suma, item) => suma + Number(item.precio) * item.cantidad, 0)
+                const checkout = {
+                    tipoPedido: pedido.tipo,
+                    nombre: pedido.nombreCliente.trim(),
+                    telefono,
+                    direccion: pedido.tipo === 'delivery' ? pedido.direccion!.trim() : '',
+                    lat: pedido.tipo === 'delivery' && Number.isFinite(lat) ? lat : null,
+                    lng: pedido.tipo === 'delivery' && Number.isFinite(lng) ? lng : null,
+                    notas: '',
+                    tipoDomicilio: null,
+                    deliveryFee,
+                    zonaNombre,
+                    itemsTotal: itemsTotal.toFixed(2),
+                    total: (itemsTotal + deliveryFee).toFixed(2),
+                    codigoDescuentoId: null,
+                    montoDescuento: 0,
+                    metodoPago: pedido.metodoPago,
+                    horarioProgramado: '',
+                    sucursalId,
+                }
+                setCartItems(items)
+                checkoutDataRef.current = checkout
+                setCheckoutDeliveryData(checkout)
+                setEditSemaphoreLocal(null)
+                setMostrarCheckoutEnCarrito(true)
+                setExpandido(false)
+                setEsPedidoHabitual(true)
+                window.history.pushState({ drawer: 'carrito' }, '')
+                setCarritoAbierto(true)
+            } catch (error) {
+                console.error('Error preparando el pedido habitual:', error)
+            }
+        }
+
+        cargarPedidoHabitual()
+    }, [loading, restaurante, productos, sucursales, cartItems.length, estadoAbierto.abierto, campana, searchParams])
+
     const cerrarCarrito = useCallback(() => {
         setCarritoAbierto(false)
         setMostrarCheckoutEnCarrito(false)
@@ -361,6 +612,7 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaProductoPublica | n
         setEditSemaphoreLocal(null)
         setCheckoutDeliveryData(null)
         checkoutDataRef.current = null
+        setEsPedidoHabitual(false)
         if (window.history.state?.drawer === 'carrito') {
             window.history.back()
         }
@@ -388,6 +640,7 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaProductoPublica | n
                 setEditSemaphoreLocal(null)
                 setCheckoutDeliveryData(null)
                 checkoutDataRef.current = null
+                setEsPedidoHabitual(false)
                 event.preventDefault()
                 return
             }
@@ -440,7 +693,7 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaProductoPublica | n
 
     const categoriasOrdenadas = Object.keys(productosPorCategoria).sort(compararCategorias)
     const mostrarProductosEnGrid = categoriasOrdenadas.length >= 1 && categoriasOrdenadas.length <= 3
-    const productoCampana = campana ? productos.find((producto) => producto.id === campana.productoId) ?? null : null
+    const productoCampana = campana?.productoId != null ? productos.find((producto) => producto.id === campana.productoId) ?? null : null
 
     const abrirDetalleProducto = (producto: any) => {
         setSelectedProduct(producto)
@@ -504,6 +757,8 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaProductoPublica | n
             id: Math.random().toString(36).substr(2, 9),
             productoId: producto.id,
             categoria: producto.categoria,
+            productoNombre: producto.nombre,
+            tieneSelectorMedallon: producto.agregados?.some((agregado: any) => etiquetaVarianteMedallon(agregado.nombre) !== null) ?? false,
             nombre: nombreFinal,
             precio: precioFinalNumber.toFixed(2),
             precioOriginal: varianteSeleccionada ? varianteSeleccionada.precio : producto.precio,
@@ -1044,10 +1299,10 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaProductoPublica | n
                         </div>
                         <div className="flex items-center justify-between px-4 pb-3 pt-2">
                             <div className="w-8 h-8" />
-                            <span className="text-xl font-extrabold">
+                            <span className={`${esPedidoHabitual ? 'text-lg' : 'text-xl'} px-2 text-center font-extrabold`}>
                                 {mostrarCheckoutEnCarrito ? tituloCheckout : 'Tu Pedido'}
                             </span>
-                            {mostrarCheckoutEnCarrito ? (
+                            {mostrarCheckoutEnCarrito && !esPedidoHabitual ? (
                                 <button
                                     onClick={() => setExpandido(e => !e)}
                                     className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-secondary transition-colors"
@@ -1065,6 +1320,11 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaProductoPublica | n
                         <CheckoutDeliveryGrupal
                             modo={expandido ? 'completo' : 'pasos'}
                             onVolverCarrito={() => {
+                                if (esPedidoHabitual) {
+                                    setCartItems([])
+                                    cerrarCarrito()
+                                    return
+                                }
                                 setMostrarCheckoutEnCarrito(false)
                                 setExpandido(true)
                                 setCheckoutDeliveryData(null)
@@ -1075,7 +1335,6 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaProductoPublica | n
                             restauranteUsername={username ?? null}
                             itemsTotal={totalPedido}
                             totalItems={cartItems.length}
-                            onConfirmarClick={() => {}}
                             sendMessage={handleCheckoutMessage}
                             clienteId="solo"
                             clienteNombre={localStorage.getItem('cliente_nombre') || ''}
@@ -1085,6 +1344,11 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaProductoPublica | n
                             direccionSoloTexto={restaurante?.direccionSoloTexto === true}
                             onTituloChange={setTituloCheckout}
                             labelGuardar={restaurante?.avisosWhatsappClienteEnabled === false ? 'Enviar pedido al WhatsApp' : 'Confirmar y pedir'}
+                            labelConfirmar={esPedidoHabitual && checkoutDeliveryData?.metodoPago
+                                ? `Pedir y pagar con ${nombreMetodoPago(checkoutDeliveryData.metodoPago)}`
+                                : undefined}
+                            itemsResumen={esPedidoHabitual ? cartItems : undefined}
+                            pedidoHabitual={esPedidoHabitual}
                             enviarPedidoWhatsapp={restaurante?.avisosWhatsappClienteEnabled === false}
                             submittingOrder={submittingOrder}
                             localCerrado={!estadoAbierto.abierto || !!restaurante?.pausadoPorSuscripcion}
@@ -1093,6 +1357,11 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaProductoPublica | n
                                 ...(campana ? { campaniaSlug: campana.slug, campanaId: campana.campanaId } : {}),
                             } : undefined}
                             codigoPromocionalInicial={username ? codigoPromocionalMarketing(username) : null}
+                            onConfirmarClick={() => {
+                                if (isSubmittingRef.current || !checkoutDataRef.current) return
+                                isSubmittingRef.current = true
+                                submitOrder(checkoutDataRef.current)
+                            }}
                         />
                     ) : cartItems.length === 0 ? (
                         <div className="flex flex-col items-center justify-center text-center gap-4 opacity-60 px-5 py-12">
@@ -1109,50 +1378,50 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaProductoPublica | n
                                     const imagen = item.imagenUrl
                                     const precio = parseFloat(item.precio || 0)
                                     return (
-                                        <div key={item.id} className="relative flex gap-4 p-3 rounded-2xl border transition-all bg-card border-primary/20 shadow-sm">
-                                            <div className="w-20 h-20 shrink-0 rounded-xl overflow-hidden bg-secondary">
+                                        <article key={item.id} className="grid min-h-[112px] grid-cols-[108px_minmax(0,1fr)] overflow-hidden rounded-[20px] border border-border bg-card transition-colors hover:border-foreground/15">
+                                            <div className="min-h-[112px] w-[108px] overflow-hidden bg-muted">
                                                 {imagen ? (
-                                                    <img src={imagen} alt="img" className="w-full h-full object-cover" />
+                                                    <img src={imagen} alt={item.nombre} className="h-full w-full object-cover" />
                                                 ) : (
-                                                    <div className="w-full h-full flex items-center justify-center text-muted-foreground">
-                                                        <Utensils className="w-6 h-6 text-primary" />
+                                                    <div className="flex h-full w-full items-center justify-center text-muted-foreground">
+                                                        <Utensils className="h-5 w-5" />
                                                     </div>
                                                 )}
                                             </div>
-                                            <div className="flex-1 flex flex-col justify-between py-0.5 min-w-0">
-                                                <div className="flex justify-between items-start gap-2">
-                                                    <div className="min-w-0">
-                                                        <p className="font-bold text-sm truncate">{item.nombre}</p>
+                                            <div className="flex min-w-0 flex-col justify-between px-3.5 py-3">
+                                                <div className="flex items-start justify-between gap-3">
+                                                    <div className="min-w-0 flex-1">
+                                                        <p className="line-clamp-2 text-[15px] font-bold leading-5 text-foreground">{item.nombre}</p>
                                                         {item.ingredientesExcluidosNombres?.length > 0 && (
-                                                            <p className="text-xs text-primary/80 font-medium mt-1">
+                                                            <p className="mt-2 text-xs leading-4 text-muted-foreground">
                                                                 ⚠️ Sin: {item.ingredientesExcluidosNombres.join(', ')}
                                                             </p>
                                                         )}
                                                         {item.agregados?.length > 0 && (
-                                                            <div className="mt-1">
+                                                            <div className="mt-1 space-y-0.5">
                                                                 {item.agregados.map((ag: any) => (
-                                                                    <p key={ag.id} className="text-xs text-muted-foreground font-medium">+ {ag.nombre}</p>
+                                                                    <p key={ag.id} className="text-xs leading-4 text-muted-foreground">+ {ag.nombre}</p>
                                                                 ))}
                                                             </div>
                                                         )}
                                                         {item.nota && (
-                                                            <p className="mt-1 text-xs font-semibold text-amber-700 dark:text-amber-400">Nota: {item.nota}</p>
+                                                            <p className="mt-1 text-xs leading-4 text-muted-foreground">Nota: {item.nota}</p>
                                                         )}
                                                     </div>
-                                                    <div className="text-right">
+                                                    <div className="shrink-0 text-right tabular-nums">
                                                         {item.descuento > 0 && (
                                                             <p className="text-[10px] text-muted-foreground line-through">${(parseFloat(item.precioOriginal) * item.cantidad).toFixed(2)}</p>
                                                         )}
-                                                        <p className="font-bold text-base">${(precio * item.cantidad).toFixed(2)}</p>
+                                                        <p className="text-lg font-black leading-5 tracking-tight text-foreground">${(precio * item.cantidad).toFixed(2)}</p>
                                                     </div>
                                                 </div>
-                                                <div className="flex items-center justify-end gap-3 mt-2">
-                                                    <button onClick={() => handleEliminarItem(item.id)} className="w-8 h-8 flex items-center justify-center rounded-full bg-destructive/10 text-destructive hover:bg-destructive hover:text-white transition-colors">
-                                                        <Trash2 className="w-4 h-4" />
+                                                <div className="mt-2 flex justify-end">
+                                                    <button type="button" onClick={() => handleEliminarItem(item.id)} aria-label={`Quitar ${item.nombre} del carrito`} className="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                                                        <Trash2 className="h-4 w-4" />
                                                     </button>
                                                 </div>
                                             </div>
-                                        </div>
+                                        </article>
                                     )
                                 })}
                             </div>
@@ -1167,6 +1436,7 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaProductoPublica | n
                                     onClick={() => {
                                         if (restaurante?.pausadoPorSuscripcion) return
                                         if (!estadoAbierto.abierto && !restaurante?.permitirPedidosProgramados) return
+                                        setEsPedidoHabitual(false)
                                         setMostrarCheckoutEnCarrito(true)
                                         setExpandido(false)
                                     }}

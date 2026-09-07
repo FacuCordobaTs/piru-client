@@ -13,7 +13,7 @@ import type { contextoParaPedidoMarketing } from '@/lib/tracking'
 type MetodoPublico = { id: string; label: string; automatico: boolean }
 type FranjaHorario = { id: number; nombre: string; horaInicio: string; horaFin: string }
 
-type PasoCheckout = 'tipo' | 'datos' | 'ubicacion' | 'extras'
+type PasoCheckout = 'tipo' | 'datos' | 'ubicacion' | 'domicilio' | 'extras'
 
 type DireccionGuardada = {
   direccion: string
@@ -103,13 +103,13 @@ export const sincronizarDireccionesCliente = async (restauranteId: number, telef
   const pedidos = Array.isArray(result.data) ? result.data : []
   return guardarDireccionesCliente(restauranteId, telefonoNormalizado, pedidos.flatMap((pedido: any) => {
     if (pedido?.tipo !== 'delivery' || typeof pedido.direccion !== 'string' || !pedido.direccion.trim()) return []
-    const lat = Number(pedido.latitud)
-    const lng = Number(pedido.longitud)
+    const lat = pedido.latitud == null || pedido.latitud === '' ? null : Number(pedido.latitud)
+    const lng = pedido.longitud == null || pedido.longitud === '' ? null : Number(pedido.longitud)
     const usadaEn = new Date(pedido.createdAt || 0).getTime()
     return [{
       direccion: pedido.direccion,
-      lat: Number.isFinite(lat) ? lat : null,
-      lng: Number.isFinite(lng) ? lng : null,
+      lat: lat !== null && Number.isFinite(lat) ? lat : null,
+      lng: lng !== null && Number.isFinite(lng) ? lng : null,
       usadaEn: Number.isFinite(usadaEn) ? usadaEn : 0,
     }]
   }))
@@ -253,7 +253,9 @@ export function CheckoutDeliveryGrupal({
 
   const [paso, setPaso] = useState(0)
   const [editandoHabitual, setEditandoHabitual] = useState(false)
-  const pasos: PasoCheckout[] = ['tipo', 'datos', 'ubicacion', 'extras']
+  const pasos: PasoCheckout[] = tipoPedido === 'delivery'
+    ? ['tipo', 'datos', 'ubicacion', 'domicilio', 'extras']
+    : ['tipo', 'datos', 'ubicacion', 'extras']
 
   const estoyEditando = editSemaphore?.clienteId === clienteId
   const alguienEditando = editSemaphore && !estoyEditando
@@ -645,11 +647,13 @@ export function CheckoutDeliveryGrupal({
         if (!direccion.trim()) { toast.error('Ingresa la dirección'); return false }
         if (!direccionSoloTexto && (lat === null || lng === null)) { toast.error('Selecciona una dirección de las sugerencias'); return false }
         if (fueraDeZona) { toast.error('La dirección está fuera del área de delivery'); return false }
-        if (!tipoDomicilio) { toast.error('Indicá si es casa o departamento'); return false }
-        if (tipoDomicilio === 'departamento' && (!piso.trim() || !numeroDepartamento.trim())) { toast.error('Ingresá el piso y el número de departamento'); return false }
       } else {
         if (sucursales.length > 1 && !sucursalSeleccionada) { toast.error('Seleccioná un local de retiro'); return false }
       }
+    }
+    if (k === 'domicilio') {
+      if (!tipoDomicilio) { toast.error('Indicá si es casa o departamento'); return false }
+      if (tipoDomicilio === 'departamento' && (!piso.trim() || !numeroDepartamento.trim())) { toast.error('Ingresá el piso y el número de departamento'); return false }
     }
     if (k === 'extras') {
       const requiere = usarFranjas ? franjaObligatoria : (programacionObligatoria || programarPedido)
@@ -860,46 +864,46 @@ export function CheckoutDeliveryGrupal({
         </div>
       )}
 
-      {tipoPedido === 'delivery' && (
-        <div className="space-y-3 animate-in fade-in slide-in-from-top-2">
-          <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-1">Tipo de domicilio</Label>
-          <div className="bg-secondary/60 rounded-2xl p-1 grid grid-cols-2 gap-1">
-            <button
-              type="button"
-              className={`flex items-center justify-center gap-2 py-4 rounded-xl transition-all duration-200 cursor-pointer ${tipoDomicilio === 'casa' ? 'bg-background shadow-sm' : ''}`}
-              onClick={() => { setTipoDomicilio('casa'); setPiso(''); setNumeroDepartamento('') }}
-            >
-              <Home className={`w-4 h-4 ${tipoDomicilio === 'casa' ? 'text-primary' : 'text-muted-foreground'}`} />
-              <span className={`text-sm font-semibold ${tipoDomicilio === 'casa' ? 'text-foreground' : 'text-muted-foreground'}`}>Casa</span>
-            </button>
-            <button
-              type="button"
-              className={`flex items-center justify-center gap-2 py-4 rounded-xl transition-all duration-200 cursor-pointer ${tipoDomicilio === 'departamento' ? 'bg-background shadow-sm' : ''}`}
-              onClick={() => setTipoDomicilio('departamento')}
-            >
-              <Building2 className={`w-4 h-4 ${tipoDomicilio === 'departamento' ? 'text-primary' : 'text-muted-foreground'}`} />
-              <span className={`text-sm font-semibold ${tipoDomicilio === 'departamento' ? 'text-foreground' : 'text-muted-foreground'}`}>Departamento</span>
-            </button>
-          </div>
-          {tipoDomicilio === 'departamento' && (
-            <div className="grid grid-cols-2 gap-3 animate-in fade-in slide-in-from-top-2">
-              <div className="space-y-2">
-                <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-1">Piso</Label>
-                <Input id="piso-grupal" placeholder="Ej: 4" className={inputCls} value={piso} onChange={e => setPiso(e.target.value)} />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-1">Depto</Label>
-                <Input id="depto-grupal" placeholder="Ej: C" className={inputCls} value={numeroDepartamento} onChange={e => setNumeroDepartamento(e.target.value.toUpperCase())} />
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-
       {tipoPedido === 'takeaway' && direccionRetiro && sucursales.length <= 1 && (
         <div className="flex items-center gap-2.5 px-4 py-3 bg-secondary/50 rounded-2xl">
           <MapPin className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
           <span className="text-sm text-muted-foreground">Retirás en <span className="font-semibold text-foreground">{direccionRetiro}</span></span>
+        </div>
+      )}
+    </div>
+  )
+
+  const secDomicilio = (
+    <div className="space-y-4 animate-in fade-in slide-in-from-right-2">
+      <p className="px-1 text-sm text-muted-foreground">Esto nos ayuda a entregar tu pedido sin demoras.</p>
+      <div className="bg-secondary/60 rounded-2xl p-1 grid grid-cols-2 gap-1">
+        <button
+          type="button"
+          className={`flex items-center justify-center gap-2 py-4 rounded-xl transition-all duration-200 cursor-pointer ${tipoDomicilio === 'casa' ? 'bg-background shadow-sm' : ''}`}
+          onClick={() => { setTipoDomicilio('casa'); setPiso(''); setNumeroDepartamento('') }}
+        >
+          <Home className={`w-4 h-4 ${tipoDomicilio === 'casa' ? 'text-primary' : 'text-muted-foreground'}`} />
+          <span className={`text-sm font-semibold ${tipoDomicilio === 'casa' ? 'text-foreground' : 'text-muted-foreground'}`}>Casa</span>
+        </button>
+        <button
+          type="button"
+          className={`flex items-center justify-center gap-2 py-4 rounded-xl transition-all duration-200 cursor-pointer ${tipoDomicilio === 'departamento' ? 'bg-background shadow-sm' : ''}`}
+          onClick={() => setTipoDomicilio('departamento')}
+        >
+          <Building2 className={`w-4 h-4 ${tipoDomicilio === 'departamento' ? 'text-primary' : 'text-muted-foreground'}`} />
+          <span className={`text-sm font-semibold ${tipoDomicilio === 'departamento' ? 'text-foreground' : 'text-muted-foreground'}`}>Departamento</span>
+        </button>
+      </div>
+      {tipoDomicilio === 'departamento' && (
+        <div className="grid grid-cols-2 gap-3 animate-in fade-in slide-in-from-top-2">
+          <div className="space-y-2">
+            <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-1">Piso</Label>
+            <Input id="piso-grupal" placeholder="Ej: 4" className={inputCls} value={piso} onChange={e => setPiso(e.target.value)} />
+          </div>
+          <div className="space-y-2">
+            <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-1">Depto</Label>
+            <Input id="depto-grupal" placeholder="Ej: C" className={inputCls} value={numeroDepartamento} onChange={e => setNumeroDepartamento(e.target.value.toUpperCase())} />
+          </div>
         </div>
       )}
     </div>
@@ -1087,6 +1091,7 @@ export function CheckoutDeliveryGrupal({
     tipo: '¿Cómo lo querés?',
     datos: 'Tus datos',
     ubicacion: tipoPedido === 'delivery' ? 'Dirección de entrega' : 'Retiro',
+    domicilio: '¿Casa o departamento?',
     extras: 'Pago y detalles',
   }
 
@@ -1442,6 +1447,7 @@ export function CheckoutDeliveryGrupal({
               {secTipo}
               {secDatos}
               {secUbicacion}
+              {tipoPedido === 'delivery' && secDomicilio}
               {secExtras}
               {totalSummary}
             </>
@@ -1450,6 +1456,7 @@ export function CheckoutDeliveryGrupal({
               {pasos[paso] === 'tipo' && secTipo}
               {pasos[paso] === 'datos' && secDatos}
               {pasos[paso] === 'ubicacion' && secUbicacion}
+              {pasos[paso] === 'domicilio' && secDomicilio}
               {pasos[paso] === 'extras' && secExtras}
             </>
           )

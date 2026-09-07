@@ -15,6 +15,106 @@ type FranjaHorario = { id: number; nombre: string; horaInicio: string; horaFin: 
 
 type PasoCheckout = 'tipo' | 'datos' | 'ubicacion' | 'extras'
 
+type DireccionGuardada = {
+  direccion: string
+  lat: number | null
+  lng: number | null
+  usadaEn: number
+}
+
+const MAX_DIRECCIONES_GUARDADAS = 6
+
+const normalizarTelefonoDireccion = (telefono: string) => telefono.replace(/\D/g, '')
+const normalizarDireccion = (direccion: string) => direccion
+  .normalize('NFD')
+  .replace(/[\u0300-\u036f]/g, '')
+  .replace(/\s+/g, ' ')
+  .trim()
+  .toLowerCase()
+
+const storageKeyDirecciones = (restauranteId: number, telefono: string) =>
+  `cliente_direcciones_v1_${restauranteId}_${normalizarTelefonoDireccion(telefono)}`
+
+export const leerDireccionesCliente = (restauranteId: number, telefono: string): DireccionGuardada[] => {
+  if (!restauranteId || normalizarTelefonoDireccion(telefono).length < 8) return []
+  try {
+    const guardadas = JSON.parse(localStorage.getItem(storageKeyDirecciones(restauranteId, telefono)) || '[]')
+    if (!Array.isArray(guardadas)) return []
+    return guardadas
+      .filter((item): item is DireccionGuardada => !!item && typeof item.direccion === 'string' && !!item.direccion.trim())
+      .slice(0, MAX_DIRECCIONES_GUARDADAS)
+  } catch {
+    return []
+  }
+}
+
+const guardarDireccionesCliente = (
+  restauranteId: number,
+  telefono: string,
+  nuevas: DireccionGuardada[],
+): DireccionGuardada[] => {
+  if (!restauranteId || normalizarTelefonoDireccion(telefono).length < 8) return []
+
+  const combinadas = new Map<string, DireccionGuardada>()
+  for (const item of [...leerDireccionesCliente(restauranteId, telefono), ...nuevas]) {
+    const direccion = item.direccion.trim()
+    const clave = normalizarDireccion(direccion)
+    if (!clave) continue
+    const anterior = combinadas.get(clave)
+    const candidata = {
+      direccion,
+      lat: Number.isFinite(item.lat) ? item.lat : null,
+      lng: Number.isFinite(item.lng) ? item.lng : null,
+      usadaEn: Number.isFinite(item.usadaEn) ? item.usadaEn : Date.now(),
+    }
+    combinadas.set(clave, anterior ? {
+      direccion: candidata.usadaEn >= anterior.usadaEn ? candidata.direccion : anterior.direccion,
+      lat: candidata.lat ?? anterior.lat,
+      lng: candidata.lng ?? anterior.lng,
+      usadaEn: Math.max(anterior.usadaEn, candidata.usadaEn),
+    } : candidata)
+  }
+
+  const resultado = [...combinadas.values()]
+    .sort((a, b) => b.usadaEn - a.usadaEn)
+    .slice(0, MAX_DIRECCIONES_GUARDADAS)
+  try {
+    localStorage.setItem(storageKeyDirecciones(restauranteId, telefono), JSON.stringify(resultado))
+  } catch { /* localStorage puede estar bloqueado */ }
+  return resultado
+}
+
+export const guardarDireccionCliente = (
+  restauranteId: number,
+  telefono: string,
+  direccion: string,
+  lat: number | null,
+  lng: number | null,
+) => guardarDireccionesCliente(restauranteId, telefono, [{ direccion, lat, lng, usadaEn: Date.now() }])
+
+export const sincronizarDireccionesCliente = async (restauranteId: number, telefono: string) => {
+  const telefonoNormalizado = normalizarTelefonoDireccion(telefono)
+  if (!restauranteId || telefonoNormalizado.length < 8) return leerDireccionesCliente(restauranteId, telefono)
+
+  const url = import.meta.env.VITE_API_URL || 'http://localhost:3000/api'
+  const response = await fetch(`${url}/public/restaurante/${restauranteId}/mis-pedidos/${encodeURIComponent(telefonoNormalizado)}`)
+  if (!response.ok) return leerDireccionesCliente(restauranteId, telefonoNormalizado)
+  const result = await response.json()
+  const pedidos = Array.isArray(result.data) ? result.data : []
+  return guardarDireccionesCliente(restauranteId, telefonoNormalizado, pedidos.flatMap((pedido: any) => {
+    if (pedido?.tipo !== 'delivery' || typeof pedido.direccion !== 'string' || !pedido.direccion.trim()) return []
+    const lat = Number(pedido.latitud)
+    const lng = Number(pedido.longitud)
+    const usadaEn = new Date(pedido.createdAt || 0).getTime()
+    return [{
+      direccion: pedido.direccion,
+      lat: Number.isFinite(lat) ? lat : null,
+      lng: Number.isFinite(lng) ? lng : null,
+      usadaEn: Number.isFinite(usadaEn) ? usadaEn : 0,
+    }]
+  }))
+}
+
 const normalizarNombrePersonalizacion = (nombre: string) => nombre
   .normalize('NFD')
   .replace(/[\u0300-\u036f]/g, '')
@@ -136,6 +236,9 @@ export function CheckoutDeliveryGrupal({
   const [restauranteData, setRestauranteData] = useState<any>(null)
   const [isLoadingRestaurante, setIsLoadingRestaurante] = useState(false)
   const [franjas, setFranjas] = useState<FranjaHorario[]>([])
+  const [direccionesGuardadas, setDireccionesGuardadas] = useState<DireccionGuardada[]>(() =>
+    leerDireccionesCliente(restauranteId, checkoutData?.telefono || localStorage.getItem('cliente_telefono') || ''),
+  )
 
   const [zonaDeliveryFee, setZonaDeliveryFee] = useState<number | null>(checkoutData ? checkoutData.deliveryFee : null)
   const [zonaNombre, setZonaNombre] = useState<string | null>(checkoutData?.zonaNombre ?? null)
@@ -212,6 +315,45 @@ export function CheckoutDeliveryGrupal({
       return availablePaymentMethods[0].id
     })
   }, [availablePaymentMethods])
+
+  useEffect(() => {
+    const telefonoNormalizado = normalizarTelefonoDireccion(telefono)
+    if (!restauranteId || telefonoNormalizado.length < 8) {
+      setDireccionesGuardadas([])
+      return
+    }
+
+    let locales = leerDireccionesCliente(restauranteId, telefonoNormalizado)
+    // Migra la única dirección que guardaban las versiones anteriores.
+    if (locales.length === 0) {
+      const direccionAnterior = localStorage.getItem('cliente_direccion')?.trim()
+      if (direccionAnterior) {
+        const latGuardada = localStorage.getItem('cliente_lat')
+        const lngGuardada = localStorage.getItem('cliente_lng')
+        const latAnterior = latGuardada === null ? null : Number(latGuardada)
+        const lngAnterior = lngGuardada === null ? null : Number(lngGuardada)
+        locales = guardarDireccionCliente(
+          restauranteId,
+          telefonoNormalizado,
+          direccionAnterior,
+          latAnterior !== null && Number.isFinite(latAnterior) ? latAnterior : null,
+          lngAnterior !== null && Number.isFinite(lngAnterior) ? lngAnterior : null,
+        )
+      }
+    }
+    setDireccionesGuardadas(locales)
+
+    let cancelado = false
+    const timer = window.setTimeout(() => {
+      void sincronizarDireccionesCliente(restauranteId, telefonoNormalizado)
+        .then((direcciones) => { if (!cancelado) setDireccionesGuardadas(direcciones) })
+        .catch(() => { /* las sugerencias locales siguen disponibles sin conexión */ })
+    }, 450)
+    return () => {
+      cancelado = true
+      window.clearTimeout(timer)
+    }
+  }, [restauranteId, telefono])
 
   useEffect(() => {
     if (!checkoutData) return
@@ -565,6 +707,35 @@ export function CheckoutDeliveryGrupal({
 
   const inputCls = "h-12 rounded-2xl bg-secondary/60 border-0 shadow-none ring-0 focus-visible:ring-0 focus-visible:ring-offset-0 text-base px-4"
 
+  const direccionesRecomendables = direccionesGuardadas.filter((item) =>
+    direccionSoloTexto || (item.lat !== null && item.lng !== null),
+  )
+  const renderDireccionesGuardadas = (compacta = false) => direccionesRecomendables.length > 0 ? (
+    <div className="space-y-2">
+      <p className="px-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Tus direcciones</p>
+      <div className={compacta ? 'flex gap-2 overflow-x-auto pb-1' : 'space-y-2'}>
+        {direccionesRecomendables.map((item) => {
+          const seleccionada = normalizarDireccion(item.direccion) === normalizarDireccion(direccion)
+          return (
+            <button
+              key={normalizarDireccion(item.direccion)}
+              type="button"
+              aria-pressed={seleccionada}
+              onClick={() => handleAddressChange(item.direccion, item.lat, item.lng)}
+              className={`${compacta ? 'min-w-[15rem] shrink-0' : 'w-full'} flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-left transition-colors ${
+                seleccionada ? 'bg-primary/10 text-foreground' : 'bg-secondary/50 text-muted-foreground hover:bg-secondary/80 hover:text-foreground'
+              }`}
+            >
+              <MapPin className={`h-4 w-4 shrink-0 ${seleccionada ? 'text-primary' : ''}`} />
+              <span className="min-w-0 flex-1 truncate text-sm font-medium">{item.direccion}</span>
+              {seleccionada && <Check className="h-4 w-4 shrink-0 text-primary" />}
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  ) : null
+
   // ===== Secciones del formulario =====
 
   const secTipo = (
@@ -659,6 +830,7 @@ export function CheckoutDeliveryGrupal({
               biasLocations={ubicacionesSucursales}
             />
           )}
+          {renderDireccionesGuardadas()}
           {!direccionSoloTexto && lat !== null && lng !== null && <AddressMapPreview lat={lat} lng={lng} />}
           {!direccionSoloTexto && lat !== null && lng !== null && direccion && (
             <div className="animate-in fade-in duration-300">
@@ -998,6 +1170,7 @@ export function CheckoutDeliveryGrupal({
                     biasLocations={ubicacionesSucursales}
                   />
                 )}
+                {renderDireccionesGuardadas(true)}
                 {!direccionSoloTexto && (isCheckingZona ? (
                   <p className="flex items-center gap-1.5 text-xs text-muted-foreground"><Loader2 className="w-3 h-3 animate-spin" /> Verificando dirección...</p>
                 ) : fueraDeZona ? (

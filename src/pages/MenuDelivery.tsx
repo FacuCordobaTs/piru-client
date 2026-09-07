@@ -12,7 +12,12 @@ import { ThemeToggle } from '@/components/ThemeToggle'
 import { MisPedidosDrawer } from '@/components/MisPedidosDrawer'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
-import { CheckoutDeliveryGrupal, etiquetaVarianteMedallon } from '@/components/CheckoutDeliveryGrupal'
+import {
+    CheckoutDeliveryGrupal,
+    etiquetaVarianteMedallon,
+    guardarDireccionCliente,
+    sincronizarDireccionesCliente,
+} from '@/components/CheckoutDeliveryGrupal'
 import { redirectPedidoAlWhatsapp } from '@/lib/checkoutWhatsapp'
 import { guardarTemaRestaurante, leerTemaRestaurante, RestauranteTheme } from '@/components/RestauranteTheme'
 import { codigoPromocionalMarketing, configurarGtm, contextoParaPedidoMarketing, registrarEventoTrackingUnaVez } from '@/lib/tracking'
@@ -274,6 +279,13 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
     const sessionStartRef = useRef<string | null>(null)
     const recomendacionIntentadaRef = useRef<string | null>(null)
     const [esPedidoHabitual, setEsPedidoHabitual] = useState(false)
+
+    useEffect(() => {
+        const telefono = telefonoCliente.replace(/\D/g, '')
+        if (!restaurante?.id || telefono.length < 8) return
+        // Deja listo el historial local antes de que el cliente abra el checkout.
+        void sincronizarDireccionesCliente(restaurante.id, telefono).catch(() => {})
+    }, [restaurante?.id, telefonoCliente])
 
     // Function to fetch points
     const fetchPuntos = useCallback(async (telefono: string, restauranteId: number) => {
@@ -891,10 +903,18 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
                 })
                 localStorage.setItem('cliente_nombre', data.nombre)
                 localStorage.setItem('cliente_telefono', data.telefono)
+                setTelefonoCliente(data.telefono)
                 if (tipoPedido === 'delivery') {
                     localStorage.setItem('cliente_direccion', data.direccion || '')
                     if (data.lat != null) localStorage.setItem('cliente_lat', String(data.lat))
                     if (data.lng != null) localStorage.setItem('cliente_lng', String(data.lng))
+                    guardarDireccionCliente(
+                        restaurante.id,
+                        data.telefono,
+                        data.direccion || '',
+                        data.lat ?? null,
+                        data.lng ?? null,
+                    )
                 }
                 localStorage.removeItem(`deliveryCart_${username}`)
                 const orderInfo = {

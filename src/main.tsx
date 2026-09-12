@@ -8,15 +8,7 @@ import { ThemeProvider } from './components/ThemeProvider'
 import Welcome from './pages/Welcome'
 import Nombre from './pages/Nombre'
 import Menu from './pages/Menu'
-import PedidoConfirmado from './pages/PedidoConfirmado'
-import AgregarProducto from './pages/AgregarProducto'
-import PedidoCerrado from './pages/PedidoCerrado'
-import Pago from './pages/Pago'
-import Factura from './pages/Factura'
-import { PagoExitoso, PagoFallido, PagoPendiente } from './pages/PagoResultado'
-import EsperandoPedido from './pages/EsperandoPedido'
 import MenuDelivery from './pages/MenuDelivery'
-import CheckoutDelivery from './pages/CheckoutDelivery'
 import SuccessDelivery from './pages/SuccessDelivery'
 import SuccessGrupal from './pages/SuccessGrupal'
 import PedidoStatus from './pages/PedidoStatus'
@@ -45,60 +37,6 @@ const rutas = [
     element: <SuccessGrupal />,
   },
   {
-    path: "/menu",
-    element: <Menu />,
-  },
-  {
-    path: "/pedido-confirmado",
-    element: <PedidoConfirmado />,
-  },
-  {
-    path: "/agregar-producto",
-    element: <AgregarProducto />,
-  },
-  {
-    path: "/pedido-cerrado",
-    element: <PedidoCerrado />,
-  },
-  {
-    path: "/pago",
-    element: <Pago />,
-  },
-  {
-    path: "/factura",
-    element: <Factura />,
-  },
-  {
-    path: "/esperando-pedido",
-    element: <EsperandoPedido />,
-  },
-  // Rutas de resultado de pago de MercadoPago
-  {
-    path: "/pago-exitoso",
-    element: <PagoExitoso />,
-  },
-  {
-    path: "/pago-fallido",
-    element: <PagoFallido />,
-  },
-  {
-    path: "/pago-pendiente",
-    element: <PagoPendiente />,
-  },
-  // También soportar las rutas con el qrToken en el path (legacy)
-  {
-    path: "/mesa/:qrToken/pago-exitoso",
-    element: <PagoExitoso />,
-  },
-  {
-    path: "/mesa/:qrToken/pago-fallido",
-    element: <PagoFallido />,
-  },
-  {
-    path: "/mesa/:qrToken/pago-pendiente",
-    element: <PagoPendiente />,
-  },
-  {
     path: "/pedido/:id",
     element: <PedidoStatus />,
   },
@@ -114,10 +52,6 @@ const rutas = [
   {
     path: "/:username",
     element: <MenuDelivery />,
-  },
-  {
-    path: "/:username/checkout",
-    element: <CheckoutDelivery />,
   },
   {
     path: "/:username/success",

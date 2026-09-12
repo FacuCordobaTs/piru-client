@@ -50,6 +50,7 @@ interface Producto {
 interface Cliente {
   id: string
   nombre: string
+  telefono?: string
 }
 
 interface Pedido {
@@ -66,6 +67,8 @@ interface ItemPedido {
   id: number
   productoId: number
   clienteNombre: string
+  clienteTelefono?: string | null
+  clienteId?: number | null
   cantidad: number
   precioUnitario: string
   nombreProducto?: string
@@ -108,6 +111,8 @@ export interface CheckoutDeliveryData {
   horarioProgramado?: string
   sucursalId?: number | null
   tipoDomicilio?: 'casa' | 'departamento' | null
+  canjeEnvioGratis?: boolean
+  canjeDescuento?: boolean
   // Contexto opcional de Growth; el pedido final de sala lo atribuye best-effort.
   visitorId?: string
   sesionUuid?: string

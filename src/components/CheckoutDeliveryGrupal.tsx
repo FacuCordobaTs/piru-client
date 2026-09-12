@@ -4,7 +4,7 @@ import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { toast } from 'sonner'
-import { MapPin, Store, Truck, AlertTriangle, Loader2, Pencil, X, Tag, Home, Building2, Clock, CreditCard, Wallet, Banknote, ChevronLeft, Check, Zap, MessageCircle, UserRound } from 'lucide-react'
+import { MapPin, Store, Truck, AlertTriangle, Loader2, Pencil, X, Tag, Home, Building2, Clock, CreditCard, Wallet, Banknote, ChevronLeft, Check, Zap, MessageCircle, UserRound, Sparkles } from 'lucide-react'
 import { AddressAutocomplete } from '@/components/AddressAutocomplete'
 import { AddressMapPreview } from '@/components/AddressMapPreview'
 import type { CheckoutDeliveryData, CheckoutEditSemaphore } from '@/store/mesaStore'
@@ -251,6 +251,11 @@ export function CheckoutDeliveryGrupal({
   const [codigoError, setCodigoError] = useState<string | null>(null)
   const [codigoAutomaticoProcesado, setCodigoAutomaticoProcesado] = useState<string | null>(null)
 
+  const [puntosDisponibles, setPuntosDisponibles] = useState<number | null>(null)
+  const [loadingPuntosCheckout, setLoadingPuntosCheckout] = useState(false)
+  const [canjeEnvioGratis, setCanjeEnvioGratis] = useState(checkoutData?.canjeEnvioGratis ?? false)
+  const [canjeDescuento, setCanjeDescuento] = useState(checkoutData?.canjeDescuento ?? false)
+
   const [paso, setPaso] = useState(0)
   const [editandoHabitual, setEditandoHabitual] = useState(false)
   const pasos: PasoCheckout[] = tipoPedido === 'delivery'
@@ -262,12 +267,31 @@ export function CheckoutDeliveryGrupal({
 
   const codigoDescuentoEnabled = !restauranteData || restauranteData.codigoDescuentoEnabled === true
   const direccionSoloTexto = direccionSoloTextoProp === true || restauranteData?.direccionSoloTexto === true
-  const deliveryFee = zonaDeliveryFee !== null
+  const deliveryFeeOriginal = zonaDeliveryFee !== null
     ? zonaDeliveryFee
     : (direccionSoloTexto ? (parseFloat(restauranteData?.deliveryFee ?? '0') || 0) : 0)
+
+  const configPuntos = restauranteData?.sistemaPuntos ? restauranteData?.configuracionPuntos : null
+  const puntosActuales = puntosDisponibles ?? 0
+  const puntosRequeridosEnvio = configPuntos?.permiteCanjeEnvioGratis ? Number(configPuntos.puntosEnvioGratis || 0) : 0
+  const puedeCanjearEnvio = tipoPedido === 'delivery' && Boolean(configPuntos?.permiteCanjeEnvioGratis) && deliveryFeeOriginal > 0 && puntosActuales >= puntosRequeridosEnvio
+
+  const deliveryFee = (canjeEnvioGratis && puedeCanjearEnvio) ? 0 : deliveryFeeOriginal
+
+  const puntosRestantesDespuesEnvio = (canjeEnvioGratis && puedeCanjearEnvio) ? Math.max(0, puntosActuales - puntosRequeridosEnvio) : puntosActuales
+  const puntosRequeridosDescuento = configPuntos?.permiteCanjeDescuento ? Number(configPuntos.descuentoPuntosCosto || 0) : 0
+  const montoMinimoDescuento = configPuntos?.permiteCanjeDescuento ? Number(configPuntos.descuentoMontoMinimo || 0) : 0
   const itemsTotalNum = parseFloat(itemsTotal)
+  const puedeCanjearDescuento = Boolean(configPuntos?.permiteCanjeDescuento) && itemsTotalNum >= montoMinimoDescuento && puntosRestantesDespuesEnvio >= puntosRequeridosDescuento
+
+  const descuentoPuntosValor = (canjeDescuento && puedeCanjearDescuento)
+    ? (configPuntos?.descuentoTipo === 'porcentaje'
+        ? itemsTotalNum * (Number(configPuntos?.descuentoValor || 0) / 100)
+        : Number(configPuntos?.descuentoValor || 0))
+    : 0
+
   const subtotalConEnvio = tipoPedido === 'delivery' ? itemsTotalNum + deliveryFee : itemsTotalNum
-  const total = Math.max(0, subtotalConEnvio - montoDescuento)
+  const total = Math.max(0, subtotalConEnvio - montoDescuento - descuentoPuntosValor)
   const ciudadesSucursales = Array.from(new Set(
     sucursales.map((s) => s.direccionCiudad?.trim()).filter((city): city is string => Boolean(city)),
   ))
@@ -317,6 +341,40 @@ export function CheckoutDeliveryGrupal({
       return availablePaymentMethods[0].id
     })
   }, [availablePaymentMethods])
+
+  useEffect(() => {
+    const telefonoNormalizado = normalizarTelefonoDireccion(telefono)
+    if (!restauranteId || telefonoNormalizado.length < 8 || !restauranteData?.sistemaPuntos) {
+      setPuntosDisponibles(null)
+      return
+    }
+    let cancelado = false
+    setLoadingPuntosCheckout(true)
+    const timer = setTimeout(async () => {
+      try {
+        const url = import.meta.env.VITE_API_URL || 'http://localhost:3000/api'
+        const res = await fetch(`${url}/public/restaurante/${restauranteId}/cliente/${encodeURIComponent(telefonoNormalizado)}`)
+        if (res.ok) {
+          const data = await res.json()
+          if (!cancelado && data.success && data.data?.puntos !== undefined) {
+            setPuntosDisponibles(data.data.puntos)
+          } else if (!cancelado) {
+            setPuntosDisponibles(0)
+          }
+        } else if (!cancelado) {
+          setPuntosDisponibles(0)
+        }
+      } catch {
+        if (!cancelado) setPuntosDisponibles(0)
+      } finally {
+        if (!cancelado) setLoadingPuntosCheckout(false)
+      }
+    }, 400)
+    return () => {
+      cancelado = true
+      clearTimeout(timer)
+    }
+  }, [restauranteId, telefono, restauranteData?.sistemaPuntos])
 
   useEffect(() => {
     const telefonoNormalizado = normalizarTelefonoDireccion(telefono)
@@ -377,6 +435,8 @@ export function CheckoutDeliveryGrupal({
     }
     if (checkoutData.tipoDomicilio) setTipoDomicilio(checkoutData.tipoDomicilio)
     if (checkoutData.sucursalId) setSucursalSeleccionada(checkoutData.sucursalId)
+    if (checkoutData.canjeEnvioGratis !== undefined) setCanjeEnvioGratis(checkoutData.canjeEnvioGratis)
+    if (checkoutData.canjeDescuento !== undefined) setCanjeDescuento(checkoutData.canjeDescuento)
   }, [checkoutData?.nombre, checkoutData?.telefono, checkoutData?.direccion, checkoutData?.tipoPedido, checkoutData?.notas, checkoutData?.deliveryFee, checkoutData?.zonaNombre, checkoutData?.codigoDescuentoId, checkoutData?.montoDescuento, checkoutData?.metodoPago, checkoutData?.horarioProgramado, checkoutData?.tipoDomicilio, checkoutData?.sucursalId])
 
   useEffect(() => {
@@ -546,6 +606,9 @@ export function CheckoutDeliveryGrupal({
       total: total.toFixed(2),
       codigoDescuentoId: codigoDescuentoId ?? null,
       montoDescuento,
+      canjeEnvioGratis: canjeEnvioGratis && puedeCanjearEnvio,
+      canjeDescuento: canjeDescuento && puedeCanjearDescuento,
+      descuentoPuntos: descuentoPuntosValor,
       metodoPago: metodoPago ?? null,
       horarioProgramado: usarFranjas ? horarioProgramado : ((programacionObligatoria || programarPedido) ? horarioProgramado : ''),
       sucursalId,
@@ -1022,6 +1085,77 @@ export function CheckoutDeliveryGrupal({
         )
       )}
 
+      {configPuntos && (puntosDisponibles !== null || loadingPuntosCheckout) && (
+        <div className="space-y-3 rounded-2xl bg-amber-500/10 border border-amber-500/20 p-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400 font-bold text-sm">
+              <Sparkles className="w-4 h-4" />
+              <span>Tus Puntos de Club</span>
+            </div>
+            <span className="text-xs font-black bg-amber-500 text-white rounded-full px-2.5 py-0.5">
+              {loadingPuntosCheckout ? '...' : `${puntosDisponibles ?? 0} pts`}
+            </span>
+          </div>
+
+          <div className="space-y-2 pt-1">
+            {tipoPedido === 'delivery' && configPuntos.permiteCanjeEnvioGratis && deliveryFeeOriginal > 0 && (
+              <button
+                type="button"
+                disabled={!puedeCanjearEnvio && !canjeEnvioGratis}
+                onClick={() => setCanjeEnvioGratis(!canjeEnvioGratis)}
+                className={`w-full flex items-center justify-between p-3 rounded-xl border text-left transition-all ${
+                  canjeEnvioGratis
+                    ? 'bg-amber-500/20 border-amber-500 text-foreground font-semibold'
+                    : puedeCanjearEnvio
+                    ? 'bg-background/60 border-border hover:bg-background'
+                    : 'opacity-50 cursor-not-allowed bg-background/30 border-dashed border-border'
+                }`}
+              >
+                <div>
+                  <p className="text-xs font-bold">Envío gratis</p>
+                  <p className="text-[11px] text-muted-foreground">
+                    Costo: {configPuntos.puntosEnvioGratis} pts
+                    {!puedeCanjearEnvio && !canjeEnvioGratis && ` (Te faltan ${configPuntos.puntosEnvioGratis - (puntosDisponibles ?? 0)} pts)`}
+                  </p>
+                </div>
+                <div className={`w-5 h-5 rounded-md flex items-center justify-center border ${canjeEnvioGratis ? 'bg-amber-500 border-amber-500 text-white' : 'border-muted-foreground/40'}`}>
+                  {canjeEnvioGratis && <Check className="w-3.5 h-3.5" />}
+                </div>
+              </button>
+            )}
+
+            {configPuntos.permiteCanjeDescuento && (
+              <button
+                type="button"
+                disabled={!puedeCanjearDescuento && !canjeDescuento}
+                onClick={() => setCanjeDescuento(!canjeDescuento)}
+                className={`w-full flex items-center justify-between p-3 rounded-xl border text-left transition-all ${
+                  canjeDescuento
+                    ? 'bg-amber-500/20 border-amber-500 text-foreground font-semibold'
+                    : puedeCanjearDescuento
+                    ? 'bg-background/60 border-border hover:bg-background'
+                    : 'opacity-50 cursor-not-allowed bg-background/30 border-dashed border-border'
+                }`}
+              >
+                <div>
+                  <p className="text-xs font-bold">
+                    Descuento de {configPuntos.descuentoTipo === 'porcentaje' ? `${configPuntos.descuentoValor}%` : `${configPuntos.descuentoValor}`}
+                  </p>
+                  <p className="text-[11px] text-muted-foreground">
+                    Costo: {configPuntos.descuentoPuntosCosto} pts
+                    {itemsTotalNum < Number(configPuntos.descuentoMontoMinimo || 0) && ` (Mínimo ${configPuntos.descuentoMontoMinimo})`}
+                    {!puedeCanjearDescuento && !canjeDescuento && puntosRestantesDespuesEnvio < Number(configPuntos.descuentoPuntosCosto || 0) && ` (Te faltan ${Number(configPuntos.descuentoPuntosCosto || 0) - puntosRestantesDespuesEnvio} pts)`}
+                  </p>
+                </div>
+                <div className={`w-5 h-5 rounded-md flex items-center justify-center border ${canjeDescuento ? 'bg-amber-500 border-amber-500 text-white' : 'border-muted-foreground/40'}`}>
+                  {canjeDescuento && <Check className="w-3.5 h-3.5" />}
+                </div>
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
       {codigoDescuentoEnabled && (
         <div className="space-y-2">
           <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-1">Código de descuento <span className="normal-case font-normal">(opcional)</span></Label>
@@ -1334,6 +1468,18 @@ export function CheckoutDeliveryGrupal({
           <span className="font-semibold">${checkoutData.deliveryFee.toFixed(2)}</span>
         </div>
       )}
+      {(checkoutData?.canjeEnvioGratis || canjeEnvioGratis) && puedeCanjearEnvio && (
+        <div className="flex justify-between text-sm text-amber-600 dark:text-amber-400">
+          <span className="flex items-center gap-1.5"><Sparkles className="w-3.5 h-3.5" /> Envío gratis (Canje)</span>
+          <span className="font-semibold">$0.00</span>
+        </div>
+      )}
+      {(checkoutData?.canjeDescuento || canjeDescuento) && descuentoPuntosValor > 0 && (
+        <div className="flex justify-between text-sm text-amber-600 dark:text-amber-400">
+          <span className="flex items-center gap-1.5"><Sparkles className="w-3.5 h-3.5" /> Descuento por puntos</span>
+          <span className="font-semibold">-${descuentoPuntosValor.toFixed(2)}</span>
+        </div>
+      )}
       {(checkoutData?.montoDescuento ?? montoDescuento) > 0 && (
         <div className="flex justify-between text-sm">
           <span className="text-muted-foreground">Descuento</span>
@@ -1478,6 +1624,12 @@ export function CheckoutDeliveryGrupal({
       </div>
 
       <div className={`${pedidoHabitual ? 'px-9' : 'px-5'} pb-5 pt-4 bg-background space-y-3 lg:w-full lg:max-w-md lg:mx-auto ${compacto ? 'sticky bottom-0 z-10' : 'shrink-0'}`}>
+        {pedidoHabitual && (checkoutData?.montoDescuento ?? montoDescuento) > 0 && (
+          <div className="flex justify-between items-center text-sm font-semibold text-emerald-600 dark:text-emerald-400">
+            <span>Descuento aplicado</span>
+            <span>-${(checkoutData?.montoDescuento ?? montoDescuento).toFixed(2)}</span>
+          </div>
+        )}
         <div className="flex justify-between items-baseline">
           <span className="text-sm text-muted-foreground">Total</span>
           <span className="text-2xl font-black tracking-tight">${checkoutData?.total || total.toFixed(2)}</span>

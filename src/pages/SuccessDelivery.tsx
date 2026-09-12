@@ -1,9 +1,7 @@
 import { useState, useEffect, useLayoutEffect, useRef, useMemo } from 'react'
 import { useParams, useNavigate, useSearchParams } from 'react-router'
-import { CheckCircle2, Copy, Loader2, Store, Truck, MapPin, Clock, Package } from 'lucide-react'
+import { CheckCircle2, Copy, Loader2, Store, Truck, MapPin, Clock, Sparkles } from 'lucide-react'
 import { toast } from 'sonner'
-import { ThemeToggle } from '@/components/ThemeToggle'
-import { MisPedidosDrawer } from '@/components/MisPedidosDrawer'
 import { OrderSummaryItemDetails } from '@/components/OrderSummaryItemDetails'
 import { AddressMapPreview } from '@/components/AddressMapPreview'
 import { leerTemaRestaurante, RestauranteTheme } from '@/components/RestauranteTheme'
@@ -60,7 +58,6 @@ const SuccessDelivery = () => {
     const [restauranteData, setRestauranteData] = useState<any>(null)
     const [isLoadingRestaurante, setIsLoadingRestaurante] = useState(true)
     const [isCreatingMP, setIsCreatingMP] = useState(false)
-    const [misPedidosOpen, setMisPedidosOpen] = useState(false)
     const [pedidoEstado, setPedidoEstado] = useState<string | null>(null)
     const [rapiboyTrackingUrl, setRapiboyTrackingUrl] = useState<string | null>(null)
     const metaPurchaseTracked = useRef(false)
@@ -400,23 +397,6 @@ const SuccessDelivery = () => {
         <div className="min-h-screen bg-background font-sans selection:bg-primary/20 pb-24 flex flex-col items-center">
             {themeStyles}
 
-            {/* Translucent header */}
-            <div className="w-full fixed top-0 z-20 bg-background/80 backdrop-blur-xl border-b border-foreground/5">
-                <div className="max-w-xl mx-auto px-5 py-4 flex items-center justify-between">
-                    <span className="font-semibold text-foreground">Piru</span>
-                    <div className="flex items-center gap-4">
-                        <button
-                            onClick={() => setMisPedidosOpen(true)}
-                            className="flex items-center gap-1.5 text-sm font-medium text-primary"
-                        >
-                            <Package className="w-3.5 h-3.5" />
-                            Mis Pedidos
-                        </button>
-                        <ThemeToggle />
-                    </div>
-                </div>
-            </div>
-
             <div className="max-w-xl w-full mx-auto px-5 pt-24 flex-1 flex flex-col">
 
                 {/* ── PENDING PAYMENT ── */}
@@ -629,6 +609,27 @@ const SuccessDelivery = () => {
                             )}
                         </div>
 
+                        {/* Puntos de fidelización */}
+                        {((orderInfo?.puntosGanados ?? 0) > 0 || (orderInfo?.puntosUsados ?? 0) > 0) && (
+                            <div className="rounded-2xl bg-amber-500/10 border border-amber-500/20 p-4 flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-xl bg-amber-500/20 flex items-center justify-center text-amber-600 dark:text-amber-400 shrink-0">
+                                    <Sparkles className="w-5 h-5" />
+                                </div>
+                                <div className="min-w-0 flex-1">
+                                    {(orderInfo?.puntosGanados ?? 0) > 0 && (
+                                        <p className="text-sm font-bold text-foreground">
+                                            ¡Sumás +{orderInfo.puntosGanados} puntos con este pedido!
+                                        </p>
+                                    )}
+                                    {(orderInfo?.puntosUsados ?? 0) > 0 && (
+                                        <p className="text-xs text-muted-foreground mt-0.5">
+                                            Canjeaste {orderInfo.puntosUsados} puntos en esta compra.
+                                        </p>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+
                         {/* Info rows */}
                         <div className="space-y-7">
                             {/* Delivery / Takeaway */}
@@ -770,12 +771,6 @@ const SuccessDelivery = () => {
                     </div>
                 )}
             </div>
-
-            <MisPedidosDrawer
-                open={misPedidosOpen}
-                onOpenChange={setMisPedidosOpen}
-                restauranteId={restauranteData?.id ?? null}
-            />
         </div>
     )
 }

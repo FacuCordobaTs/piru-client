@@ -44,6 +44,10 @@ interface Product {
   tituloNota?: string
   descuento?: number | null
   descuentoFechaFin?: string | null
+  esCanjePuntos?: boolean
+  intentandoCanjear?: boolean
+  puntosNecesarios?: number | string | null
+  puntosDisponiblesUsuario?: number
 }
 
 interface ProductDetailDrawerProps {
@@ -258,6 +262,12 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder, sibl
   }
 
   const handlePrimary = handleContinue
+  const esCanje = Boolean((product as any)?.intentandoCanjear || (product as any)?.esCanjePuntos)
+  const puntosRequeridos = Number((product as any)?.puntosNecesarios || 0)
+  const puntosDisponibles = (product as any)?.puntosDisponiblesUsuario !== undefined
+    ? Number((product as any).puntosDisponiblesUsuario)
+    : undefined
+  const puntosInsuficientes = esCanje && puntosDisponibles !== undefined && puntosDisponibles < puntosRequeridos
 
   const timeLeft = tieneDescuento ? formatTimeLeft(product?.descuentoFechaFin ?? null) : null
   const nombreLength = product?.nombre.trim().length ?? 0
@@ -427,6 +437,11 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder, sibl
                             )}
                           </AnimatePresence>
                           <div className="mb-2 flex flex-wrap items-center gap-2">
+                            {esCanje && (
+                              <span className="rounded-full bg-amber-500 px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wide text-white">
+                                Canje de Puntos
+                              </span>
+                            )}
                             {tieneDescuento && (
                               <span className="rounded-full bg-emerald-500 px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wide text-white">
                                 {product.descuento}% OFF
@@ -451,15 +466,26 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder, sibl
                                   ${totalTachado.toFixed(2)}
                                 </p>
                               )}
-                              <p className="text-2xl font-bold text-primary">
-                                ${total.toFixed(2)}
-                              </p>
+                              {esCanje ? (
+                                <p className="text-2xl font-bold text-amber-600 dark:text-amber-400">
+                                  {puntosRequeridos} pts
+                                </p>
+                              ) : (
+                                <p className="text-2xl font-bold text-primary">
+                                  ${total.toFixed(2)}
+                                </p>
+                              )}
                             </div>
                           </div>
                         </>
                       ) : (
                         <div className="absolute inset-x-0 bottom-0 px-6 pb-8">
                           <div className="mb-2 flex flex-wrap items-center gap-2">
+                            {esCanje && (
+                              <span className="rounded-full bg-amber-500 px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wide text-white">
+                                Canje de Puntos
+                              </span>
+                            )}
                             {tieneDescuento && (
                               <span className="rounded-full bg-emerald-500 px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wide text-white">
                                 {product.descuento}% OFF
@@ -484,9 +510,15 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder, sibl
                                   ${totalTachado.toFixed(2)}
                                 </p>
                               )}
-                              <p className="text-2xl font-bold text-white drop-shadow-sm">
-                                ${total.toFixed(2)}
-                              </p>
+                              {esCanje ? (
+                                <p className="text-2xl font-bold text-amber-300 drop-shadow-sm">
+                                  {puntosRequeridos} pts
+                                </p>
+                              ) : (
+                                <p className="text-2xl font-bold text-white drop-shadow-sm">
+                                  ${total.toFixed(2)}
+                                </p>
+                              )}
                             </div>
                           </div>
                         </div>
@@ -670,7 +702,7 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder, sibl
                         <button
                           type="button"
                           onClick={handlePrimary}
-                          disabled={!isDetailsStage && variantBloqueada}
+                          disabled={(!isDetailsStage && variantBloqueada) || puntosInsuficientes}
                           className={cn(
                             'relative h-14 min-w-0 flex-1 overflow-hidden rounded-2xl text-[17px] font-semibold transition-all duration-300 active:scale-[0.98]',
                             addCount > 0
@@ -734,7 +766,11 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder, sibl
                                 transition={{ duration: 0.2 }}
                                 className="absolute inset-0 flex items-center justify-center"
                               >
-                                Agregar · ${total.toFixed(2)}
+                                {puntosInsuficientes
+                                  ? `Puntos insuficientes (${puntosRequeridos} pts)`
+                                  : esCanje
+                                  ? `Canjear por ${puntosRequeridos} pts`
+                                  : `Agregar · ${total.toFixed(2)}`}
                               </motion.span>
                             )}
                           </AnimatePresence>

@@ -8,8 +8,6 @@ import {
     Package, Receipt, UtensilsCrossed, Utensils, Clock, Share2, User, Plus
 } from 'lucide-react'
 import { ProductDetailDrawer } from '@/components/ProductDetailDrawer'
-import { ThemeToggle } from '@/components/ThemeToggle'
-import { MisPedidosDrawer } from '@/components/MisPedidosDrawer'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import {
@@ -20,7 +18,7 @@ import {
 } from '@/components/CheckoutDeliveryGrupal'
 import { redirectPedidoAlWhatsapp } from '@/lib/checkoutWhatsapp'
 import { guardarTemaRestaurante, leerTemaRestaurante, RestauranteTheme } from '@/components/RestauranteTheme'
-import { codigoPromocionalMarketing, configurarGtm, contextoParaPedidoMarketing, registrarEventoTrackingUnaVez } from '@/lib/tracking'
+import { codigoPromocionalMarketing, configurarGtm, contextoParaPedidoMarketing, guardarContextoTracking, registrarEventoTrackingUnaVez } from '@/lib/tracking'
 
 type PedidoHistorico = {
     id: number
@@ -140,6 +138,7 @@ export interface CampanaPublica {
     campanaId: number
     nombre: string
     slug: string
+    tipo?: 'adquisicion' | 'recompra' | 'retencion' | 'lo_mismo' | 'reactivacion'
     productoId: number | null
     descuentoPorcentaje: number
     limiteUsos: number | null
@@ -202,6 +201,13 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
     const [searchParams, setSearchParams] = useSearchParams()
     const repAplicadoRef = useRef(false)
     const productoAplicadoRef = useRef(false)
+    const tkAplicadoRef = useRef<string | null>(null)
+    const [bannerGrowth, setBannerGrowth] = useState<{
+        texto: string
+        porcentaje: number
+        expiraAt: number | null
+    } | null>(null)
+    const [descuentoGrowthCodigo, setDescuentoGrowthCodigo] = useState<string | null>(null)
 
     const [carritoAbierto, setCarritoAbierto] = useState(false)
     const [selectedProduct, setSelectedProduct] = useState<any>(null)
@@ -265,7 +271,6 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
     const [puntosCliente, setPuntosCliente] = useState<number | null>(null)
     const [loadingPuntos, setLoadingPuntos] = useState(false)
     const [modalPuntosOpen, setModalPuntosOpen] = useState(false)
-    const [misPedidosOpen, setMisPedidosOpen] = useState(false)
 
     const [mostrarCheckoutEnCarrito, setMostrarCheckoutEnCarrito] = useState(false)
     const [expandido, setExpandido] = useState(false)
@@ -470,11 +475,153 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
         }
     }, [productos, searchParams, setSearchParams])
 
+    // Resuelve micro-campañas persistentes seguras cifradas con AES-256-GCM (?tk=v1...)
+    useEffect(() => {
+        const tk = searchParams.get('tk')
+        if (!tk || tkAplicadoRef.current === tk || !username) return
+        if (loading || !restaurante || productos.length === 0) return
+
+        tkAplicadoRef.current = tk
+
+        const resolverToken = async () => {
+            try {
+                const url = import.meta.env.VITE_API_URL || 'http://localhost:3000/api'
+                const res = await fetch(`${url}/public/growth/resolver-enlace`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ token: tk, restauranteSlug: username }),
+                })
+
+                if (res.status === 410) {
+                    toast.info('Este beneficio exclusivo ha expirado, pero podés disfrutar de toda nuestra carta.')
+                    return
+                }
+
+                if (!res.ok) {
+                    const errorData = await res.json().catch(() => null)
+                    toast.error(errorData?.message || 'El enlace no es válido o ha expirado.')
+                    return
+                }
+
+                const response = await res.json()
+                if (!response.success || !response.data) return
+                const data = response.data
+
+                // Sincronizar datos de cliente en localStorage
+                if (data.cliente?.nombre) localStorage.setItem('cliente_nombre', data.cliente.nombre)
+                if (data.cliente?.telefono) {
+                    localStorage.setItem('cliente_telefono', data.cliente.telefono)
+                    setTelefonoCliente(data.cliente.telefono)
+                }
+
+                // Registrar contexto atribuible en la sesión para el checkout
+                guardarContextoTracking({
+                    username,
+                    campaniaSlug: data.campanaSlug,
+                    campanaId: data.campanaId ?? undefined,
+                    recetaToken: tk,
+                    codigoPromocional: data.descuento?.codigoCupon ?? undefined,
+                })
+
+                // Configurar beneficio de descuento si está presente
+                if (data.descuento?.activo && data.descuento?.porcentaje > 0) {
+                    const pct = data.descuento.porcentaje
+                    const exp = data.descuento.expiraAt
+                    const texto = pct >= 20
+                        ? '⏳ Oportunidad Exclusiva: 20% OFF por 48 horas aplicado a tu pedido'
+                        : `¡Te extrañamos! Tenés un ${pct}% OFF aplicado a tu pedido 🎁`
+
+                    setBannerGrowth({ texto, porcentaje: pct, expiraAt: exp })
+                    if (data.descuento.codigoCupon) {
+                        setDescuentoGrowthCodigo(data.descuento.codigoCupon)
+                    }
+                }
+
+                // Caso 1: Campaña "¿Lo Mismo de Siempre?" (Drawer 1-Click Buy)
+                if (data.modalidad === 'drawer_habitual') {
+                    const items = Array.isArray(data.carrito) ? data.carrito : []
+                    if (items.length > 0) {
+                        const dir = data.cliente?.direccionHabitual
+                        const tipoPedido = (dir?.tipoPedido === 'delivery' || dir?.tipoPedido === 'takeaway')
+                            ? dir.tipoPedido
+                            : (restaurante.deliveryEnabled !== false ? 'delivery' : 'takeaway')
+
+                        const fee = dir?.deliveryFee != null ? Number(dir.deliveryFee) : (tipoPedido === 'delivery' ? Number(restaurante.deliveryFee || 0) : 0)
+                        const itemsTotalNum = items.reduce((sum: number, it: any) => sum + (parseFloat(it.precio) * it.cantidad), 0)
+
+                        const metodosDisponibles = new Set((restaurante.metodosPago || []).map((m: any) => m.id))
+                        const metodoPago = dir?.metodoPago && metodosDisponibles.has(dir.metodoPago)
+                            ? dir.metodoPago
+                            : (restaurante.metodosPago?.[0]?.id || 'efectivo')
+
+                        const checkout = {
+                            tipoPedido,
+                            nombre: data.cliente?.nombre || '',
+                            telefono: data.cliente?.telefono || '',
+                            direccion: tipoPedido === 'delivery' ? (dir?.direccion || '') : '',
+                            lat: dir?.lat ?? null,
+                            lng: dir?.lng ?? null,
+                            notas: '',
+                            tipoDomicilio: null,
+                            deliveryFee: fee,
+                            zonaNombre: null,
+                            itemsTotal: itemsTotalNum.toFixed(2),
+                            total: (itemsTotalNum + fee).toFixed(2),
+                            codigoDescuentoId: data.descuento?.codigoDescuentoId ?? null,
+                            montoDescuento: 0,
+                            metodoPago,
+                            horarioProgramado: '',
+                            sucursalId: dir?.sucursalId ?? null,
+                        }
+
+                        setCartItems(items)
+                        checkoutDataRef.current = checkout
+                        setCheckoutDeliveryData(checkout)
+                        setEditSemaphoreLocal(null)
+                        setMostrarCheckoutEnCarrito(true)
+                        setExpandido(false)
+                        setEsPedidoHabitual(true)
+                        window.history.pushState({ drawer: 'carrito' }, '')
+                        setCarritoAbierto(true)
+                    }
+                } else if (data.modalidad === 'descuento_banner') {
+                    // Caso 2: Campaña "Reactivación con Descuento"
+                    const items = Array.isArray(data.carrito) ? data.carrito : []
+                    if (items.length > 0 && cartItems.length === 0) {
+                        setCartItems(items)
+                        toast.success('Te dejamos tu pedido listo con descuento 🛒')
+                    } else if (data.descuento?.activo) {
+                        toast.success(`Beneficio aplicado: ${data.descuento.porcentaje}% OFF 🎉`)
+                    }
+                }
+            } catch (err) {
+                console.error('Error resolviendo token de micro-campaña:', err)
+            }
+        }
+
+        void resolverToken()
+    }, [searchParams, username, loading, restaurante, productos.length])
+
+    // Soporte para micro-campañas independientes sin token individual (?c=reactivacion)
+    useEffect(() => {
+        if (!campana || searchParams.has('tk') || tkAplicadoRef.current) return
+
+        if (campana.tipo === 'reactivacion' || campana.slug === 'reactivacion') {
+            const pct = campana.descuentoPorcentaje > 0 ? campana.descuentoPorcentaje : 10
+            setBannerGrowth({
+                texto: `¡Te extrañamos! Tenés un ${pct}% OFF aplicado a tu pedido 🎁`,
+                porcentaje: pct,
+                expiraAt: null,
+            })
+        }
+    }, [campana, searchParams])
+
     useEffect(() => {
         const recomendacionKey = restaurante?.id && username ? `${restaurante.id}:${username}` : null
         if (loading || !recomendacionKey || productos.length === 0 || recomendacionIntentadaRef.current === recomendacionKey) return
-        // Un Smart Link tiene prioridad sobre una recomendación basada en historial.
-        if (campana || repAplicadoRef.current || productoAplicadoRef.current || searchParams.has('rep') || searchParams.has('producto')) return
+        const esCampanaLoMismo = campana?.tipo === 'lo_mismo' || campana?.slug === 'lo-mismo'
+        // Un Smart Link tiene prioridad sobre recomendación histórica, excepto si es la campaña "Lo Mismo de Siempre".
+        if ((campana && !esCampanaLoMismo) || repAplicadoRef.current || productoAplicadoRef.current || searchParams.has('rep') || searchParams.has('producto') || searchParams.has('tk') || tkAplicadoRef.current) return
         if (!estadoAbierto.abierto || restaurante.soloPedidosProgramados || restaurante.pausadoPorSuscripcion) return
         recomendacionIntentadaRef.current = recomendacionKey
 
@@ -491,7 +638,7 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
                 const pedidos: PedidoHistorico[] = Array.isArray(response.data)
                     ? response.data.filter((pedido: PedidoHistorico) => pedido.estado !== 'cancelled' && pedido.items?.length > 0)
                     : []
-                if (pedidos.length === 0 || (!import.meta.env.DEV && pedidos.length < 2)) return
+                if (pedidos.length === 0 || (!esCampanaLoMismo && !import.meta.env.DEV && pedidos.length < 2)) return
 
                 const grupos = new Map<string, PedidoHistorico[]>()
                 pedidos.forEach(pedido => {
@@ -875,6 +1022,8 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
                 ...(campana ? { campaniaSlug: campana.slug, campanaId: campana.campanaId } : {}),
             }
             if (data.codigoDescuentoId) payload.codigoDescuentoId = data.codigoDescuentoId
+            if (data.canjeEnvioGratis) payload.canjeEnvioGratis = data.canjeEnvioGratis
+            if (data.canjeDescuento) payload.canjeDescuento = data.canjeDescuento
             if (tipoPedido === 'delivery') {
                 payload.direccion = data.direccion
                 if (data.lat != null) payload.lat = data.lat
@@ -932,6 +1081,9 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
                     montoDescuento: data.montoDescuento > 0 ? data.montoDescuento : undefined,
                     horarioProgramado: data.horarioProgramado || undefined,
                     notas: data.notas || undefined,
+                    puntosGanados: result.data.puntosGanados ?? 0,
+                    puntosUsados: result.data.puntosUsados ?? 0,
+                    puntosCanjeTipo: result.data.puntosCanjeTipo ?? null,
                 }
                 sessionStorage.setItem('deliveryOrderInfo', JSON.stringify(orderInfo))
                 if (restaurante.avisosWhatsappClienteEnabled === false) {
@@ -1044,22 +1196,6 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
     return (
         <div className="min-h-screen pb-32 bg-background font-sans selection:bg-primary/20">
             {themeStyles}
-            <div className="sticky top-0 z-20 bg-background/80 backdrop-blur-md border-b border-border/50 supports-backdrop-filter:bg-background/60">
-                <div className="max-w-2xl lg:max-w-5xl xl:max-w-6xl mx-auto px-4 py-3">
-                    <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                            <ThemeToggle />
-                        </div>
-                        <button
-                            onClick={() => setMisPedidosOpen(true)}
-                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold text-primary hover:bg-primary/10 transition-colors border border-primary/20"
-                        >
-                            <Package className="w-3.5 h-3.5" />
-                            Mis Pedidos
-                        </button>
-                    </div>
-                </div>
-            </div>
 
             {restaurante?.pausadoPorSuscripcion ? (
                 // Local pausado por suscripción (Tarea 8): cerrado temporalmente, no toma pedidos.
@@ -1087,6 +1223,26 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
             )}
 
             <div className="max-w-2xl lg:max-w-5xl xl:max-w-6xl mx-auto px-5 pt-4 space-y-6">
+                {bannerGrowth && (
+                    <div className="rounded-2xl bg-gradient-to-r from-emerald-500/15 via-emerald-500/10 to-transparent border border-emerald-500/30 p-4 shadow-sm flex items-center justify-between gap-3 animate-in fade-in slide-in-from-top-2 duration-300">
+                        <div className="flex items-center gap-3 min-w-0">
+                            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 font-black text-sm">
+                                {bannerGrowth.porcentaje}%
+                            </span>
+                            <div className="min-w-0">
+                                <p className="text-sm font-bold text-foreground leading-snug">
+                                    {bannerGrowth.texto}
+                                </p>
+                                <p className="text-xs text-muted-foreground mt-0.5">
+                                    Se descontará automáticamente al confirmar tu compra
+                                </p>
+                            </div>
+                        </div>
+                        <span className="rounded-full bg-emerald-600 px-3 py-1 text-[11px] font-bold text-white shrink-0 shadow-sm">
+                            Aplicado
+                        </span>
+                    </div>
+                )}
                 <section className="space-y-4">
                     <div className="flex items-center justify-center gap-4">
                         {restaurante.imagenUrl && (
@@ -1341,7 +1497,8 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
                             modo={expandido ? 'completo' : 'pasos'}
                             onVolverCarrito={() => {
                                 if (esPedidoHabitual) {
-                                    setCartItems([])
+                                    setEsPedidoHabitual(false)
+                                    setMostrarCheckoutEnCarrito(false)
                                     cerrarCarrito()
                                     return
                                 }
@@ -1376,7 +1533,7 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
                                 ...contextoParaPedidoMarketing(username),
                                 ...(campana ? { campaniaSlug: campana.slug, campanaId: campana.campanaId } : {}),
                             } : undefined}
-                            codigoPromocionalInicial={username ? codigoPromocionalMarketing(username) : null}
+                            codigoPromocionalInicial={descuentoGrowthCodigo || (username ? codigoPromocionalMarketing(username) : null)}
                             onConfirmarClick={() => {
                                 if (isSubmittingRef.current || !checkoutDataRef.current) return
                                 isSubmittingRef.current = true
@@ -1492,18 +1649,16 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
             </Sheet>
 
             <ProductDetailDrawer
-                product={selectedProduct ? { ...selectedProduct, categoria: selectedProduct.categoria ?? undefined } : null}
+                product={selectedProduct ? {
+                    ...selectedProduct,
+                    categoria: selectedProduct.categoria ?? undefined,
+                    puntosDisponiblesUsuario: (puntosCliente ?? 0) - puntosEnCarrito(),
+                } : null}
                 open={drawerOpen}
                 onClose={cerrarProductoDrawer}
                 onAddToOrder={agregarAlPedido}
                 siblings={productosNavegables}
                 onNavigate={(p) => setSelectedProduct(p)}
-            />
-
-            <MisPedidosDrawer
-                open={misPedidosOpen}
-                onOpenChange={setMisPedidosOpen}
-                restauranteId={restaurante?.id ?? null}
             />
 
             <Dialog open={modalSalaOpen} onOpenChange={setModalSalaOpen}>

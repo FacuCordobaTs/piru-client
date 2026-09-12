@@ -247,6 +247,9 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
 
     const [modalSalaOpen, setModalSalaOpen] = useState(false)
     const [nombreSala, setNombreSala] = useState('')
+    const [telefonoSala, setTelefonoSala] = useState(() => {
+        return localStorage.getItem('cliente_telefono') || localStorage.getItem('piru_cliente_telefono') || ''
+    })
     const [creandoSala, setCreandoSala] = useState(false)
 
     const [cartItems, setCartItems] = useState<any[]>(() => {
@@ -1135,7 +1138,7 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
             submitOrder(checkoutDataRef.current)
         }
     }, [submitOrder])
-    const crearSala = async (nombreParaSala: string) => {
+    const crearSala = async (nombreParaSala: string, telefonoParaSala?: string) => {
         if (!nombreParaSala.trim() || !restaurante?.id) return
         setCreandoSala(true)
         try {
@@ -1143,11 +1146,18 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
             const res = await fetch(`${url}/public/sala/create`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ restauranteId: restaurante.id, nombreCliente: nombreParaSala.trim() })
+                body: JSON.stringify({
+                    restauranteId: restaurante.id,
+                    nombreCliente: nombreParaSala.trim(),
+                    telefono: telefonoParaSala?.trim() || undefined,
+                })
             })
             const data = await res.json()
             if (data.success && data.data?.token) {
                 localStorage.setItem('cliente_nombre', nombreParaSala.trim())
+                if (telefonoParaSala?.trim()) {
+                    localStorage.setItem('cliente_telefono', telefonoParaSala.trim())
+                }
                 setModalSalaOpen(false)
                 navigate(`/sala/${data.data.token}/nombre`)
             } else {
@@ -1162,15 +1172,24 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
 
     const handleCrearSala = async (e: React.FormEvent) => {
         e.preventDefault()
-        await crearSala(nombreSala)
+        const digits = telefonoSala.replace(/\D/g, '')
+        if (digits.length < 8) {
+            toast.error('Ingresá un número de WhatsApp válido (mínimo 8 dígitos)')
+            return
+        }
+        await crearSala(nombreSala, telefonoSala)
     }
 
     const onArmarPedidoClick = () => {
         if (creandoSala) return
         const storedName = localStorage.getItem('cliente_nombre')
-        if (storedName) {
-            crearSala(storedName)
+        const storedTel = localStorage.getItem('cliente_telefono') || localStorage.getItem('piru_cliente_telefono') || ''
+        const digits = storedTel.replace(/\D/g, '')
+        if (storedName && digits.length >= 8) {
+            crearSala(storedName, storedTel)
         } else {
+            if (storedName) setNombreSala(storedName)
+            if (storedTel) setTelefonoSala(storedTel)
             setModalSalaOpen(true)
         }
     }
@@ -1687,20 +1706,42 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
                         ))}
                     </ol>
                     <form onSubmit={handleCrearSala} className="mt-5 space-y-3">
-                        <Input
-                            placeholder="¿Cuál es tu nombre?"
-                            value={nombreSala}
-                            onChange={(e) => setNombreSala(e.target.value)}
-                            required
-                            autoComplete="off"
-                            autoFocus
-                            className="h-12 text-center rounded-xl"
-                        />
-                        <DialogFooter className="flex-col gap-2 sm:gap-2">
+                        <div className="space-y-1 text-left">
+                            <label className="text-xs font-semibold text-neutral-500 uppercase px-1">
+                                Tu nombre
+                            </label>
+                            <Input
+                                placeholder="¿Cuál es tu nombre?"
+                                value={nombreSala}
+                                onChange={(e) => setNombreSala(e.target.value)}
+                                required
+                                autoComplete="name"
+                                autoFocus
+                                className="h-12 text-center rounded-xl"
+                            />
+                        </div>
+                        <div className="space-y-1 text-left">
+                            <label className="text-xs font-semibold text-neutral-500 uppercase px-1">
+                                Tu WhatsApp
+                            </label>
+                            <Input
+                                type="tel"
+                                placeholder="Ej: 11 2345 6789"
+                                value={telefonoSala}
+                                onChange={(e) => setTelefonoSala(e.target.value)}
+                                required
+                                autoComplete="tel"
+                                className="h-12 text-center rounded-xl"
+                            />
+                            <p className="text-[11px] text-neutral-400 px-1">
+                                Para asociar tus productos a tu cuenta
+                            </p>
+                        </div>
+                        <DialogFooter className="flex-col gap-2 sm:gap-2 pt-1">
                             <Button
                                 type="submit"
                                 size="lg"
-                                disabled={creandoSala || !nombreSala.trim()}
+                                disabled={creandoSala || !nombreSala.trim() || telefonoSala.replace(/\D/g, '').length < 8}
                                 className="w-full rounded-2xl font-semibold"
                             >
                                 {creandoSala ? (

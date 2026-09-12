@@ -74,7 +74,7 @@ function checkIsOpen(horarios: HorarioTurno[]): { abierto: boolean; proximaApert
 const Menu = () => {
   const navigate = useNavigate()
   const { qrToken: urlQrToken } = useParams<{ qrToken?: string }>()
-  const { mesa, productos, clientes, clienteNombre, clienteId, qrToken, isHydrated, sessionEnded, restaurante, checkoutDeliveryData, checkoutEditSemaphore, setMesa, setProductos, setPedidoId, setPedido, setRestaurante, setQrToken, setClientes, setCheckoutDeliveryData, setCheckoutEditSemaphore } = useMesaStore()
+  const { mesa, productos, clientes, clienteNombre, clienteTelefono, clienteId, qrToken, isHydrated, sessionEnded, restaurante, checkoutDeliveryData, checkoutEditSemaphore, setMesa, setProductos, setPedidoId, setPedido, setRestaurante, setQrToken, setClientes, setCheckoutDeliveryData, setCheckoutEditSemaphore } = useMesaStore()
   const { state: wsState, isConnected, sendMessage, confirmacionGrupal, confirmacionCancelada, clearConfirmacionCancelada } = useClienteWebSocket()
 
   const [carritoAbierto, setCarritoAbierto] = useState(false)
@@ -196,8 +196,9 @@ const Menu = () => {
     if (!isHydrated) return
     if (sessionEnded) return
 
-    if (!clienteNombre || (!qrToken && !urlQrToken)) {
-      toast.error('Debes ingresar tu nombre primero')
+    const digitsCliente = (clienteTelefono || localStorage.getItem('cliente_telefono') || '').replace(/\D/g, '')
+    if (!clienteNombre || digitsCliente.length < 8 || (!qrToken && !urlQrToken)) {
+      toast.error('Debes ingresar tu nombre y teléfono primero')
       const isSala = window.location.pathname.includes('/sala/')
       const token = urlQrToken || qrToken || 'invalid'
       navigate(isSala ? `/sala/${token}/nombre` : `/mesa/${token}`)
@@ -216,7 +217,7 @@ const Menu = () => {
         navigate('/pedido-cerrado')
       }
     }
-  }, [clienteNombre, qrToken, wsState?.estado, navigate, isHydrated, sessionEnded, restaurante?.esCarrito])
+  }, [clienteNombre, clienteTelefono, qrToken, wsState?.estado, navigate, isHydrated, sessionEnded, restaurante?.esCarrito])
 
   // Lógica de productos y categorías (se mantiene igual)
   const categorias = ['All', ...Array.from(new Set(productos.map(p => p.categoria).filter(Boolean)))]
@@ -279,11 +280,13 @@ const Menu = () => {
     }
     const precioAgregados = (agregados || []).reduce((sum: number, ag: any) => sum + parseFloat(ag.precio || '0'), 0)
     const precioUnitario = (precioBase + precioAgregados).toFixed(2)
+    const tel = clienteTelefono || localStorage.getItem('cliente_telefono') || undefined
     sendMessage({
       type: 'AGREGAR_ITEM',
       payload: {
         productoId: producto.id,
         clienteNombre,
+        clienteTelefono: tel,
         cantidad,
         precioUnitario,
         imagenUrl: producto.imagenUrl,

@@ -9,6 +9,8 @@ interface ItemPedido {
   id: number
   productoId: number
   clienteNombre: string
+  clienteTelefono?: string | null
+  clienteId?: number | null
   cantidad: number
   precioUnitario: string
   nombreProducto?: string // Nombre del producto desde el servidor
@@ -56,7 +58,7 @@ const WS_URL = import.meta.env.VITE_WS_URL || 'wss://api.piru.app'
 
 export const useClienteWebSocket = (): UseClienteWebSocketReturn => {
   const {
-    qrToken, clienteId, clienteNombre, setClientes, setPedidoId,
+    qrToken, clienteId, clienteNombre, clienteTelefono, setClientes, setPedidoId,
     setPedidoCerrado, clearPedidoCerrado, setSubtotalesPagados, pedidoId, sessionEnded, endSession,
     setPedido, setPedidoListo, setCheckoutDeliveryData, setCheckoutEditSemaphore
   } = useMesaStore()
@@ -74,12 +76,14 @@ export const useClienteWebSocket = (): UseClienteWebSocketReturn => {
   // Refs para acceder a los valores actuales sin causar reconexiones
   const clienteIdRef = useRef(clienteId)
   const clienteNombreRef = useRef(clienteNombre)
+  const clienteTelefonoRef = useRef(clienteTelefono)
 
   // Mantener refs actualizados
   useEffect(() => {
     clienteIdRef.current = clienteId
     clienteNombreRef.current = clienteNombre
-  }, [clienteId, clienteNombre])
+    clienteTelefonoRef.current = clienteTelefono
+  }, [clienteId, clienteNombre, clienteTelefono])
 
   // Función para limpiar el estado de cancelación
   const clearConfirmacionCancelada = useCallback(() => {
@@ -114,10 +118,11 @@ export const useClienteWebSocket = (): UseClienteWebSocketReturn => {
         payload: {
           clienteId,
           nombre: clienteNombre,
+          telefono: clienteTelefono || undefined,
         },
       })
     }
-  }, [isConnected, clienteId, clienteNombre, sendMessage, sessionEnded])
+  }, [isConnected, clienteId, clienteNombre, clienteTelefono, sendMessage, sessionEnded])
 
   // Efecto principal de conexión - SOLO depende de qrToken y sessionEnded
   useEffect(() => {

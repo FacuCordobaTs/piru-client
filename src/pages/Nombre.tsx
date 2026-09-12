@@ -33,6 +33,9 @@ const Nombre = () => {
   const location = useLocation()
   const { qrToken: urlQrToken } = useParams<{ qrToken: string }>()
   const [nombre, setNombre] = useState('')
+  const [telefono, setTelefono] = useState(() => {
+    return localStorage.getItem('cliente_telefono') || localStorage.getItem('piru_cliente_telefono') || ''
+  })
   const [isLoading, setIsLoading] = useState(true)
   const [shouldAskName, setShouldAskName] = useState(false)
   const [currentFeature, setCurrentFeature] = useState(0)
@@ -40,7 +43,7 @@ const Nombre = () => {
   const [showCarritoModal, setShowCarritoModal] = useState(false) // Modal para carritos existentes
   const {
     setMesa, setProductos, setQrToken, setClienteInfo, setPedidoId, setPedido, setRestaurante,
-    pedido, clienteNombre, qrToken: storedQrToken, isHydrated, sessionEnded,
+    pedido, clienteNombre, clienteTelefono, qrToken: storedQrToken, isHydrated, sessionEnded,
     reset, clearPedidoCerrado, restaurante, mesa
   } = useMesaStore()
 
@@ -57,26 +60,32 @@ const Nombre = () => {
     // Esperar a que el store se hidrate
     if (!isHydrated) return
 
+    const storedLocalName = localStorage.getItem('cliente_nombre')
+    const storedLocalTel = localStorage.getItem('cliente_telefono') || localStorage.getItem('piru_cliente_telefono') || ''
+
     // Si es un nuevo QR diferente al guardado, o la sesión terminó, limpiar datos
     if (urlQrToken && (urlQrToken !== storedQrToken || sessionEnded)) {
       console.log('Nuevo QR o sesión terminada, limpiando datos anteriores', { urlQrToken, storedQrToken, sessionEnded })
-      const storedLocalName = localStorage.getItem('cliente_nombre')
       reset()
       clearPedidoCerrado()
       setDataLoaded(false) // Marcar que necesitamos recargar datos
 
-      if (storedLocalName) {
+      const digits = storedLocalTel.replace(/\D/g, '')
+      if (storedLocalName && digits.length >= 8) {
         const clienteId = `cliente-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
-        setClienteInfo(clienteId, storedLocalName)
+        setClienteInfo(clienteId, storedLocalName, storedLocalTel)
       } else {
+        if (storedLocalName) setNombre(storedLocalName)
+        if (storedLocalTel) setTelefono(storedLocalTel)
         setShouldAskName(true)
       }
       return // Importante: retornar para no seguir con la redirección
     }
 
-    // Si ya tiene nombre para este mismo QR y la sesión no terminó, redirigir automáticamente
+    const digitsCliente = (clienteTelefono || storedLocalTel).replace(/\D/g, '')
+    // Si ya tiene nombre y teléfono para este mismo QR y la sesión no terminó, redirigir automáticamente
     // PERO solo si ya tenemos datos del servidor cargados (dataLoaded)
-    if (urlQrToken === storedQrToken && clienteNombre && !sessionEnded && dataLoaded) {
+    if (urlQrToken === storedQrToken && clienteNombre && digitsCliente.length >= 8 && !sessionEnded && dataLoaded) {
       console.log('Usuario ya registrado, redirigiendo según estado del pedido', { estado: pedido?.estado })
       const estadoPedido = pedido?.estado
       if (estadoPedido === 'preparing') {
@@ -87,11 +96,15 @@ const Nombre = () => {
         const isSala = location.pathname.includes('/sala/');
         navigate(isSala ? `/sala/${urlQrToken}` : '/menu')
       }
-    } else if (!clienteNombre) {
-      // Si no hay nombre, mostrar formulario
+    } else if (!clienteNombre || digitsCliente.length < 8) {
+      // Si falta nombre o teléfono válido, mostrar formulario
+      if (clienteNombre) setNombre(clienteNombre)
+      else if (storedLocalName) setNombre(storedLocalName)
+      if (clienteTelefono) setTelefono(clienteTelefono)
+      else if (storedLocalTel) setTelefono(storedLocalTel)
       setShouldAskName(true)
     }
-  }, [isHydrated, urlQrToken, storedQrToken, clienteNombre, sessionEnded, pedido?.estado, navigate, dataLoaded])
+  }, [isHydrated, urlQrToken, storedQrToken, clienteNombre, clienteTelefono, sessionEnded, pedido?.estado, navigate, dataLoaded])
 
   // Efecto para cargar datos de la mesa o sala
   useEffect(() => {
@@ -200,27 +213,40 @@ const Nombre = () => {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    if (nombre.trim()) {
-      // Generar ID único para el cliente
-      const clienteId = `cliente-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
-      setClienteInfo(clienteId, nombre.trim())
-      localStorage.setItem('cliente_nombre', nombre.trim())
+    const nombreLimpio = nombre.trim()
+    const telLimpio = telefono.trim()
+    const digits = telLimpio.replace(/\D/g, '')
 
-      // Redirigir según el estado del pedido del SERVIDOR (no del localStorage viejo)
-      // El pedido ya se actualizó desde el servidor en el useEffect de carga
-      const estadoPedido = pedido?.estado
-      console.log('Redirigiendo después de ingresar nombre, estado:', estadoPedido)
+    if (!nombreLimpio) {
+      toast.error('Ingresá tu nombre')
+      return
+    }
 
-      if (estadoPedido === 'preparing' || estadoPedido === 'delivered') {
-        navigate('/pedido-confirmado')
-      } else if (estadoPedido === 'closed') {
-        // Si el pedido está cerrado, ir directamente a la pantalla de pago
-        navigate('/pedido-cerrado')
-      } else {
-        // pending o cualquier otro estado -> ir al menú o sala
-        const isSala = location.pathname.includes('/sala/');
-        navigate(isSala ? `/sala/${urlQrToken}` : '/menu')
-      }
+    if (digits.length < 8) {
+      toast.error('Ingresá un número de teléfono válido (mínimo 8 dígitos)')
+      return
+    }
+
+    // Generar ID único para el cliente
+    const clienteId = `cliente-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+    setClienteInfo(clienteId, nombreLimpio, telLimpio)
+    localStorage.setItem('cliente_nombre', nombreLimpio)
+    localStorage.setItem('cliente_telefono', telLimpio)
+
+    // Redirigir según el estado del pedido del SERVIDOR (no del localStorage viejo)
+    // El pedido ya se actualizó desde el servidor en el useEffect de carga
+    const estadoPedido = pedido?.estado
+    console.log('Redirigiendo después de ingresar nombre y teléfono, estado:', estadoPedido)
+
+    if (estadoPedido === 'preparing' || estadoPedido === 'delivered') {
+      navigate('/pedido-confirmado')
+    } else if (estadoPedido === 'closed') {
+      // Si el pedido está cerrado, ir directamente a la pantalla de pago
+      navigate('/pedido-cerrado')
+    } else {
+      // pending o cualquier otro estado -> ir al menú o sala
+      const isSala = location.pathname.includes('/sala/');
+      navigate(isSala ? `/sala/${urlQrToken}` : '/menu')
     }
   }
 
@@ -323,13 +349,16 @@ const Nombre = () => {
             {/* Instrucción clara */}
             <div className="text-center mb-6">
               <p className="text-neutral-600 dark:text-neutral-400 text-sm leading-relaxed">
-                Ingresá tu nombre para unirte al pedido
+                Ingresá tus datos para unirte al pedido
               </p>
             </div>
 
             {/* Formulario */}
-            <form onSubmit={handleSubmit} className="space-y-5">
-              <div className="space-y-2">
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div className="space-y-1 text-left">
+                <label htmlFor="nombre" className="text-xs font-semibold text-neutral-500 uppercase px-1">
+                  Tu nombre
+                </label>
                 <Input
                   id="nombre"
                   type="text"
@@ -338,15 +367,34 @@ const Nombre = () => {
                   onChange={(e) => setNombre(e.target.value)}
                   required
                   autoFocus
-                  autoComplete="off"
-                  className="h-14 text-lg text-center rounded-2xl border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800 focus:bg-white dark:focus:bg-neutral-900 transition-colors placeholder:text-neutral-400"
+                  autoComplete="name"
+                  className="h-12 text-base rounded-2xl border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800 focus:bg-white dark:focus:bg-neutral-900 transition-colors placeholder:text-neutral-400"
                 />
+              </div>
+
+              <div className="space-y-1 text-left">
+                <label htmlFor="telefono" className="text-xs font-semibold text-neutral-500 uppercase px-1">
+                  Tu número de WhatsApp
+                </label>
+                <Input
+                  id="telefono"
+                  type="tel"
+                  placeholder="Ej: 11 2345 6789"
+                  value={telefono}
+                  onChange={(e) => setTelefono(e.target.value)}
+                  required
+                  autoComplete="tel"
+                  className="h-12 text-base rounded-2xl border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800 focus:bg-white dark:focus:bg-neutral-900 transition-colors placeholder:text-neutral-400"
+                />
+                <p className="text-[11px] text-neutral-400 px-1">
+                  Para guardar tus productos y avisarte el estado de tu pedido
+                </p>
               </div>
 
               <Button
                 type="submit"
-                className="w-full h-14 text-base font-semibold rounded-2xl bg-neutral-900 hover:bg-neutral-800 dark:bg-white dark:hover:bg-neutral-100 dark:text-neutral-900 transition-all duration-200 shadow-lg hover:shadow-xl hover:scale-[1.02] active:scale-[0.98]"
-                disabled={!nombre.trim()}
+                className="w-full h-14 text-base font-semibold rounded-2xl bg-neutral-900 hover:bg-neutral-800 dark:bg-white dark:hover:bg-neutral-100 dark:text-neutral-900 transition-all duration-200 shadow-lg hover:shadow-xl hover:scale-[1.02] active:scale-[0.98] mt-2"
+                disabled={!nombre.trim() || telefono.replace(/\D/g, '').length < 8}
               >
                 <span>Comenzar</span>
                 <ChevronRight className="ml-2 h-5 w-5" />

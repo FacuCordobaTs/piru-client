@@ -137,6 +137,7 @@ interface MesaState {
   pedido: Pedido | null
   clienteId: string | null
   clienteNombre: string | null
+  clienteTelefono: string | null
   qrToken: string | null
   isLoading: boolean
   error: string | null
@@ -161,7 +162,7 @@ interface MesaState {
   setClientes: (clientes: Cliente[]) => void
   setPedidoId: (pedidoId: number) => void
   setPedido: (pedido: Pedido) => void
-  setClienteInfo: (id: string, nombre: string) => void
+  setClienteInfo: (id: string, nombre: string, telefono?: string) => void
   setQrToken: (token: string) => void
   setLoading: (loading: boolean) => void
   setError: (error: string | null) => void
@@ -185,6 +186,7 @@ export const useMesaStore = create<MesaState>()(
       pedido: null,
       clienteId: null,
       clienteNombre: null,
+      clienteTelefono: null,
       qrToken: null,
       isLoading: false,
       error: null,
@@ -218,7 +220,11 @@ export const useMesaStore = create<MesaState>()(
       }),
 
       setPedido: (pedido) => set({ pedido }),
-      setClienteInfo: (id, nombre) => set({ clienteId: id, clienteNombre: nombre }),
+      setClienteInfo: (id, nombre, telefono) => set({
+        clienteId: id,
+        clienteNombre: nombre,
+        clienteTelefono: telefono || null,
+      }),
 
       // CORRECCIÓN CRÍTICA: Al cambiar de mesa (QR), limpiar todo
       setQrToken: (token) => set((state) => {
@@ -251,6 +257,7 @@ export const useMesaStore = create<MesaState>()(
         pedido: null,
         clienteId: null,
         clienteNombre: null,
+        clienteTelefono: null,
         qrToken: null,
         isLoading: false,
         error: null,
@@ -267,6 +274,7 @@ export const useMesaStore = create<MesaState>()(
       partialize: (state) => ({
         clienteId: state.clienteId,
         clienteNombre: state.clienteNombre,
+        clienteTelefono: state.clienteTelefono,
         qrToken: state.qrToken,
         pedidoId: state.pedidoId,
         mesa: state.mesa,

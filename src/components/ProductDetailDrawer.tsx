@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Drawer, DrawerContent } from '@/components/ui/drawer'
 import { motion, AnimatePresence, type PanInfo } from 'motion/react'
-import { Check, ChevronLeft, ChevronRight, Clock } from 'lucide-react'
+import { Check, ChevronLeft, ChevronRight, Clock, Sparkles } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Textarea } from '@/components/ui/textarea'
 
@@ -48,6 +48,9 @@ interface Product {
   intentandoCanjear?: boolean
   puntosNecesarios?: number | string | null
   puntosDisponiblesUsuario?: number
+  puntosGanados?: number | string | null
+  sistemaPuntos?: boolean
+  configuracionPuntos?: any
 }
 
 interface ProductDetailDrawerProps {
@@ -60,6 +63,8 @@ interface ProductDetailDrawerProps {
   siblings?: Product[]
   /** Se llama con el producto destino al navegar (el padre actualiza el producto abierto). */
   onNavigate?: (product: Product) => void
+  sistemaPuntos?: boolean
+  configuracionPuntos?: any
 }
 
 function formatTimeLeft(fechaFin: string | Date | null): string | null {
@@ -113,7 +118,7 @@ const navVariants = {
 
 type CustomizationStage = 'primary' | 'secondary' | 'extrasPrimary' | 'extrasSecondary' | 'note'
 
-export function ProductDetailDrawer({ product, open, onClose, onAddToOrder, siblings, onNavigate }: ProductDetailDrawerProps) {
+export function ProductDetailDrawer({ product, open, onClose, onAddToOrder, siblings, onNavigate, sistemaPuntos, configuracionPuntos }: ProductDetailDrawerProps) {
   const [stage, setStage] = useState<CustomizationStage>('primary')
   const [quantity, setQuantity] = useState(1)
   const [ingredientesExcluidos, setIngredientesExcluidos] = useState<number[]>([])
@@ -269,6 +274,31 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder, sibl
     : undefined
   const puntosInsuficientes = esCanje && puntosDisponibles !== undefined && puntosDisponibles < puntosRequeridos
 
+  const sistemaPuntosActivo = Boolean(
+    sistemaPuntos ??
+    product?.sistemaPuntos ??
+    (Number(product?.puntosGanados || 0) > 0 || Number(product?.puntosNecesarios || 0) > 0)
+  )
+
+  const configPuntos = configuracionPuntos ?? (product as any)?.configuracionPuntos
+  const puntosDirectos = Number(product?.puntosGanados || 0)
+  const divisorMonto = Number(configPuntos?.pesosPorPunto || 100)
+  const puntosPorMonto = (configPuntos?.modoAcumulacion === 'monto' || configPuntos?.modoAcumulacion === 'ambos') && divisorMonto > 0
+    ? Math.floor(precioUnitConDescuento / divisorMonto)
+    : 0
+
+  const puntosQueDa = (() => {
+    if (esCanje) return 0
+    if (configPuntos?.modoAcumulacion === 'producto') return puntosDirectos
+    if (configPuntos?.modoAcumulacion === 'monto') return puntosPorMonto
+    if (configPuntos?.modoAcumulacion === 'ambos') return puntosDirectos + puntosPorMonto
+    if (puntosDirectos > 0) return puntosDirectos
+    if (configPuntos && divisorMonto > 0) return Math.floor(precioUnitConDescuento / divisorMonto)
+    return 0
+  })()
+
+  const tienePuntosBadge = sistemaPuntosActivo && !esCanje && puntosQueDa > 0
+
   const timeLeft = tieneDescuento ? formatTimeLeft(product?.descuentoFechaFin ?? null) : null
   const nombreLength = product?.nombre.trim().length ?? 0
   const nombreFontSize = nombreLength > 90 ? 15 : nombreLength > 65 ? 17 : nombreLength > 45 ? 20 : nombreLength > 30 ? 23 : undefined
@@ -279,7 +309,7 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder, sibl
   const secondaryVariantCount = product?.variantesSecundarias?.length ?? 0
   const vh = typeof window !== 'undefined' ? window.innerHeight : 800
 
-  const stage1Base = sinImagen ? FLAT_STAGE1_BASE_H : STAGE1_BASE_H
+  const stage1Base = (sinImagen ? FLAT_STAGE1_BASE_H : STAGE1_BASE_H) + (tienePuntosBadge ? 28 : 0)
   const stage2Base = sinImagen ? FLAT_STAGE2_BASE_H : STAGE2_BASE_H
 
   // Etapa 1: mínimo equivalente a 1 variante visible, crece hasta 3, techo en 85vh
@@ -544,9 +574,21 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder, sibl
                               className="absolute inset-0 flex flex-col"
                             >
                               <div className="min-h-0 flex-1 space-y-6 overflow-y-auto overscroll-contain px-6 pb-4 pt-6">
-                                {stage === 'primary' && <p className="text-[15px] leading-relaxed text-foreground/70">
-                                  {product.descripcion || 'Sin descripción.'}
-                                </p>}
+                                {stage === 'primary' && (
+                                  <div className="space-y-2">
+                                    <p className="text-[15px] leading-relaxed text-foreground/70">
+                                      {product.descripcion || 'Sin descripción.'}
+                                    </p>
+                                    {tienePuntosBadge && (
+                                      <div className="flex items-center gap-1.5 pt-0.5">
+                                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-primary/10 text-primary border border-primary/20">
+                                          <Sparkles className="w-3.5 h-3.5" />
+                                          Sumás +{puntosQueDa} {puntosQueDa === 1 ? 'punto' : 'puntos'}
+                                        </span>
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
 
                                 {((stage === 'primary' && tieneVariantes) || (stage === 'secondary' && tieneVariantesSecundarias)) && (
                                   <div className="space-y-1">

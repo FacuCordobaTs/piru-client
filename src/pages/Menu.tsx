@@ -915,7 +915,14 @@ const Menu = () => {
       </div>
 
       <ProductDetailDrawer
-        product={selectedProduct ? { ...selectedProduct, categoria: selectedProduct.categoria ?? undefined } : null}
+        product={selectedProduct ? {
+          ...selectedProduct,
+          categoria: selectedProduct.categoria ?? undefined,
+          sistemaPuntos: Boolean(restaurante?.sistemaPuntos),
+          configuracionPuntos: restaurante?.configuracionPuntos,
+        } : null}
+        sistemaPuntos={Boolean(restaurante?.sistemaPuntos)}
+        configuracionPuntos={restaurante?.configuracionPuntos}
         open={drawerOpen}
         onClose={cerrarProductoDrawer}
         onAddToOrder={agregarAlPedido}

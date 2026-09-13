@@ -26,6 +26,8 @@ interface Restaurante {
   comprobantesWhatsapp?: string | null
   transferenciaAlias?: string | null
   avisosWhatsappClienteEnabled?: boolean
+  sistemaPuntos?: boolean | null
+  configuracionPuntos?: any
 }
 
 interface Ingrediente {

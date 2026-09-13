@@ -1810,7 +1810,11 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
                     puntosDisponiblesUsuario: puntosCliente !== null
                         ? Math.max(0, (puntosCliente ?? 0) - puntosEnCarrito() - puntosUsadosBeneficios)
                         : undefined,
+                    sistemaPuntos: Boolean(restaurante?.sistemaPuntos),
+                    configuracionPuntos: restaurante?.configuracionPuntos,
                 } : null}
+                sistemaPuntos={Boolean(restaurante?.sistemaPuntos)}
+                configuracionPuntos={restaurante?.configuracionPuntos}
                 open={drawerOpen}
                 onClose={cerrarProductoDrawer}
                 onAddToOrder={agregarAlPedido}

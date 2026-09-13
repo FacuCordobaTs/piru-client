@@ -478,9 +478,9 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
         }
     }, [productos, searchParams, setSearchParams])
 
-    // Resuelve micro-campañas persistentes seguras cifradas con AES-256-GCM (?tk=v1...)
+    // Resuelve micro-campañas persistentes seguras cifradas con AES-256-GCM (?tk=v1... o ?c=v1...)
     useEffect(() => {
-        const tk = searchParams.get('tk')
+        const tk = searchParams.get('tk') || searchParams.get('c')
         if (!tk || tkAplicadoRef.current === tk || !username) return
         if (loading || !restaurante || productos.length === 0) return
 
@@ -607,7 +607,7 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
 
     // Soporte para micro-campañas independientes sin token individual (?c=reactivacion)
     useEffect(() => {
-        if (!campana || searchParams.has('tk') || tkAplicadoRef.current) return
+        if (!campana || searchParams.has('tk') || searchParams.has('c') || tkAplicadoRef.current) return
 
         if (campana.tipo === 'reactivacion' || campana.slug === 'reactivacion') {
             const pct = campana.descuentoPorcentaje > 0 ? campana.descuentoPorcentaje : 10
@@ -624,7 +624,7 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
         if (loading || !recomendacionKey || productos.length === 0 || recomendacionIntentadaRef.current === recomendacionKey) return
         const esCampanaLoMismo = campana?.tipo === 'lo_mismo' || campana?.slug === 'lo-mismo'
         // Un Smart Link tiene prioridad sobre recomendación histórica, excepto si es la campaña "Lo Mismo de Siempre".
-        if ((campana && !esCampanaLoMismo) || repAplicadoRef.current || productoAplicadoRef.current || searchParams.has('rep') || searchParams.has('producto') || searchParams.has('tk') || tkAplicadoRef.current) return
+        if ((campana && !esCampanaLoMismo) || repAplicadoRef.current || productoAplicadoRef.current || searchParams.has('rep') || searchParams.has('producto') || searchParams.has('tk') || searchParams.has('c') || tkAplicadoRef.current) return
         if (!estadoAbierto.abierto || restaurante.soloPedidosProgramados || restaurante.pausadoPorSuscripcion) return
         recomendacionIntentadaRef.current = recomendacionKey
 

@@ -5,7 +5,8 @@ import { Sheet, SheetContent } from '@/components/ui/sheet'
 import { toast } from 'sonner'
 import {
     Trash2, Maximize2, Minimize2, Loader2,
-    Package, Receipt, UtensilsCrossed, Utensils, Clock, Share2, User, Plus
+    Package, Receipt, UtensilsCrossed, Utensils, Clock, Share2, User, Plus,
+    Check, Truck, Percent, Sparkles
 } from 'lucide-react'
 import { ProductDetailDrawer } from '@/components/ProductDetailDrawer'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
@@ -274,6 +275,8 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
     const [puntosCliente, setPuntosCliente] = useState<number | null>(null)
     const [loadingPuntos, setLoadingPuntos] = useState(false)
     const [modalPuntosOpen, setModalPuntosOpen] = useState(false)
+    const [canjeEnvioGratis, setCanjeEnvioGratis] = useState(false)
+    const [canjeDescuento, setCanjeDescuento] = useState(false)
 
     const [mostrarCheckoutEnCarrito, setMostrarCheckoutEnCarrito] = useState(false)
     const [expandido, setExpandido] = useState(false)
@@ -836,9 +839,81 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
         return ordenCategoria(a) - ordenCategoria(b) || a.localeCompare(b)
     }
     const categoriasBase = Array.from(new Set<string>(productos.map(p => p.categoria).filter(Boolean))).sort(compararCategorias)
-    const tieneProductosCanje = productos.some(p => p.puntosNecesarios > 0)
     const categorias = ['All', ...categoriasBase]
-    if (restaurante?.sistemaPuntos && tieneProductosCanje) categorias.push('Canje Puntos')
+
+    const configPuntos = restaurante?.sistemaPuntos ? restaurante?.configuracionPuntos : null
+    const tieneEnvioGratisCanje = Boolean(configPuntos?.permiteCanjeEnvioGratis || configPuntos?.permitirCanjeEnvioGratis)
+    const tieneDescuentoCanje = Boolean(configPuntos?.permiteCanjeDescuento || configPuntos?.permitirCanjeDescuento)
+    const costoEnvioGratis = Number(configPuntos?.puntosEnvioGratis || 0)
+    const costoDescuento = Number(configPuntos?.descuentoPuntosCosto || 0)
+
+    const puntosEnCarrito = () => cartItems.reduce((sum, item) => sum + (item.esCanjePuntos ? item.puntosNecesarios * item.cantidad : 0), 0)
+    const puntosGanadosCarrito = () => cartItems.reduce((sum, item) => sum + (!item.esCanjePuntos && item.puntosGanados ? item.puntosGanados * item.cantidad : 0), 0)
+
+    const puntosUsadosBeneficios = (canjeEnvioGratis && tieneEnvioGratisCanje ? costoEnvioGratis : 0) + (canjeDescuento && tieneDescuentoCanje ? costoDescuento : 0)
+    const productosCanje = productos.filter(p => Number(p.puntosNecesarios) > 0)
+    const tieneOpcionesCanje = productosCanje.length > 0 || tieneEnvioGratisCanje || tieneDescuentoCanje
+
+    useEffect(() => {
+        if (puntosCliente !== null) {
+            const disponiblesAntes = (puntosCliente ?? 0) - puntosEnCarrito()
+            if (canjeEnvioGratis && disponiblesAntes < costoEnvioGratis) {
+                setCanjeEnvioGratis(false)
+            }
+            const disponiblesTrasEnvio = disponiblesAntes - (canjeEnvioGratis ? costoEnvioGratis : 0)
+            if (canjeDescuento && disponiblesTrasEnvio < costoDescuento) {
+                setCanjeDescuento(false)
+            }
+        }
+    }, [puntosCliente, cartItems, canjeEnvioGratis, canjeDescuento, costoEnvioGratis, costoDescuento])
+
+    const handleToggleEnvioGratis = () => {
+        if (puntosCliente === null) {
+            setModalPuntosOpen(true)
+            toast.info('Identifícate con tu WhatsApp para canjear tus puntos')
+            return
+        }
+        if (canjeEnvioGratis) {
+            setCanjeEnvioGratis(false)
+            setCheckoutDeliveryData((prev: any) => ({ ...prev, canjeEnvioGratis: false }))
+            if (checkoutDataRef.current) checkoutDataRef.current.canjeEnvioGratis = false
+            toast.info('Envío gratis desactivado')
+            return
+        }
+        const disponibles = (puntosCliente || 0) - puntosEnCarrito() - (canjeDescuento ? costoDescuento : 0)
+        if (disponibles < costoEnvioGratis) {
+            toast.error(`Te faltan ${costoEnvioGratis - disponibles} pts para canjear envío gratis`)
+            return
+        }
+        setCanjeEnvioGratis(true)
+        setCheckoutDeliveryData((prev: any) => ({ ...prev, canjeEnvioGratis: true }))
+        if (checkoutDataRef.current) checkoutDataRef.current.canjeEnvioGratis = true
+        toast.success('¡Envío gratis activado!')
+    }
+
+    const handleToggleDescuento = () => {
+        if (puntosCliente === null) {
+            setModalPuntosOpen(true)
+            toast.info('Identifícate con tu WhatsApp para canjear tus puntos')
+            return
+        }
+        if (canjeDescuento) {
+            setCanjeDescuento(false)
+            setCheckoutDeliveryData((prev: any) => ({ ...prev, canjeDescuento: false }))
+            if (checkoutDataRef.current) checkoutDataRef.current.canjeDescuento = false
+            toast.info('Descuento desactivado')
+            return
+        }
+        const disponibles = (puntosCliente || 0) - puntosEnCarrito() - (canjeEnvioGratis ? costoEnvioGratis : 0)
+        if (disponibles < costoDescuento) {
+            toast.error(`Te faltan ${costoDescuento - disponibles} pts para canjear el descuento`)
+            return
+        }
+        setCanjeDescuento(true)
+        setCheckoutDeliveryData((prev: any) => ({ ...prev, canjeDescuento: true }))
+        if (checkoutDataRef.current) checkoutDataRef.current.canjeDescuento = true
+        toast.success('¡Descuento activado!')
+    }
 
     const productosPorCategoria = productos.reduce((acc, producto) => {
         const categoria = producto.categoria || 'Sin categoría'
@@ -879,9 +954,7 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
         ? []
         : selectedCategory === 'All'
             ? categoriasOrdenadas.flatMap(c => productosPorCategoria[c] || [])
-            : selectedCategory === 'Canje Puntos'
-                ? []
-                : productosFiltrados
+            : productosFiltrados
 
     const agregarAlPedido = (producto: any, cantidad: number = 1, ingredientesExcluidos?: number[], agregados?: any[], varianteSeleccionada?: any, varianteSecundariaSeleccionada?: any, nota?: string) => {
         let ingExNombres: string[] = []
@@ -893,7 +966,12 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
 
         const esCanje = !!producto.intentandoCanjear;
         if (esCanje) {
-            const puntosRestantes = (puntosCliente || 0) - puntosEnCarrito() - (producto.puntosNecesarios * cantidad);
+            if (puntosCliente === null) {
+                setModalPuntosOpen(true)
+                toast.info('Identifícate con tu WhatsApp para canjear tus puntos')
+                return
+            }
+            const puntosRestantes = (puntosCliente || 0) - puntosEnCarrito() - puntosUsadosBeneficios - (producto.puntosNecesarios * cantidad);
             if (puntosRestantes < 0) {
                 toast.error('No tienes suficientes puntos para agregar este producto.');
                 return;
@@ -957,8 +1035,6 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
     }
 
     const totalPedido = cartItems.reduce((sum, item) => sum + (parseFloat(item.precio) * item.cantidad), 0).toFixed(2)
-    const puntosEnCarrito = () => cartItems.reduce((sum, item) => sum + (item.esCanjePuntos ? item.puntosNecesarios * item.cantidad : 0), 0)
-    const puntosGanadosCarrito = () => cartItems.reduce((sum, item) => sum + (!item.esCanjePuntos && item.puntosGanados ? item.puntosGanados * item.cantidad : 0), 0)
 
     const alturaCarrito = (() => {
         const n = cartItems.length
@@ -1025,8 +1101,10 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
                 ...(campana ? { campaniaSlug: campana.slug, campanaId: campana.campanaId } : {}),
             }
             if (data.codigoDescuentoId) payload.codigoDescuentoId = data.codigoDescuentoId
-            if (data.canjeEnvioGratis) payload.canjeEnvioGratis = data.canjeEnvioGratis
-            if (data.canjeDescuento) payload.canjeDescuento = data.canjeDescuento
+            const aplicarCanjeEnvio = data?.canjeEnvioGratis !== undefined ? Boolean(data.canjeEnvioGratis) : canjeEnvioGratis
+            const aplicarCanjeDescuento = data?.canjeDescuento !== undefined ? Boolean(data.canjeDescuento) : canjeDescuento
+            if (aplicarCanjeEnvio) payload.canjeEnvioGratis = true
+            if (aplicarCanjeDescuento) payload.canjeDescuento = true
             if (tipoPedido === 'delivery') {
                 payload.direccion = data.direccion
                 if (data.lat != null) payload.lat = data.lat
@@ -1132,6 +1210,12 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
             orderAttemptIdRef.current = null
             checkoutDataRef.current = msg.payload.updates
             setCheckoutDeliveryData(msg.payload.updates)
+            if (msg.payload?.updates?.canjeEnvioGratis !== undefined) {
+                setCanjeEnvioGratis(Boolean(msg.payload.updates.canjeEnvioGratis))
+            }
+            if (msg.payload?.updates?.canjeDescuento !== undefined) {
+                setCanjeDescuento(Boolean(msg.payload.updates.canjeDescuento))
+            }
         } else if (msg.type === 'ACEPTAR_EDICION_CHECKOUT') {
             if (isSubmittingRef.current) return
             isSubmittingRef.current = true
@@ -1319,12 +1403,12 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
                                 <span className="bg-primary text-primary-foreground text-xs px-2 py-0.5 rounded-full font-bold">PUNTOS</span>
                                 {puntosCliente !== null && (
                                     <span className="font-semibold text-foreground text-sm">
-                                        {puntosCliente - puntosEnCarrito() + puntosGanadosCarrito()} pts
+                                        {Math.max(0, puntosCliente - puntosEnCarrito() - puntosUsadosBeneficios + puntosGanadosCarrito())} pts
                                     </span>
                                 )}
                             </div>
                             <p className="text-xs text-muted-foreground max-w-[200px]">
-                                {puntosCliente === null ? 'Identifícate para ver tus puntos disponibles y canjear.' : 'Puntos acumulados. Canjea por productos.'}
+                                {puntosCliente === null ? 'Identifícate para ver tus puntos disponibles y canjear.' : 'Puntos acumulados. Canjea por productos o beneficios.'}
                             </p>
                         </div>
                         <div>
@@ -1337,6 +1421,68 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
                                     Activo
                                 </Button>
                             )}
+                        </div>
+                    </section>
+                )}
+
+                {restaurante?.sistemaPuntos && tieneOpcionesCanje && (
+                    <section className="space-y-3 pt-1 lg:max-w-2xl lg:mx-auto lg:w-full">
+                        <div className="flex items-center justify-between px-1">
+                            <h2 className="text-sm font-bold text-foreground uppercase tracking-wider flex items-center gap-1.5">
+                                <Sparkles className="w-4 h-4 text-primary" />
+                                Canje de puntos
+                            </h2>
+                            {puntosCliente !== null ? (
+                                <span className="text-xs text-muted-foreground font-medium">
+                                    Disponibles: <strong className="text-primary font-bold">{Math.max(0, (puntosCliente ?? 0) - puntosEnCarrito() - puntosUsadosBeneficios)} pts</strong>
+                                </span>
+                            ) : (
+                                <span className="text-xs text-muted-foreground">
+                                    Elegí productos o beneficios
+                                </span>
+                            )}
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 px-1">
+                            {tieneEnvioGratisCanje && (
+                                <BeneficioCanjeCard
+                                    tipo="envio"
+                                    titulo="Envío gratis"
+                                    descripcion={canjeEnvioGratis ? 'Activado para este pedido' : 'Bonifica el costo de envío'}
+                                    puntosNecesarios={costoEnvioGratis}
+                                    activo={canjeEnvioGratis}
+                                    onClick={handleToggleEnvioGratis}
+                                />
+                            )}
+
+                            {tieneDescuentoCanje && (
+                                <BeneficioCanjeCard
+                                    tipo="descuento"
+                                    titulo={configPuntos?.descuentoTipo === 'porcentaje'
+                                        ? `${Number(configPuntos?.descuentoValor || 0)}% de descuento`
+                                        : `$${Number(configPuntos?.descuentoValor || 0)} de descuento`}
+                                    descripcion={canjeDescuento
+                                        ? 'Activado para este pedido'
+                                        : (Number(configPuntos?.descuentoMontoMinimo || 0) > 0
+                                            ? `Mínimo $${configPuntos?.descuentoMontoMinimo}`
+                                            : 'Descuento en tu pedido')}
+                                    puntosNecesarios={costoDescuento}
+                                    activo={canjeDescuento}
+                                    onClick={handleToggleDescuento}
+                                />
+                            )}
+
+                            {productosCanje.map((producto: any) => {
+                                const enCarrito = cartItems.find(it => it.productoId === producto.id && it.esCanjePuntos)
+                                return (
+                                    <ProductoCanjeCard
+                                        key={producto.id}
+                                        producto={producto}
+                                        cantidadEnCarrito={enCarrito?.cantidad}
+                                        onClick={() => abrirDetalleProducto({ ...producto, intentandoCanjear: true })}
+                                    />
+                                )
+                            })}
                         </div>
                     </section>
                 )}
@@ -1394,21 +1540,6 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
                         ) : (
                             <EmptyState />
                         )
-                    ) : selectedCategory === 'Canje Puntos' ? (
-                        <div className="space-y-4">
-                            <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider px-1">
-                                Productos a Canjear
-                            </h3>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 px-1">
-                                {productos.filter(p => p.puntosNecesarios > 0).map((producto: any) => (
-                                    <ProductoCanjeCard
-                                        key={producto.id}
-                                        producto={producto}
-                                        onClick={() => abrirDetalleProducto({ ...producto, intentandoCanjear: true })}
-                                    />
-                                ))}
-                            </div>
-                        </div>
                     ) : (
                         productosFiltrados.length > 0 ? (
                             <div className="space-y-4">
@@ -1633,6 +1764,11 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
                                         if (restaurante?.pausadoPorSuscripcion) return
                                         if (!estadoAbierto.abierto && !restaurante?.permitirPedidosProgramados) return
                                         setEsPedidoHabitual(false)
+                                        setCheckoutDeliveryData((prev: any) => ({
+                                            ...(prev || {}),
+                                            canjeEnvioGratis,
+                                            canjeDescuento,
+                                        }))
                                         setMostrarCheckoutEnCarrito(true)
                                         setExpandido(false)
                                     }}
@@ -1671,7 +1807,9 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
                 product={selectedProduct ? {
                     ...selectedProduct,
                     categoria: selectedProduct.categoria ?? undefined,
-                    puntosDisponiblesUsuario: (puntosCliente ?? 0) - puntosEnCarrito(),
+                    puntosDisponiblesUsuario: puntosCliente !== null
+                        ? Math.max(0, (puntosCliente ?? 0) - puntosEnCarrito() - puntosUsadosBeneficios)
+                        : undefined,
                 } : null}
                 open={drawerOpen}
                 onClose={cerrarProductoDrawer}
@@ -1925,26 +2063,108 @@ const ProductoCard = ({ producto, onClick, fullWidth }: { producto: any, onClick
 
 export default MenuDelivery
 
-const ProductoCanjeCard = ({ producto, onClick }: { producto: any, onClick: () => void }) => (
+const BeneficioCanjeCard = ({
+    tipo,
+    titulo,
+    descripcion,
+    puntosNecesarios,
+    activo,
+    onClick,
+}: {
+    tipo: 'envio' | 'descuento'
+    titulo: string
+    descripcion: string
+    puntosNecesarios: number
+    activo: boolean
+    onClick: () => void
+}) => (
     <div
-        className="group relative flex min-h-24 w-full cursor-pointer items-center gap-4 overflow-hidden rounded-2xl border border-primary/20 bg-card p-3 shadow-sm transition-all duration-300 hover:border-primary/50 hover:bg-secondary/50"
+        className={`group relative flex min-h-24 w-full cursor-pointer items-center gap-3.5 overflow-hidden rounded-2xl border p-3 shadow-sm transition-all duration-300 ${
+            activo
+                ? 'border-primary bg-primary/10 shadow-md ring-1 ring-primary/30'
+                : 'border-primary/20 bg-card hover:border-primary/50 hover:bg-secondary/50'
+        }`}
+        onClick={onClick}
+    >
+        <div className={`w-16 h-16 shrink-0 rounded-xl overflow-hidden border flex items-center justify-center transition-colors ${
+            activo
+                ? 'bg-primary text-primary-foreground border-primary'
+                : 'bg-primary/10 text-primary border-primary/20'
+        }`}>
+            {tipo === 'envio' ? (
+                <Truck className="w-7 h-7" />
+            ) : (
+                <Percent className="w-7 h-7" />
+            )}
+        </div>
+        <div className="flex-1 min-w-0 flex flex-col justify-center">
+            <h3 className="break-words text-sm font-semibold leading-tight text-foreground [overflow-wrap:anywhere]">
+                {titulo}
+            </h3>
+            <p className={`text-xs line-clamp-1 mt-0.5 ${activo ? 'text-primary font-medium' : 'text-muted-foreground'}`}>
+                {descripcion}
+            </p>
+        </div>
+        <div className="flex flex-col items-end justify-center px-1 shrink-0">
+            <span className="text-[10px] font-bold text-primary mb-0.5">COSTO</span>
+            <span className="font-extrabold text-primary text-lg leading-none">{puntosNecesarios}</span>
+            <span className="text-[10px] font-medium text-primary mt-0.5">pts</span>
+            {activo ? (
+                <span className="mt-1.5 flex items-center gap-1 text-[11px] font-bold text-primary-foreground bg-primary px-2 py-0.5 rounded-full shadow-xs">
+                    <Check className="w-3 h-3 stroke-[2.5]" /> Activo
+                </span>
+            ) : (
+                <span className="mt-1.5 text-[11px] font-semibold text-primary bg-primary/10 group-hover:bg-primary group-hover:text-primary-foreground px-2 py-0.5 rounded-full transition-colors">
+                    Activar
+                </span>
+            )}
+        </div>
+    </div>
+)
+
+const ProductoCanjeCard = ({
+    producto,
+    cantidadEnCarrito,
+    onClick,
+}: {
+    producto: any
+    cantidadEnCarrito?: number
+    onClick: () => void
+}) => (
+    <div
+        className={`group relative flex min-h-24 w-full cursor-pointer items-center gap-3.5 overflow-hidden rounded-2xl border p-3 shadow-sm transition-all duration-300 ${
+            cantidadEnCarrito
+                ? 'border-primary/50 bg-primary/5'
+                : 'border-primary/20 bg-card hover:border-primary/50 hover:bg-secondary/50'
+        }`}
         onClick={onClick}
     >
         <div className="w-16 h-16 shrink-0 rounded-xl overflow-hidden bg-zinc-900 border border-border/50">
             {producto.imagenUrl ? (
                 <img src={producto.imagenUrl} alt={producto.nombre} className="w-full h-full object-cover" />
             ) : (
-                <div className="w-full h-full flex items-center justify-center bg-linear-to-br from-zinc-800 to-zinc-900"><Utensils className="w-6 h-6 text-primary" /></div>
+                <div className="w-full h-full flex items-center justify-center bg-linear-to-br from-zinc-800 to-zinc-900">
+                    <Utensils className="w-6 h-6 text-primary" />
+                </div>
             )}
         </div>
         <div className="flex-1 min-w-0 flex flex-col justify-center">
             <h3 className="break-words text-sm font-semibold leading-tight text-foreground [overflow-wrap:anywhere]">{producto.nombre}</h3>
-            <p className="text-xs text-muted-foreground line-clamp-1">{producto.descripcion || 'Canje de puntos'}</p>
+            <p className="text-xs text-muted-foreground line-clamp-1 mt-0.5">{producto.descripcion || 'Canje de producto'}</p>
         </div>
-        <div className="flex flex-col items-end justify-center px-2">
+        <div className="flex flex-col items-end justify-center px-1 shrink-0">
             <span className="text-[10px] font-bold text-primary mb-0.5">COSTO</span>
             <span className="font-extrabold text-primary text-lg leading-none">{producto.puntosNecesarios}</span>
             <span className="text-[10px] font-medium text-primary mt-0.5">pts</span>
+            {cantidadEnCarrito ? (
+                <span className="mt-1.5 flex items-center gap-1 text-[11px] font-bold text-primary-foreground bg-primary px-2 py-0.5 rounded-full shadow-xs">
+                    <Check className="w-3 h-3 stroke-[2.5]" /> En pedido ({cantidadEnCarrito})
+                </span>
+            ) : (
+                <span className="mt-1.5 text-[11px] font-semibold text-primary bg-primary/10 group-hover:bg-primary group-hover:text-primary-foreground px-2 py-0.5 rounded-full transition-colors">
+                    Canjear
+                </span>
+            )}
         </div>
     </div>
 )

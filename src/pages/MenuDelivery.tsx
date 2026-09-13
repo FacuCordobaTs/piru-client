@@ -505,6 +505,7 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
 
                 if (!res.ok) {
                     const errorData = await res.json().catch(() => null)
+                    console.error('Error resolviendo growth token:', res.status, errorData)
                     toast.error(errorData?.message || 'El enlace no es válido o ha expirado.')
                     return
                 }

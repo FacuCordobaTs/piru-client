@@ -40,8 +40,30 @@ export function CampanaLinkResolver() {
       if (!activo) return
       window.clearTimeout(timeout)
       if (respuesta?.data?.encontrada && respuesta.data.contexto?.campaniaSlug) {
-        guardarContextoTracking({ username, campaniaSlug: respuesta.data.contexto.campaniaSlug, campanaId: respuesta.data.contexto.campanaId })
-        setCampana(respuesta.data.campana ?? null)
+        guardarContextoTracking({
+          username,
+          campaniaSlug: respuesta.data.contexto.campaniaSlug,
+          campanaId: respuesta.data.contexto.campanaId,
+          codigoPromocional: respuesta.data.beneficio?.codigo,
+        })
+        const campanaBase = respuesta.data.campana
+        const destino = respuesta.data.destino
+        const campanaPublica: CampanaPublica = {
+          campanaId: campanaBase?.campanaId ?? respuesta.data.contexto.campanaId ?? 0,
+          nombre: campanaBase?.nombre ?? '',
+          slug: campanaBase?.slug ?? respuesta.data.contexto.campaniaSlug,
+          tipo: campanaBase?.tipo,
+          destinoTipo: destino?.tipo ?? campanaBase?.destinoTipo,
+          productoId: destino?.tipo === 'producto' ? destino.productoId : (campanaBase?.productoId ?? null),
+          carritoRep: destino?.tipo === 'carrito' ? destino.carritoRep : (campanaBase?.carritoRep ?? null),
+          descuentoPorcentaje: campanaBase?.descuentoPorcentaje ?? 0,
+          limiteUsos: campanaBase?.limiteUsos ?? null,
+          usosActuales: campanaBase?.usosActuales ?? 0,
+          usosRestantes: campanaBase?.usosRestantes ?? null,
+          fechaInicio: campanaBase?.fechaInicio ?? null,
+          fechaFin: campanaBase?.fechaFin ?? null,
+        }
+        setCampana(campanaPublica)
       } else limpiarContextoTracking(username)
       setResuelta(true)
     })

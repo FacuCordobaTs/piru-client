@@ -140,7 +140,9 @@ export interface CampanaPublica {
     nombre: string
     slug: string
     tipo?: 'adquisicion' | 'recompra' | 'retencion' | 'lo_mismo' | 'reactivacion'
+    destinoTipo?: 'tienda' | 'producto' | 'carrito'
     productoId: number | null
+    carritoRep?: string | null
     descuentoPorcentaje: number
     limiteUsos: number | null
     usosActuales: number
@@ -404,7 +406,7 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
     useEffect(() => {
         if (repAplicadoRef.current) return
         if (productos.length === 0) return
-        const rep = searchParams.get('rep')
+        const rep = searchParams.get('rep') || campana?.carritoRep
         if (!rep) return
         repAplicadoRef.current = true
 
@@ -453,9 +455,11 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
         }
 
         // Limpiamos el query param para que no se reaplique al navegar / recargar.
-        const nuevosParams = new URLSearchParams(searchParams)
-        nuevosParams.delete('rep')
-        setSearchParams(nuevosParams, { replace: true })
+        if (searchParams.has('rep')) {
+            const nuevosParams = new URLSearchParams(searchParams)
+            nuevosParams.delete('rep')
+            setSearchParams(nuevosParams, { replace: true })
+        }
 
         if (nuevos.length > 0) {
             setCartItems(nuevos)

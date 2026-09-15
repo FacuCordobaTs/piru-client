@@ -339,23 +339,40 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
                 const data = await res.json()
                 if (data.success) {
                     const promo = campana?.productoId != null ? campana : null
+                    const descCampanaTienda = (!promo && (
+                        (campana?.descuentoPorcentaje && campana.descuentoPorcentaje > 0)
+                        || campana?.tipo === 'reactivacion'
+                        || campana?.slug === 'reactivacion'
+                    )) ? (campana?.descuentoPorcentaje && campana.descuentoPorcentaje > 0 ? campana.descuentoPorcentaje : 10) : 0
+
                     setRestaurante(data.data.restaurante)
                     setSucursales(Array.isArray(data.data.sucursales) ? data.data.sucursales : [])
                     setProductos(data.data.productos.map((producto: any) => {
-                        if (!promo || producto.id !== promo.productoId) return producto
                         const ahora = Date.now()
                         const inicioProducto = producto.descuentoFechaInicio ? new Date(producto.descuentoFechaInicio).getTime() : null
                         const finProducto = producto.descuentoFechaFin ? new Date(producto.descuentoFechaFin).getTime() : null
                         const descuentoProductoActivo = (inicioProducto == null || inicioProducto <= ahora)
                             && (finProducto == null || finProducto >= ahora)
                             ? Number(producto.descuento || 0) : 0
-                        const usaOfertaCampana = promo.descuentoPorcentaje >= descuentoProductoActivo
-                        return {
-                            ...producto,
-                            descuento: Math.max(descuentoProductoActivo, promo.descuentoPorcentaje || 0),
-                            descuentoFechaInicio: usaOfertaCampana ? promo.fechaInicio : producto.descuentoFechaInicio,
-                            descuentoFechaFin: usaOfertaCampana ? promo.fechaFin : producto.descuentoFechaFin,
+
+                        if (promo && producto.id === promo.productoId) {
+                            const usaOfertaCampana = promo.descuentoPorcentaje >= descuentoProductoActivo
+                            return {
+                                ...producto,
+                                descuento: Math.max(descuentoProductoActivo, promo.descuentoPorcentaje || 0),
+                                descuentoFechaInicio: usaOfertaCampana ? promo.fechaInicio : producto.descuentoFechaInicio,
+                                descuentoFechaFin: usaOfertaCampana ? promo.fechaFin : producto.descuentoFechaFin,
+                            }
+                        } else if (!promo && descCampanaTienda > 0) {
+                            const usaOfertaCampana = descCampanaTienda >= descuentoProductoActivo
+                            return {
+                                ...producto,
+                                descuento: Math.max(descuentoProductoActivo, descCampanaTienda),
+                                descuentoFechaInicio: usaOfertaCampana ? campana?.fechaInicio : producto.descuentoFechaInicio,
+                                descuentoFechaFin: usaOfertaCampana ? campana?.fechaFin : producto.descuentoFechaFin,
+                            }
                         }
+                        return producto
                     }))
                     configurarGtm(data.data.restaurante.gtmContainerId)
                     const sessionKey = `${data.data.restaurante.id}:${username}`
@@ -545,15 +562,36 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
                 // Configurar beneficio de descuento si está presente
                 if (data.descuento?.activo && data.descuento?.porcentaje > 0) {
                     const pct = data.descuento.porcentaje
-                    const exp = data.descuento.expiraAt
+                    const exp = data.descuento.expiraAt ? new Date(data.descuento.expiraAt).toISOString() : null
                     const texto = pct >= 20
                         ? '⏳ Oportunidad Exclusiva: 20% OFF por 48 horas aplicado a tu pedido'
                         : `¡Te extrañamos! Tenés un ${pct}% OFF aplicado a tu pedido 🎁`
 
-                    setBannerGrowth({ texto, porcentaje: pct, expiraAt: exp })
+                    setBannerGrowth({ texto, porcentaje: pct, expiraAt: data.descuento.expiraAt })
                     if (data.descuento.codigoCupon) {
                         setDescuentoGrowthCodigo(data.descuento.codigoCupon)
                     }
+
+                    // Reflejar el porcentaje de descuento en todos los productos de la carta
+                    setProductos(prev => prev.map((prod: any) => {
+                        const descActual = Number(prod.descuento || 0)
+                        return {
+                            ...prod,
+                            descuento: Math.max(descActual, pct),
+                            descuentoFechaFin: pct >= descActual ? (exp || prod.descuentoFechaFin) : prod.descuentoFechaFin,
+                        }
+                    }))
+
+                    // Actualizar selectedProduct si el drawer de producto está abierto
+                    setSelectedProduct((prev: any) => {
+                        if (!prev) return null
+                        const descActual = Number(prev.descuento || 0)
+                        return {
+                            ...prev,
+                            descuento: Math.max(descActual, pct),
+                            descuentoFechaFin: pct >= descActual ? (exp || prev.descuentoFechaFin) : prev.descuentoFechaFin,
+                        }
+                    })
                 }
 
                 // Caso 1: Campaña "¿Lo Mismo de Siempre?" (Drawer 1-Click Buy)
@@ -606,8 +644,20 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
                 } else if (data.modalidad === 'descuento_banner') {
                     // Caso 2: Campaña "Reactivación con Descuento"
                     const items = Array.isArray(data.carrito) ? data.carrito : []
+                    const pct = data.descuento?.porcentaje ?? 0
                     if (items.length > 0 && cartItems.length === 0) {
-                        setCartItems(items)
+                        const itemsConDescuento = items.map((it: any) => {
+                            const descActual = Number(it.descuento || 0)
+                            const nuevoDesc = Math.max(descActual, pct)
+                            const precioOrig = parseFloat(it.precioOriginal || it.precio || 0)
+                            return {
+                                ...it,
+                                descuento: nuevoDesc,
+                                precioOriginal: (it.precioOriginal || it.precio).toString(),
+                                precio: nuevoDesc > 0 ? (precioOrig * (1 - nuevoDesc / 100)).toFixed(2) : it.precio,
+                            }
+                        })
+                        setCartItems(itemsConDescuento)
                         toast.success('Te dejamos tu pedido listo con descuento 🛒')
                     } else if (data.descuento?.activo) {
                         toast.success(`Beneficio aplicado: ${data.descuento.porcentaje}% OFF 🎉`)
@@ -632,6 +682,14 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
                 porcentaje: pct,
                 expiraAt: null,
             })
+            setProductos(prev => prev.map((prod: any) => {
+                const descActual = Number(prod.descuento || 0)
+                return {
+                    ...prod,
+                    descuento: Math.max(descActual, pct),
+                    descuentoFechaFin: prod.descuentoFechaFin || null,
+                }
+            }))
         }
     }, [campana, searchParams])
 
@@ -1048,6 +1106,9 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
     }
 
     const totalPedido = cartItems.reduce((sum, item) => sum + (parseFloat(item.precio) * item.cantidad), 0).toFixed(2)
+    const tieneCodigoCampana = Boolean(descuentoGrowthCodigo || (username && codigoPromocionalMarketing(username)))
+    const subtotalBaseOriginal = cartItems.reduce((sum, item) => sum + (parseFloat(item.precioOriginal || item.precio || 0) * item.cantidad), 0).toFixed(2)
+    const itemsTotalCheckout = tieneCodigoCampana ? subtotalBaseOriginal : totalPedido
 
     const alturaCarrito = (() => {
         const n = cartItems.length
@@ -1673,7 +1734,7 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
                             }}
                             restauranteId={restaurante?.id ?? 0}
                             restauranteUsername={username ?? null}
-                            itemsTotal={totalPedido}
+                            itemsTotal={itemsTotalCheckout}
                             totalItems={cartItems.length}
                             sendMessage={handleCheckoutMessage}
                             clienteId="solo"
@@ -1790,8 +1851,8 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
                                                     tipoDomicilio: null,
                                                     deliveryFee: restaurante?.deliveryFee ? Number(restaurante.deliveryFee) : 0,
                                                     zonaNombre: null,
-                                                    itemsTotal: totalPedido,
-                                                    total: totalPedido,
+                                                    itemsTotal: itemsTotalCheckout,
+                                                    total: itemsTotalCheckout,
                                                     codigoDescuentoId: null,
                                                     montoDescuento: 0,
                                                     metodoPago: null,
@@ -1803,6 +1864,7 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
                                             }
                                             return {
                                                 ...prev,
+                                                itemsTotal: itemsTotalCheckout,
                                                 canjeEnvioGratis,
                                                 canjeDescuento,
                                             }

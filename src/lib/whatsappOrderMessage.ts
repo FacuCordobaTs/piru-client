@@ -3,7 +3,7 @@ import { orderItemDisplayName, parseAgregadosList, orderItemLineSubtotalSession 
 /**
  * Arma el mensaje de WhatsApp con el detalle completo del pedido para que el
  * cliente se lo envíe al restaurante (flujo estilo "link in bio"). Es el canal
- * que reemplaza los avisos automáticos en el plan Básico: nada de esto le cuesta
+ * alternativo a los avisos automáticos: nada de esto le cuesta
  * a Piru porque lo manda el propio cliente desde su WhatsApp.
  *
  * Incluye: productos (con ingredientes quitados y extras), subtotal, envío,

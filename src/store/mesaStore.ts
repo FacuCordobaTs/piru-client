@@ -115,6 +115,7 @@ export interface CheckoutDeliveryData {
   tipoDomicilio?: 'casa' | 'departamento' | null
   canjeEnvioGratis?: boolean
   canjeDescuento?: boolean
+  descuentoPuntos?: number
   // Contexto opcional de Growth; el pedido final de sala lo atribuye best-effort.
   visitorId?: string
   sesionUuid?: string

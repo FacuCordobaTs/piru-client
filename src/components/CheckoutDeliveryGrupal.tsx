@@ -527,10 +527,29 @@ export function CheckoutDeliveryGrupal({
       })
       const data = await res.json()
       if (data.success && data.data) {
-        setCodigoDescuentoId(data.data.codigoDescuentoId)
-        setMontoDescuento(parseFloat(data.data.montoDescuento))
+        const cuponId = data.data.codigoDescuentoId
+        const monto = parseFloat(data.data.montoDescuento)
+        setCodigoDescuentoId(cuponId)
+        setMontoDescuento(monto)
         setCodigoInput(data.data.codigo)
-        toast.success(`${automatico ? 'Beneficio de la campaña aplicado' : 'Código aplicado'}: -$${parseFloat(data.data.montoDescuento).toFixed(0)}`)
+        toast.success(`${automatico ? 'Beneficio de la campaña aplicado' : 'Código aplicado'}: -$${monto.toFixed(0)}`)
+        if (checkoutData && sendMessage) {
+          const fee = checkoutData.tipoPedido === 'delivery' ? (checkoutData.deliveryFee ?? 0) : 0
+          const itemsTot = parseFloat(checkoutData.itemsTotal || itemsTotal || '0')
+          const nuevoTotal = Math.max(0, itemsTot + fee - monto - (checkoutData.descuentoPuntos ?? descuentoPuntosValor))
+          sendMessage({
+            type: 'MODIFICAR_CHECKOUT',
+            payload: {
+              clienteId,
+              updates: {
+                ...checkoutData,
+                codigoDescuentoId: cuponId,
+                montoDescuento: monto,
+                total: nuevoTotal.toFixed(2),
+              },
+            },
+          })
+        }
       } else {
         setCodigoError(data.message || 'Código no válido')
         setCodigoDescuentoId(null)
@@ -543,23 +562,40 @@ export function CheckoutDeliveryGrupal({
     } finally {
       setValidandoCodigo(false)
     }
-  }, [restauranteId, subtotalConEnvio])
+  }, [restauranteId, subtotalConEnvio, checkoutData, sendMessage, clienteId, itemsTotal, descuentoPuntosValor])
 
   const handleValidarCodigo = () => void validarCodigo(codigoInput)
 
   useEffect(() => {
     const codigo = codigoPromocionalInicial?.trim().toUpperCase()
-    if (!codigo || codigoAutomaticoProcesado === codigo || codigoDescuentoId || !codigoDescuentoEnabled) return
+    if (!codigo || codigoAutomaticoProcesado === codigo || (codigoDescuentoId && montoDescuento > 0) || !codigoDescuentoEnabled || itemsTotalNum === 0) return
     setCodigoAutomaticoProcesado(codigo)
     setCodigoInput(codigo)
     void validarCodigo(codigo, true)
-  }, [codigoPromocionalInicial, codigoAutomaticoProcesado, codigoDescuentoEnabled, codigoDescuentoId, validarCodigo])
+  }, [codigoPromocionalInicial, codigoAutomaticoProcesado, codigoDescuentoEnabled, codigoDescuentoId, montoDescuento, itemsTotalNum, validarCodigo])
 
   const quitarCodigo = () => {
     setCodigoInput('')
     setCodigoDescuentoId(null)
     setMontoDescuento(0)
     setCodigoError(null)
+    if (checkoutData && sendMessage) {
+      const fee = checkoutData.tipoPedido === 'delivery' ? (checkoutData.deliveryFee ?? 0) : 0
+      const itemsTot = parseFloat(checkoutData.itemsTotal || itemsTotal || '0')
+      const nuevoTotal = Math.max(0, itemsTot + fee - (checkoutData.descuentoPuntos ?? descuentoPuntosValor))
+      sendMessage({
+        type: 'MODIFICAR_CHECKOUT',
+        payload: {
+          clienteId,
+          updates: {
+            ...checkoutData,
+            codigoDescuentoId: null,
+            montoDescuento: 0,
+            total: nuevoTotal.toFixed(2),
+          },
+        },
+      })
+    }
   }
 
   const handleGuardarEdicion = () => {
@@ -653,6 +689,20 @@ export function CheckoutDeliveryGrupal({
       toast.error('Falta la dirección de entrega')
       return
     }
+    const efectivoDescuento = montoDescuento > 0 ? montoDescuento : (checkoutData.montoDescuento ?? 0)
+    const efectivoCodigoId = codigoDescuentoId ?? checkoutData.codigoDescuentoId ?? null
+    if (efectivoDescuento !== checkoutData.montoDescuento || efectivoCodigoId !== checkoutData.codigoDescuentoId) {
+      const fee = checkoutData.tipoPedido === 'delivery' ? (checkoutData.deliveryFee ?? 0) : 0
+      const itemsTot = parseFloat(checkoutData.itemsTotal || itemsTotal || '0')
+      const totalCalc = Math.max(0, itemsTot + fee - efectivoDescuento - (checkoutData.descuentoPuntos ?? descuentoPuntosValor))
+      const updates = {
+        ...checkoutData,
+        codigoDescuentoId: efectivoCodigoId,
+        montoDescuento: efectivoDescuento,
+        total: totalCalc.toFixed(2),
+      }
+      sendMessage({ type: 'MODIFICAR_CHECKOUT', payload: { clienteId, updates } })
+    }
     onConfirmarClick()
   }
 
@@ -677,7 +727,11 @@ export function CheckoutDeliveryGrupal({
       return
     }
 
-    const nuevoTotal = parseFloat(itemsTotal) + (checkoutData.tipoPedido === 'delivery' ? deliveryFee : 0)
+    const fee = checkoutData.tipoPedido === 'delivery' ? deliveryFee : 0
+    const itemsTot = parseFloat(itemsTotal)
+    const descEfectivo = checkoutData.montoDescuento ?? montoDescuento
+    const puntosDesc = checkoutData.descuentoPuntos ?? descuentoPuntosValor
+    const nuevoTotal = Math.max(0, itemsTot + fee - descEfectivo - puntosDesc)
     const updates: CheckoutDeliveryData = {
       ...checkoutData,
       nombre: nombre.trim(),
@@ -692,6 +746,8 @@ export function CheckoutDeliveryGrupal({
         : checkoutData.sucursalId,
       metodoPago,
       itemsTotal,
+      codigoDescuentoId: checkoutData.codigoDescuentoId ?? codigoDescuentoId ?? null,
+      montoDescuento: descEfectivo,
       total: nuevoTotal.toFixed(2),
     }
     sendMessage({ type: 'MODIFICAR_CHECKOUT', payload: { clienteId, updates } })
@@ -1258,6 +1314,14 @@ export function CheckoutDeliveryGrupal({
     }
   }, [onTituloChange, estoyEditando, modo, paso, checkoutData, tipoPedido, pedidoHabitual])
 
+  const descuentoEfectivo = checkoutData?.montoDescuento ?? montoDescuento
+  const feeEfectivo = checkoutData?.tipoPedido === 'delivery'
+    ? (checkoutData.deliveryFee ?? deliveryFee)
+    : (tipoPedido === 'delivery' ? deliveryFee : 0)
+  const itemsTotalEfectivo = checkoutData?.itemsTotal ? parseFloat(checkoutData.itemsTotal) : itemsTotalNum
+  const puntosDescEfectivo = checkoutData?.descuentoPuntos ?? descuentoPuntosValor
+  const totalCalculado = Math.max(0, itemsTotalEfectivo + feeEfectivo - descuentoEfectivo - puntosDescEfectivo)
+
   const readOnlyHabitual = (
     <div className="space-y-4">
       <div className="space-y-2.5 px-4">
@@ -1385,6 +1449,16 @@ export function CheckoutDeliveryGrupal({
                 <p className="text-sm font-semibold">Retirás en el local</p>
               </div>
             )}
+            {descuentoEfectivo > 0 && (
+              <div className="flex items-center gap-3 pt-1 text-emerald-600 dark:text-emerald-400">
+                <Tag className="h-4 w-4 shrink-0" />
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold leading-snug">
+                    Descuento aplicado: -${descuentoEfectivo.toFixed(2)}
+                  </p>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -1450,12 +1524,19 @@ export function CheckoutDeliveryGrupal({
             </div>
           </>
         )}
-        {(checkoutData?.montoDescuento ?? 0) > 0 && (
+        {descuentoEfectivo > 0 && (
           <>
             <div className="h-px bg-background mx-4" />
-            <div className="px-4 py-3.5">
-              <p className="text-xs text-muted-foreground mb-0.5">Descuento</p>
-              <p className="text-sm font-semibold">-${(checkoutData?.montoDescuento ?? 0).toFixed(0)}</p>
+            <div className="px-4 py-3.5 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Tag className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                <div>
+                  <p className="text-xs text-muted-foreground">Descuento aplicado</p>
+                  <p className="text-sm font-bold text-emerald-600 dark:text-emerald-400">
+                    -${descuentoEfectivo.toFixed(2)}
+                  </p>
+                </div>
+              </div>
             </div>
           </>
         )}
@@ -1496,15 +1577,15 @@ export function CheckoutDeliveryGrupal({
           <span className="font-semibold">-${descuentoPuntosValor.toFixed(2)}</span>
         </div>
       )}
-      {(checkoutData?.montoDescuento ?? montoDescuento) > 0 && (
-        <div className="flex justify-between text-sm">
-          <span className="text-muted-foreground">Descuento</span>
-          <span className="font-semibold">-${(checkoutData?.montoDescuento ?? montoDescuento).toFixed(2)}</span>
+      {descuentoEfectivo > 0 && (
+        <div className="flex justify-between text-sm text-emerald-600 dark:text-emerald-400 font-medium">
+          <span className="flex items-center gap-1.5"><Tag className="w-3.5 h-3.5" /> Descuento</span>
+          <span className="font-semibold">-${descuentoEfectivo.toFixed(2)}</span>
         </div>
       )}
       <div className="flex justify-between font-bold text-base pt-2.5">
         <span>Total</span>
-        <span>${checkoutData?.total || total.toFixed(2)}</span>
+        <span>${totalCalculado.toFixed(2)}</span>
       </div>
     </div>
   )
@@ -1640,15 +1721,15 @@ export function CheckoutDeliveryGrupal({
       </div>
 
       <div className={`${pedidoHabitual ? 'px-9' : 'px-5'} pb-5 pt-4 bg-background space-y-3 lg:w-full lg:max-w-md lg:mx-auto ${compacto ? 'sticky bottom-0 z-10' : 'shrink-0'}`}>
-        {pedidoHabitual && (checkoutData?.montoDescuento ?? montoDescuento) > 0 && (
+        {descuentoEfectivo > 0 && (
           <div className="flex justify-between items-center text-sm font-semibold text-emerald-600 dark:text-emerald-400">
             <span>Descuento aplicado</span>
-            <span>-${(checkoutData?.montoDescuento ?? montoDescuento).toFixed(2)}</span>
+            <span>-${descuentoEfectivo.toFixed(2)}</span>
           </div>
         )}
         <div className="flex justify-between items-baseline">
           <span className="text-sm text-muted-foreground">Total</span>
-          <span className="text-2xl font-black tracking-tight">${checkoutData?.total || total.toFixed(2)}</span>
+          <span className="text-2xl font-black tracking-tight">${totalCalculado.toFixed(2)}</span>
         </div>
         {footerButton}
         {pedidoHabitual && checkoutData && !estoyEditando && (

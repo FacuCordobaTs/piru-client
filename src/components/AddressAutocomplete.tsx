@@ -14,8 +14,8 @@ interface AddressAutocompleteProps {
     biasLocations?: Array<{ lat: number; lng: number }>
 }
 
-function normalizeCity(value: string): string {
-    return value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase()
+function normalizeCity(value?: string | null): string {
+    return (value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase()
 }
 
 function extractCity(components: google.maps.GeocoderAddressComponent[] | undefined): string | null {

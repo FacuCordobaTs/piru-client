@@ -24,18 +24,18 @@ type DireccionGuardada = {
 
 const MAX_DIRECCIONES_GUARDADAS = 6
 
-const normalizarTelefonoDireccion = (telefono: string) => telefono.replace(/\D/g, '')
-const normalizarDireccion = (direccion: string) => direccion
+const normalizarTelefonoDireccion = (telefono?: string | null) => (telefono || '').replace(/\D/g, '')
+const normalizarDireccion = (direccion?: string | null) => (direccion || '')
   .normalize('NFD')
   .replace(/[\u0300-\u036f]/g, '')
   .replace(/\s+/g, ' ')
   .trim()
   .toLowerCase()
 
-const storageKeyDirecciones = (restauranteId: number, telefono: string) =>
+const storageKeyDirecciones = (restauranteId: number, telefono?: string | null) =>
   `cliente_direcciones_v1_${restauranteId}_${normalizarTelefonoDireccion(telefono)}`
 
-export const leerDireccionesCliente = (restauranteId: number, telefono: string): DireccionGuardada[] => {
+export const leerDireccionesCliente = (restauranteId: number, telefono?: string | null): DireccionGuardada[] => {
   if (!restauranteId || normalizarTelefonoDireccion(telefono).length < 8) return []
   try {
     const guardadas = JSON.parse(localStorage.getItem(storageKeyDirecciones(restauranteId, telefono)) || '[]')
@@ -50,14 +50,14 @@ export const leerDireccionesCliente = (restauranteId: number, telefono: string):
 
 const guardarDireccionesCliente = (
   restauranteId: number,
-  telefono: string,
-  nuevas: DireccionGuardada[],
+  telefono?: string | null,
+  nuevas: DireccionGuardada[] = [],
 ): DireccionGuardada[] => {
   if (!restauranteId || normalizarTelefonoDireccion(telefono).length < 8) return []
 
   const combinadas = new Map<string, DireccionGuardada>()
   for (const item of [...leerDireccionesCliente(restauranteId, telefono), ...nuevas]) {
-    const direccion = item.direccion.trim()
+    const direccion = (item.direccion || '').trim()
     const clave = normalizarDireccion(direccion)
     if (!clave) continue
     const anterior = combinadas.get(clave)
@@ -86,13 +86,13 @@ const guardarDireccionesCliente = (
 
 export const guardarDireccionCliente = (
   restauranteId: number,
-  telefono: string,
-  direccion: string,
-  lat: number | null,
-  lng: number | null,
-) => guardarDireccionesCliente(restauranteId, telefono, [{ direccion, lat, lng, usadaEn: Date.now() }])
+  telefono?: string | null,
+  direccion?: string | null,
+  lat: number | null = null,
+  lng: number | null = null,
+) => guardarDireccionesCliente(restauranteId, telefono, [{ direccion: direccion || '', lat, lng, usadaEn: Date.now() }])
 
-export const sincronizarDireccionesCliente = async (restauranteId: number, telefono: string) => {
+export const sincronizarDireccionesCliente = async (restauranteId: number, telefono?: string | null) => {
   const telefonoNormalizado = normalizarTelefonoDireccion(telefono)
   if (!restauranteId || telefonoNormalizado.length < 8) return leerDireccionesCliente(restauranteId, telefono)
 
@@ -115,7 +115,7 @@ export const sincronizarDireccionesCliente = async (restauranteId: number, telef
   }))
 }
 
-const normalizarNombrePersonalizacion = (nombre: string) => nombre
+const normalizarNombrePersonalizacion = (nombre?: string | null) => (nombre || '')
   .normalize('NFD')
   .replace(/[\u0300-\u036f]/g, '')
   .toLowerCase()
@@ -124,7 +124,7 @@ const normalizarNombrePersonalizacion = (nombre: string) => nombre
 
 /** Compatibilidad con Alfajor: estos agregados representan el tamaño de la
  * hamburguesa y en el resumen deben verse como variantes. */
-export const etiquetaVarianteMedallon = (nombre: string): 'Doble' | 'Triple' | null => {
+export const etiquetaVarianteMedallon = (nombre?: string | null): 'Doble' | 'Triple' | null => {
   const normalizado = normalizarNombrePersonalizacion(nombre)
   if (normalizado === 'doble medallon') return 'Doble'
   if (normalizado === 'triple medallon') return 'Triple'
@@ -417,17 +417,17 @@ export function CheckoutDeliveryGrupal({
 
   useEffect(() => {
     if (!checkoutData) return
-    setTipoPedido(checkoutData.tipoPedido)
-    setNombre(checkoutData.nombre)
-    setTelefono(checkoutData.telefono)
-    setDireccion(checkoutData.direccion)
-    setLat(checkoutData.lat)
-    setLng(checkoutData.lng)
-    setNotas(checkoutData.notas)
-    setZonaDeliveryFee(checkoutData.deliveryFee)
-    setZonaNombre(checkoutData.zonaNombre)
-    setCodigoDescuentoId(checkoutData.codigoDescuentoId ?? null)
-    setMontoDescuento(checkoutData.montoDescuento ?? 0)
+    if (checkoutData.tipoPedido) setTipoPedido(checkoutData.tipoPedido)
+    if (checkoutData.nombre !== undefined && checkoutData.nombre !== null) setNombre(checkoutData.nombre)
+    if (checkoutData.telefono !== undefined && checkoutData.telefono !== null) setTelefono(checkoutData.telefono)
+    if (checkoutData.direccion !== undefined && checkoutData.direccion !== null) setDireccion(checkoutData.direccion)
+    if (checkoutData.lat !== undefined) setLat(checkoutData.lat)
+    if (checkoutData.lng !== undefined) setLng(checkoutData.lng)
+    if (checkoutData.notas !== undefined && checkoutData.notas !== null) setNotas(checkoutData.notas)
+    if (checkoutData.deliveryFee !== undefined) setZonaDeliveryFee(checkoutData.deliveryFee)
+    if (checkoutData.zonaNombre !== undefined) setZonaNombre(checkoutData.zonaNombre)
+    if (checkoutData.codigoDescuentoId !== undefined) setCodigoDescuentoId(checkoutData.codigoDescuentoId ?? null)
+    if (checkoutData.montoDescuento !== undefined) setMontoDescuento(checkoutData.montoDescuento ?? 0)
     if (checkoutData.metodoPago) setMetodoPago(checkoutData.metodoPago)
     if (checkoutData.horarioProgramado) {
       setProgramarPedido(true)
@@ -437,7 +437,23 @@ export function CheckoutDeliveryGrupal({
     if (checkoutData.sucursalId) setSucursalSeleccionada(checkoutData.sucursalId)
     if (checkoutData.canjeEnvioGratis !== undefined) setCanjeEnvioGratis(checkoutData.canjeEnvioGratis)
     if (checkoutData.canjeDescuento !== undefined) setCanjeDescuento(checkoutData.canjeDescuento)
-  }, [checkoutData?.nombre, checkoutData?.telefono, checkoutData?.direccion, checkoutData?.tipoPedido, checkoutData?.notas, checkoutData?.deliveryFee, checkoutData?.zonaNombre, checkoutData?.codigoDescuentoId, checkoutData?.montoDescuento, checkoutData?.metodoPago, checkoutData?.horarioProgramado, checkoutData?.tipoDomicilio, checkoutData?.sucursalId])
+  }, [
+    checkoutData?.nombre,
+    checkoutData?.telefono,
+    checkoutData?.direccion,
+    checkoutData?.tipoPedido,
+    checkoutData?.notas,
+    checkoutData?.deliveryFee,
+    checkoutData?.zonaNombre,
+    checkoutData?.codigoDescuentoId,
+    checkoutData?.montoDescuento,
+    checkoutData?.metodoPago,
+    checkoutData?.horarioProgramado,
+    checkoutData?.tipoDomicilio,
+    checkoutData?.sucursalId,
+    checkoutData?.canjeEnvioGratis,
+    checkoutData?.canjeDescuento,
+  ])
 
   useEffect(() => {
     if (lat === null || lng === null || !restauranteId) {
@@ -582,9 +598,9 @@ export function CheckoutDeliveryGrupal({
       return
     }
 
-    const notasLimpias = notas.replace(/[^\x20-\x7E\xA0-\xFF\n]/g, '').trim()
+    const notasLimpias = (notas || '').replace(/[^\x20-\x7E\xA0-\xFF\n]/g, '').trim()
     const notasFinal = (tipoPedido === 'delivery' && tipoDomicilio === 'departamento')
-      ? (notasLimpias ? `Piso ${piso.trim()} Dpto ${numeroDepartamento.trim()}\n${notasLimpias}` : `Piso ${piso.trim()} Dpto ${numeroDepartamento.trim()}`)
+      ? (notasLimpias ? `Piso ${(piso || '').trim()} Dpto ${(numeroDepartamento || '').trim()}\n${notasLimpias}` : `Piso ${(piso || '').trim()} Dpto ${(numeroDepartamento || '').trim()}`)
       : notasLimpias
 
     const sucursalId = tipoPedido === 'delivery'
@@ -593,9 +609,9 @@ export function CheckoutDeliveryGrupal({
 
     const updates: Record<string, unknown> = {
       tipoPedido,
-      nombre: nombre.trim(),
-      telefono: telefono.trim(),
-      direccion: tipoPedido === 'delivery' ? direccion.trim() : '',
+      nombre: (nombre || '').trim(),
+      telefono: (telefono || '').trim(),
+      direccion: tipoPedido === 'delivery' ? (direccion || '').trim() : '',
       lat: tipoPedido === 'delivery' ? lat : null,
       lng: tipoPedido === 'delivery' ? lng : null,
       notas: notasFinal,
@@ -847,11 +863,11 @@ export function CheckoutDeliveryGrupal({
     <div className="space-y-4">
       <div className="space-y-2">
         <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-1">Nombre</Label>
-        <Input id="nombre-grupal" placeholder="Quien recibe el pedido" className={inputCls} value={nombre} onChange={e => setNombre(e.target.value)} />
+        <Input id="nombre-grupal" placeholder="Quien recibe el pedido" className={inputCls} value={nombre || ''} onChange={e => setNombre(e.target.value)} />
       </div>
       <div className="space-y-2">
         <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-1">Celular</Label>
-        <Input id="telefono-grupal" type="tel" placeholder="Ej: 5491112345678" className={inputCls} value={telefono} onChange={e => setTelefono(e.target.value.replace(/\D/g, ''))} />
+        <Input id="telefono-grupal" type="tel" placeholder="Ej: 5491112345678" className={inputCls} value={telefono || ''} onChange={e => setTelefono((e.target.value || '').replace(/\D/g, ''))} />
       </div>
     </div>
   )
@@ -1293,13 +1309,13 @@ export function CheckoutDeliveryGrupal({
         {editandoHabitual ? (
           <div className="space-y-3.5 animate-in fade-in duration-200">
             <div className="grid grid-cols-[1fr_0.9fr] gap-2.5">
-              <Input aria-label="Nombre" value={nombre} onChange={event => setNombre(event.target.value)} placeholder="Nombre" className="h-10 rounded-xl border-0 bg-secondary/50" />
-              <Input aria-label="Celular" type="tel" value={telefono} onChange={event => setTelefono(event.target.value.replace(/\D/g, ''))} placeholder="Celular" className="h-10 rounded-xl border-0 bg-secondary/50" />
+              <Input aria-label="Nombre" value={nombre || ''} onChange={event => setNombre(event.target.value)} placeholder="Nombre" className="h-10 rounded-xl border-0 bg-secondary/50" />
+              <Input aria-label="Celular" type="tel" value={telefono || ''} onChange={event => setTelefono((event.target.value || '').replace(/\D/g, ''))} placeholder="Celular" className="h-10 rounded-xl border-0 bg-secondary/50" />
             </div>
             {checkoutData?.tipoPedido === 'delivery' && (
               <div className="space-y-2">
                 {direccionSoloTexto ? (
-                  <Input value={direccion} onChange={event => handleAddressChange(event.target.value, null, null)} placeholder="Dirección de entrega" className="h-10 rounded-xl border-0 bg-secondary/50" />
+                  <Input value={direccion || ''} onChange={event => handleAddressChange(event.target.value, null, null)} placeholder="Dirección de entrega" className="h-10 rounded-xl border-0 bg-secondary/50" />
                 ) : (
                   <AddressAutocomplete
                     value={direccion}
@@ -1421,7 +1437,7 @@ export function CheckoutDeliveryGrupal({
             <div className="h-px bg-background mx-4" />
             <div className="px-4 py-3.5">
               <p className="text-xs text-muted-foreground mb-0.5">Método de pago</p>
-              <p className="text-sm font-semibold capitalize">{checkoutData.metodoPago.replace(/_/g, ' ')}</p>
+              <p className="text-sm font-semibold capitalize">{(checkoutData.metodoPago || '').replace(/_/g, ' ')}</p>
             </div>
           </>
         )}

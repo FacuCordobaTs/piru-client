@@ -70,7 +70,7 @@ const Nombre = () => {
       clearPedidoCerrado()
       setDataLoaded(false) // Marcar que necesitamos recargar datos
 
-      const digits = storedLocalTel.replace(/\D/g, '')
+      const digits = (storedLocalTel || '').replace(/\D/g, '')
       if (storedLocalName && digits.length >= 8) {
         const clienteId = `cliente-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
         setClienteInfo(clienteId, storedLocalName, storedLocalTel)
@@ -82,7 +82,7 @@ const Nombre = () => {
       return // Importante: retornar para no seguir con la redirección
     }
 
-    const digitsCliente = (clienteTelefono || storedLocalTel).replace(/\D/g, '')
+    const digitsCliente = (clienteTelefono || storedLocalTel || '').replace(/\D/g, '')
     // Si ya tiene nombre y teléfono para este mismo QR y la sesión no terminó, redirigir automáticamente
     // PERO solo si ya tenemos datos del servidor cargados (dataLoaded)
     if (urlQrToken === storedQrToken && clienteNombre && digitsCliente.length >= 8 && !sessionEnded && dataLoaded) {
@@ -213,9 +213,9 @@ const Nombre = () => {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    const nombreLimpio = nombre.trim()
-    const telLimpio = telefono.trim()
-    const digits = telLimpio.replace(/\D/g, '')
+    const nombreLimpio = (nombre || '').trim()
+    const telLimpio = (telefono || '').trim()
+    const digits = (telLimpio || '').replace(/\D/g, '')
 
     if (!nombreLimpio) {
       toast.error('Ingresá tu nombre')
@@ -394,7 +394,7 @@ const Nombre = () => {
               <Button
                 type="submit"
                 className="w-full h-14 text-base font-semibold rounded-2xl bg-neutral-900 hover:bg-neutral-800 dark:bg-white dark:hover:bg-neutral-100 dark:text-neutral-900 transition-all duration-200 shadow-lg hover:shadow-xl hover:scale-[1.02] active:scale-[0.98] mt-2"
-                disabled={!nombre.trim() || telefono.replace(/\D/g, '').length < 8}
+                disabled={!(nombre || '').trim() || (telefono || '').replace(/\D/g, '').length < 8}
               >
                 <span>Comenzar</span>
                 <ChevronRight className="ml-2 h-5 w-5" />

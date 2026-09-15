@@ -57,14 +57,17 @@ const firmaPedido = (pedido: PedidoHistorico) => pedido.items
     .sort()
     .join('|')
 
-const nombreMetodoPago = (metodo: string) => ({
-    cash: 'efectivo',
-    manual_transfer: 'transferencia',
-    transferencia_automatica_cucuru: 'transferencia',
-    transferencia_automatica_talo: 'transferencia',
-    mercadopago_checkout: 'Mercado Pago',
-    mercadopago_bricks: 'tarjeta',
-}[metodo] || metodo.replace(/_/g, ' '))
+const nombreMetodoPago = (metodo?: string | null) => {
+    if (!metodo) return ''
+    return ({
+        cash: 'efectivo',
+        manual_transfer: 'transferencia',
+        transferencia_automatica_cucuru: 'transferencia',
+        transferencia_automatica_talo: 'transferencia',
+        mercadopago_checkout: 'Mercado Pago',
+        mercadopago_bricks: 'tarjeta',
+    }[metodo] || metodo.replace(/_/g, ' '))
+}
 
 type HorarioTurno = { diaSemana: number; horaApertura: string; horaCierre: string }
 
@@ -294,7 +297,7 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
     const [esPedidoHabitual, setEsPedidoHabitual] = useState(false)
 
     useEffect(() => {
-        const telefono = telefonoCliente.replace(/\D/g, '')
+        const telefono = (telefonoCliente || '').replace(/\D/g, '')
         if (!restaurante?.id || telefono.length < 8) return
         // Deja listo el historial local antes de que el cliente abra el checkout.
         void sincronizarDireccionesCliente(restaurante.id, telefono).catch(() => {})
@@ -523,6 +526,11 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
                 if (data.cliente?.telefono) {
                     localStorage.setItem('cliente_telefono', data.cliente.telefono)
                     setTelefonoCliente(data.cliente.telefono)
+                }
+                if (data.cliente?.direccionHabitual?.direccion) {
+                    localStorage.setItem('cliente_direccion', data.cliente.direccionHabitual.direccion)
+                    if (data.cliente.direccionHabitual.lat != null) localStorage.setItem('cliente_lat', String(data.cliente.direccionHabitual.lat))
+                    if (data.cliente.direccionHabitual.lng != null) localStorage.setItem('cliente_lng', String(data.cliente.direccionHabitual.lng))
                 }
 
                 // Registrar contexto atribuible en la sesión para el checkout
@@ -880,7 +888,7 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
         }
         if (canjeEnvioGratis) {
             setCanjeEnvioGratis(false)
-            setCheckoutDeliveryData((prev: any) => ({ ...prev, canjeEnvioGratis: false }))
+            setCheckoutDeliveryData((prev: any) => (prev ? { ...prev, canjeEnvioGratis: false } : prev))
             if (checkoutDataRef.current) checkoutDataRef.current.canjeEnvioGratis = false
             toast.info('Envío gratis desactivado')
             return
@@ -891,7 +899,7 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
             return
         }
         setCanjeEnvioGratis(true)
-        setCheckoutDeliveryData((prev: any) => ({ ...prev, canjeEnvioGratis: true }))
+        setCheckoutDeliveryData((prev: any) => (prev ? { ...prev, canjeEnvioGratis: true } : prev))
         if (checkoutDataRef.current) checkoutDataRef.current.canjeEnvioGratis = true
         toast.success('¡Envío gratis activado!')
     }
@@ -904,7 +912,7 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
         }
         if (canjeDescuento) {
             setCanjeDescuento(false)
-            setCheckoutDeliveryData((prev: any) => ({ ...prev, canjeDescuento: false }))
+            setCheckoutDeliveryData((prev: any) => (prev ? { ...prev, canjeDescuento: false } : prev))
             if (checkoutDataRef.current) checkoutDataRef.current.canjeDescuento = false
             toast.info('Descuento desactivado')
             return
@@ -915,7 +923,7 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
             return
         }
         setCanjeDescuento(true)
-        setCheckoutDeliveryData((prev: any) => ({ ...prev, canjeDescuento: true }))
+        setCheckoutDeliveryData((prev: any) => (prev ? { ...prev, canjeDescuento: true } : prev))
         if (checkoutDataRef.current) checkoutDataRef.current.canjeDescuento = true
         toast.success('¡Descuento activado!')
     }
@@ -1261,7 +1269,7 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
 
     const handleCrearSala = async (e: React.FormEvent) => {
         e.preventDefault()
-        const digits = telefonoSala.replace(/\D/g, '')
+        const digits = (telefonoSala || '').replace(/\D/g, '')
         if (digits.length < 8) {
             toast.error('Ingresá un número de WhatsApp válido (mínimo 8 dígitos)')
             return
@@ -1273,7 +1281,7 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
         if (creandoSala) return
         const storedName = localStorage.getItem('cliente_nombre')
         const storedTel = localStorage.getItem('cliente_telefono') || localStorage.getItem('piru_cliente_telefono') || ''
-        const digits = storedTel.replace(/\D/g, '')
+        const digits = (storedTel || '').replace(/\D/g, '')
         if (storedName && digits.length >= 8) {
             crearSala(storedName, storedTel)
         } else {
@@ -1769,11 +1777,36 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
                                         if (restaurante?.pausadoPorSuscripcion) return
                                         if (!estadoAbierto.abierto && !restaurante?.permitirPedidosProgramados) return
                                         setEsPedidoHabitual(false)
-                                        setCheckoutDeliveryData((prev: any) => ({
-                                            ...(prev || {}),
-                                            canjeEnvioGratis,
-                                            canjeDescuento,
-                                        }))
+                                        setCheckoutDeliveryData((prev: any) => {
+                                            if (!prev) {
+                                                return {
+                                                    tipoPedido: restaurante?.deliveryEnabled !== false ? 'delivery' : 'takeaway',
+                                                    nombre: localStorage.getItem('cliente_nombre') || '',
+                                                    telefono: localStorage.getItem('cliente_telefono') || '',
+                                                    direccion: localStorage.getItem('cliente_direccion') || '',
+                                                    lat: localStorage.getItem('cliente_lat') ? Number(localStorage.getItem('cliente_lat')) : null,
+                                                    lng: localStorage.getItem('cliente_lng') ? Number(localStorage.getItem('cliente_lng')) : null,
+                                                    notas: '',
+                                                    tipoDomicilio: null,
+                                                    deliveryFee: restaurante?.deliveryFee ? Number(restaurante.deliveryFee) : 0,
+                                                    zonaNombre: null,
+                                                    itemsTotal: totalPedido,
+                                                    total: totalPedido,
+                                                    codigoDescuentoId: null,
+                                                    montoDescuento: 0,
+                                                    metodoPago: null,
+                                                    horarioProgramado: '',
+                                                    sucursalId: null,
+                                                    canjeEnvioGratis,
+                                                    canjeDescuento,
+                                                }
+                                            }
+                                            return {
+                                                ...prev,
+                                                canjeEnvioGratis,
+                                                canjeDescuento,
+                                            }
+                                        })
                                         setMostrarCheckoutEnCarrito(true)
                                         setExpandido(false)
                                     }}
@@ -1888,7 +1921,7 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
                             <Button
                                 type="submit"
                                 size="lg"
-                                disabled={creandoSala || !nombreSala.trim() || telefonoSala.replace(/\D/g, '').length < 8}
+                                disabled={creandoSala || !nombreSala.trim() || (telefonoSala || '').replace(/\D/g, '').length < 8}
                                 className="w-full rounded-2xl font-semibold"
                             >
                                 {creandoSala ? (

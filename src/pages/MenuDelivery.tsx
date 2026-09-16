@@ -290,6 +290,9 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
     const [tituloCheckout, setTituloCheckout] = useState('¿Cómo lo querés?')
     const [submittingOrder, setSubmittingOrder] = useState(false)
     const checkoutDataRef = useRef<any>(null)
+    // Medio de pago habitual que trae el token de una micro-campaña. Se usa para
+    // pre-completar el checkout sin obligar al cliente a pasar por "Editar".
+    const metodoPagoHabitualRef = useRef<string | null>(null)
     const isSubmittingRef = useRef(false)
     const orderAttemptIdRef = useRef<string | null>(null)
     const sessionStartRef = useRef<string | null>(null)
@@ -548,6 +551,9 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
                     localStorage.setItem('cliente_direccion', data.cliente.direccionHabitual.direccion)
                     if (data.cliente.direccionHabitual.lat != null) localStorage.setItem('cliente_lat', String(data.cliente.direccionHabitual.lat))
                     if (data.cliente.direccionHabitual.lng != null) localStorage.setItem('cliente_lng', String(data.cliente.direccionHabitual.lng))
+                }
+                if (data.cliente?.direccionHabitual?.metodoPago) {
+                    metodoPagoHabitualRef.current = data.cliente.direccionHabitual.metodoPago
                 }
 
                 // Registrar contexto atribuible en la sesión para el checkout
@@ -1162,7 +1168,9 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
                     nota: i.nota,
                     esCanjePuntos: i.esCanjePuntos || false
                 })),
-                metodoPago: data.metodoPago,
+                // Se omite cuando no hay medio elegido: el backend resuelve el
+                // default del local con el campo ausente, pero rechaza `null`.
+                ...(data.metodoPago ? { metodoPago: data.metodoPago } : {}),
                 ...contextoParaPedidoMarketing(username),
                 // CheckoutDeliveryGrupal capturó el contexto cuando se abrió.
                 // Se prioriza esa copia y finalmente la landing actual, para
@@ -1838,6 +1846,14 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
                                         if (restaurante?.pausadoPorSuscripcion) return
                                         if (!estadoAbierto.abierto && !restaurante?.permitirPedidosProgramados) return
                                         setEsPedidoHabitual(false)
+                                        // El checkout pre-completado necesita un medio de pago válido del
+                                        // local: el alta pública rechaza el pedido sin él. Se prioriza el
+                                        // habitual que trae el token y si no el primero habilitado.
+                                        const metodosDisponibles = new Set((restaurante?.metodosPago || []).map((m: any) => m.id))
+                                        const metodoPagoHabitual = metodoPagoHabitualRef.current
+                                        const metodoPagoInicial = metodoPagoHabitual && metodosDisponibles.has(metodoPagoHabitual)
+                                            ? metodoPagoHabitual
+                                            : (restaurante?.metodosPago?.[0]?.id ?? null)
                                         setCheckoutDeliveryData((prev: any) => {
                                             if (!prev) {
                                                 return {
@@ -1855,7 +1871,7 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
                                                     total: itemsTotalCheckout,
                                                     codigoDescuentoId: null,
                                                     montoDescuento: 0,
-                                                    metodoPago: null,
+                                                    metodoPago: metodoPagoInicial,
                                                     horarioProgramado: '',
                                                     sucursalId: null,
                                                     canjeEnvioGratis,
@@ -1867,6 +1883,7 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
                                                 itemsTotal: itemsTotalCheckout,
                                                 canjeEnvioGratis,
                                                 canjeDescuento,
+                                                metodoPago: prev.metodoPago ?? metodoPagoInicial,
                                             }
                                         })
                                         setMostrarCheckoutEnCarrito(true)

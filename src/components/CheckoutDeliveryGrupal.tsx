@@ -1631,7 +1631,13 @@ export function CheckoutDeliveryGrupal({
         {submittingOrder ? 'Enviando pedido...' : enviarPedidoWhatsapp ? 'Enviar pedido al WhatsApp' : (labelConfirmar || 'Confirmar Pedido')}
       </Button>
     ) : (
-      <p className="text-xs text-muted-foreground text-center py-2">Esperando que se completen los datos...</p>
+      <Button
+        className="w-full h-12 rounded-2xl font-bold text-base"
+        onClick={() => (pedidoHabitual ? setEditandoHabitual(true) : handleIniciarEdicion())}
+      >
+        <Pencil className="w-4 h-4 mr-2" />
+        {tipoPedido === 'delivery' ? 'Completar datos de envío' : 'Completar datos'}
+      </Button>
     )
   } else {
     footerButton = (

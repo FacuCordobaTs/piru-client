@@ -35,6 +35,12 @@ const normalizarDireccion = (direccion?: string | null) => (direccion || '')
 const storageKeyDirecciones = (restauranteId: number, telefono?: string | null) =>
   `cliente_direcciones_v1_${restauranteId}_${normalizarTelefonoDireccion(telefono)}`
 
+// El checkout guarda los datos del RECEPTOR del pedido, que en una sala grupal
+// puede ser otro comensal. Se comparan los nombres con el mismo criterio que
+// usa el backend al atribuir cada ítem a su participante.
+const esMismoComensal = (a?: string | null, b?: string | null) =>
+  normalizarDireccion(a) === normalizarDireccion(b)
+
 export const leerDireccionesCliente = (restauranteId: number, telefono?: string | null): DireccionGuardada[] => {
   if (!restauranteId || normalizarTelefonoDireccion(telefono).length < 8) return []
   try {
@@ -671,8 +677,14 @@ export function CheckoutDeliveryGrupal({
     sendMessage({ type: 'MODIFICAR_CHECKOUT', payload: { clienteId, updates } })
     sendMessage({ type: 'ACEPTAR_EDICION_CHECKOUT', payload: { clienteId, clienteNombre } })
 
-    localStorage.setItem('cliente_nombre', nombre.trim())
-    localStorage.setItem('cliente_telefono', telefono.trim())
+    // `cliente_nombre`/`cliente_telefono` son la identidad de quien está
+    // comprando, no la del receptor: en una sala grupal guardar acá el celular
+    // de otro participante hacía que los ítems siguientes se atribuyeran al
+    // receptor y que el cliente propio del comensal no se registrara.
+    if (!clienteNombre?.trim() || esMismoComensal(nombre, clienteNombre)) {
+      localStorage.setItem('cliente_nombre', nombre.trim())
+      localStorage.setItem('cliente_telefono', telefono.trim())
+    }
   }
 
   const handleConfirmarPedido = () => {
@@ -751,8 +763,10 @@ export function CheckoutDeliveryGrupal({
       total: nuevoTotal.toFixed(2),
     }
     sendMessage({ type: 'MODIFICAR_CHECKOUT', payload: { clienteId, updates } })
-    localStorage.setItem('cliente_nombre', updates.nombre)
-    localStorage.setItem('cliente_telefono', updates.telefono)
+    if (!clienteNombre?.trim() || esMismoComensal(updates.nombre, clienteNombre)) {
+      localStorage.setItem('cliente_nombre', updates.nombre)
+      localStorage.setItem('cliente_telefono', updates.telefono)
+    }
     if (updates.tipoPedido === 'delivery') {
       localStorage.setItem('cliente_direccion', updates.direccion)
       if (updates.lat != null) localStorage.setItem('cliente_lat', String(updates.lat))

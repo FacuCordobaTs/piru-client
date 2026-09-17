@@ -56,6 +56,17 @@ interface UseClienteWebSocketReturn {
 
 const WS_URL = import.meta.env.VITE_WS_URL || 'wss://api.piru.app'
 
+// El celular del comensal puede vivir sólo en localStorage (Menu.tsx ya lo usa
+// como respaldo al agregar ítems). El acceso puede estar bloqueado en modo
+// privado, así que la lectura nunca debe romper la conexión.
+const leerTelefonoGuardado = (): string | undefined => {
+  try {
+    return localStorage.getItem('cliente_telefono') || undefined
+  } catch {
+    return undefined
+  }
+}
+
 export const useClienteWebSocket = (): UseClienteWebSocketReturn => {
   const {
     qrToken, clienteId, clienteNombre, clienteTelefono, setClientes, setPedidoId,
@@ -70,7 +81,7 @@ export const useClienteWebSocket = (): UseClienteWebSocketReturn => {
   const [confirmacionCancelada, setConfirmacionCancelada] = useState<{ canceladoPor: string } | null>(null)
   const wsRef = useRef<WebSocket | null>(null)
   const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const hasConnectedRef = useRef(false)
+  const identidadEnviadaRef = useRef<string | null>(null)
   const connectionIdRef = useRef<string | null>(null)
 
   // Refs para acceder a los valores actuales sin causar reconexiones
@@ -107,21 +118,29 @@ export const useClienteWebSocket = (): UseClienteWebSocketReturn => {
 
   // Efecto separado para enviar CLIENTE_CONECTADO cuando los datos estén disponibles
   useEffect(() => {
-    // No enviar si la sesión terminó o si ya se envió para esta conexión
+    // No enviar si la sesión terminó
     if (sessionEnded) return
+    if (!isConnected || !clienteId || !clienteNombre || !connectionIdRef.current) return
 
-    if (isConnected && clienteId && clienteNombre && !hasConnectedRef.current && connectionIdRef.current) {
-      console.log('Enviando CLIENTE_CONECTADO para conexión:', connectionIdRef.current)
-      hasConnectedRef.current = true
-      sendMessage({
-        type: 'CLIENTE_CONECTADO',
-        payload: {
-          clienteId,
-          nombre: clienteNombre,
-          telefono: clienteTelefono || undefined,
-        },
-      })
-    }
+    // El celular es la identidad del comensal en la sala y puede resolverse
+    // después de abrir el socket (hidratación del store o paso por /nombre), por
+    // eso se reenvía cuando cambia: el backend es idempotente por clienteId y
+    // sólo completa el dato que faltaba. Mismo respaldo que usa Menu.tsx al
+    // agregar ítems, para que ítem y participante compartan el mismo celular.
+    const telefono = clienteTelefono || leerTelefonoGuardado()
+    const identidad = `${clienteNombre}|${telefono || ''}`
+    if (identidadEnviadaRef.current === identidad) return
+
+    console.log('Enviando CLIENTE_CONECTADO para conexión:', connectionIdRef.current)
+    identidadEnviadaRef.current = identidad
+    sendMessage({
+      type: 'CLIENTE_CONECTADO',
+      payload: {
+        clienteId,
+        nombre: clienteNombre,
+        telefono: telefono || undefined,
+      },
+    })
   }, [isConnected, clienteId, clienteNombre, clienteTelefono, sendMessage, sessionEnded])
 
   // Efecto principal de conexión - SOLO depende de qrToken y sessionEnded
@@ -183,8 +202,8 @@ export const useClienteWebSocket = (): UseClienteWebSocketReturn => {
           console.log('WebSocket conectado para cliente:', qrToken)
           setIsConnected(true)
           setError(null)
-          // Resetear el flag para permitir envío de CLIENTE_CONECTADO
-          hasConnectedRef.current = false
+          // Resetear el flag para permitir reenviar CLIENTE_CONECTADO
+          identidadEnviadaRef.current = null
         }
 
         ws.onmessage = async (event) => {
@@ -508,7 +527,7 @@ export const useClienteWebSocket = (): UseClienteWebSocketReturn => {
 
           console.log('WebSocket cerrado, código:', event.code)
           setIsConnected(false)
-          hasConnectedRef.current = false
+          identidadEnviadaRef.current = null
 
           // Solo reconectar si no fue un cierre intencional y la sesión no terminó
           if (event.code !== 1000 && !sessionEnded) {
@@ -539,7 +558,7 @@ export const useClienteWebSocket = (): UseClienteWebSocketReturn => {
         wsRef.current.close(1000, 'Component unmount')
         wsRef.current = null
       }
-      hasConnectedRef.current = false
+      identidadEnviadaRef.current = null
     }
   }, [qrToken, sessionEnded]) // Depender también de sessionEnded
 

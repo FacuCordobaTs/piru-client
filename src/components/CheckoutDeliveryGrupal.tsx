@@ -41,6 +41,13 @@ const storageKeyDirecciones = (restauranteId: number, telefono?: string | null) 
 const esMismoComensal = (a?: string | null, b?: string | null) =>
   normalizarDireccion(a) === normalizarDireccion(b)
 
+// Los cupones que emite el SISTEMA por destinatario —`VOLVE*` de un toque del Motor de Recompra,
+// `CRECE-*` de una micro-campaña, `GROWTH-*` de un Smart Link— no son códigos que el local haya
+// cargado a mano, y el backend ya los exime del toggle al validarlos Y al cobrarlos. El auto-aplicado
+// tiene que eximirlos igual: si no, la tienda muestra el beneficio y el checkout no lo aplica.
+const esCuponDelSistema = (codigo: string) =>
+  codigo.startsWith('VOLVE') || codigo.startsWith('CRECE-') || codigo.startsWith('GROWTH-')
+
 export const leerDireccionesCliente = (restauranteId: number, telefono?: string | null): DireccionGuardada[] => {
   if (!restauranteId || normalizarTelefonoDireccion(telefono).length < 8) return []
   try {
@@ -187,6 +194,12 @@ interface CheckoutDeliveryGrupalProps {
   contextoMarketing?: ReturnType<typeof contextoParaPedidoMarketing>
   /** Código incluido en un Smart Link; se valida contra el total y se aplica automáticamente. */
   codigoPromocionalInicial?: string | null
+  /** Ofrece "Tus Puntos de Club" también al revisar el pedido, no sólo al editarlo.
+   * Es el único momento en que el cliente puede activar los canjes cuando el
+   * checkout se confirma desde ahí. El alta pública recalcula el canje al crear
+   * el pedido; el pedido de sala usa el `deliveryFee` guardado, así que en sala
+   * no se ofrecen. */
+  canjesPuntosEnRevision?: boolean
 }
 
 export function CheckoutDeliveryGrupal({
@@ -214,6 +227,7 @@ export function CheckoutDeliveryGrupal({
   submittingOrder = false,
   contextoMarketing,
   codigoPromocionalInicial,
+  canjesPuntosEnRevision = false,
 }: CheckoutDeliveryGrupalProps) {
   const [tipoPedido, setTipoPedido] = useState<'delivery' | 'takeaway'>(checkoutData?.tipoPedido || 'delivery')
   const [nombre, setNombre] = useState(checkoutData?.nombre || localStorage.getItem('cliente_nombre') || '')
@@ -246,7 +260,12 @@ export function CheckoutDeliveryGrupal({
     leerDireccionesCliente(restauranteId, checkoutData?.telefono || localStorage.getItem('cliente_telefono') || ''),
   )
 
-  const [zonaDeliveryFee, setZonaDeliveryFee] = useState<number | null>(checkoutData ? checkoutData.deliveryFee : null)
+  // El fee guardado ya puede venir en 0 por el canje de envío gratis; en ese caso
+  // arranca en null para que la zona (o el fee del local) lo vuelva a resolver y
+  // el canje se pueda deshacer.
+  const [zonaDeliveryFee, setZonaDeliveryFee] = useState<number | null>(
+    checkoutData && !checkoutData.canjeEnvioGratis ? checkoutData.deliveryFee : null,
+  )
   const [zonaNombre, setZonaNombre] = useState<string | null>(checkoutData?.zonaNombre ?? null)
   const [isCheckingZona, setIsCheckingZona] = useState(false)
   const [fueraDeZona, setFueraDeZona] = useState(false)
@@ -280,20 +299,39 @@ export function CheckoutDeliveryGrupal({
   const configPuntos = restauranteData?.sistemaPuntos ? restauranteData?.configuracionPuntos : null
   const puntosActuales = puntosDisponibles ?? 0
   const puntosRequeridosEnvio = configPuntos?.permiteCanjeEnvioGratis ? Number(configPuntos.puntosEnvioGratis || 0) : 0
-  const puedeCanjearEnvio = tipoPedido === 'delivery' && Boolean(configPuntos?.permiteCanjeEnvioGratis) && deliveryFeeOriginal > 0 && puntosActuales >= puntosRequeridosEnvio
+  const puntosRequeridosDescuento = configPuntos?.permiteCanjeDescuento ? Number(configPuntos.descuentoPuntosCosto || 0) : 0
+  const montoMinimoDescuento = configPuntos?.permiteCanjeDescuento ? Number(configPuntos.descuentoMontoMinimo || 0) : 0
+  const itemsTotalNum = parseFloat(itemsTotal)
+
+  // Cada canje se mide con los puntos que deja el otro: el backend cobra los dos
+  // sobre el mismo saldo y rechaza el pedido si no alcanza.
+  const descuentoHabilitado = Boolean(configPuntos?.permiteCanjeDescuento) && itemsTotalNum >= montoMinimoDescuento
+  const puntosTrasDescuento = canjeDescuento && descuentoHabilitado
+    ? Math.max(0, puntosActuales - puntosRequeridosDescuento)
+    : puntosActuales
+  const puedeCanjearEnvio = tipoPedido === 'delivery'
+    && Boolean(configPuntos?.permiteCanjeEnvioGratis)
+    && deliveryFeeOriginal > 0
+    && puntosTrasDescuento >= puntosRequeridosEnvio
 
   const deliveryFee = (canjeEnvioGratis && puedeCanjearEnvio) ? 0 : deliveryFeeOriginal
 
   const puntosRestantesDespuesEnvio = (canjeEnvioGratis && puedeCanjearEnvio) ? Math.max(0, puntosActuales - puntosRequeridosEnvio) : puntosActuales
-  const puntosRequeridosDescuento = configPuntos?.permiteCanjeDescuento ? Number(configPuntos.descuentoPuntosCosto || 0) : 0
-  const montoMinimoDescuento = configPuntos?.permiteCanjeDescuento ? Number(configPuntos.descuentoMontoMinimo || 0) : 0
-  const itemsTotalNum = parseFloat(itemsTotal)
-  const puedeCanjearDescuento = Boolean(configPuntos?.permiteCanjeDescuento) && itemsTotalNum >= montoMinimoDescuento && puntosRestantesDespuesEnvio >= puntosRequeridosDescuento
+  const puedeCanjearDescuento = descuentoHabilitado && puntosRestantesDespuesEnvio >= puntosRequeridosDescuento
 
-  const descuentoPuntosValor = (canjeDescuento && puedeCanjearDescuento)
-    ? (configPuntos?.descuentoTipo === 'porcentaje'
-        ? itemsTotalNum * (Number(configPuntos?.descuentoValor || 0) / 100)
-        : Number(configPuntos?.descuentoValor || 0))
+  const montoDescuentoPuntos = () => configPuntos?.descuentoTipo === 'porcentaje'
+    ? itemsTotalNum * (Number(configPuntos?.descuentoValor || 0) / 100)
+    : Number(configPuntos?.descuentoValor || 0)
+
+  const descuentoPuntosValor = (canjeDescuento && puedeCanjearDescuento) ? montoDescuentoPuntos() : 0
+
+  const canjeEnvioActivo = canjeEnvioGratis && puedeCanjearEnvio
+  // Envío que corresponde cobrar sin el canje. La zona resuelta manda sobre el
+  // valor guardado, y el guardado sólo se usa si no quedó en 0 por el canje:
+  // si no, deshacerlo cobraría envío 0.
+  const feeGuardado = checkoutData && !checkoutData.canjeEnvioGratis ? checkoutData.deliveryFee : undefined
+  const feeBase = tipoPedido === 'delivery'
+    ? (zonaDeliveryFee ?? feeGuardado ?? deliveryFeeOriginal)
     : 0
 
   const subtotalConEnvio = tipoPedido === 'delivery' ? itemsTotalNum + deliveryFee : itemsTotalNum
@@ -313,7 +351,9 @@ export function CheckoutDeliveryGrupal({
     : restauranteDireccion
 
   useEffect(() => {
-    if (!restauranteUsername || (!estoyEditando && !pedidoHabitual) || restauranteData) return
+    // En la revisión previa igual hace falta el restaurante: de ahí salen la
+    // configuración de puntos y el envío del local que alimentan los canjes.
+    if (!restauranteUsername || (!estoyEditando && !pedidoHabitual && !canjesPuntosEnRevision) || restauranteData) return
     const fetchRestaurante = async () => {
       setIsLoadingRestaurante(true)
       try {
@@ -337,7 +377,7 @@ export function CheckoutDeliveryGrupal({
       finally { setIsLoadingRestaurante(false) }
     }
     fetchRestaurante()
-  }, [restauranteUsername, estoyEditando, pedidoHabitual])
+  }, [restauranteUsername, estoyEditando, pedidoHabitual, canjesPuntosEnRevision])
 
   useEffect(() => {
     if (!availablePaymentMethods.length) return
@@ -430,7 +470,7 @@ export function CheckoutDeliveryGrupal({
     if (checkoutData.lat !== undefined) setLat(checkoutData.lat)
     if (checkoutData.lng !== undefined) setLng(checkoutData.lng)
     if (checkoutData.notas !== undefined && checkoutData.notas !== null) setNotas(checkoutData.notas)
-    if (checkoutData.deliveryFee !== undefined) setZonaDeliveryFee(checkoutData.deliveryFee)
+    if (checkoutData.deliveryFee !== undefined && !checkoutData.canjeEnvioGratis) setZonaDeliveryFee(checkoutData.deliveryFee)
     if (checkoutData.zonaNombre !== undefined) setZonaNombre(checkoutData.zonaNombre)
     if (checkoutData.codigoDescuentoId !== undefined) setCodigoDescuentoId(checkoutData.codigoDescuentoId ?? null)
     if (checkoutData.montoDescuento !== undefined) setMontoDescuento(checkoutData.montoDescuento ?? 0)
@@ -574,7 +614,9 @@ export function CheckoutDeliveryGrupal({
 
   useEffect(() => {
     const codigo = codigoPromocionalInicial?.trim().toUpperCase()
-    if (!codigo || codigoAutomaticoProcesado === codigo || (codigoDescuentoId && montoDescuento > 0) || !codigoDescuentoEnabled || itemsTotalNum === 0) return
+    // El toggle gatea el input MANUAL y los códigos del local; un cupón del sistema que llegó en el
+    // link se auto-aplica igual, porque es el beneficio que la campaña prometió al cliente.
+    if (!codigo || codigoAutomaticoProcesado === codigo || (codigoDescuentoId && montoDescuento > 0) || (!codigoDescuentoEnabled && !esCuponDelSistema(codigo)) || itemsTotalNum === 0) return
     setCodigoAutomaticoProcesado(codigo)
     setCodigoInput(codigo)
     void validarCodigo(codigo, true)
@@ -742,7 +784,11 @@ export function CheckoutDeliveryGrupal({
     const fee = checkoutData.tipoPedido === 'delivery' ? deliveryFee : 0
     const itemsTot = parseFloat(itemsTotal)
     const descEfectivo = checkoutData.montoDescuento ?? montoDescuento
-    const puntosDesc = checkoutData.descuentoPuntos ?? descuentoPuntosValor
+    // Los canjes se guardan con su bandera: el backend recalcula el envío desde las
+    // zonas y sólo bonifica si la bandera viaja en el pedido.
+    const envioCanjeado = canjeEnvioActivo
+    const descuentoCanjeado = canjeDescuento && puedeCanjearDescuento
+    const puntosDesc = descuentoCanjeado ? descuentoPuntosValor : 0
     const nuevoTotal = Math.max(0, itemsTot + fee - descEfectivo - puntosDesc)
     const updates: CheckoutDeliveryData = {
       ...checkoutData,
@@ -760,6 +806,9 @@ export function CheckoutDeliveryGrupal({
       itemsTotal,
       codigoDescuentoId: checkoutData.codigoDescuentoId ?? codigoDescuentoId ?? null,
       montoDescuento: descEfectivo,
+      canjeEnvioGratis: envioCanjeado,
+      canjeDescuento: descuentoCanjeado,
+      descuentoPuntos: puntosDesc,
       total: nuevoTotal.toFixed(2),
     }
     sendMessage({ type: 'MODIFICAR_CHECKOUT', payload: { clienteId, updates } })
@@ -1058,6 +1107,128 @@ export function CheckoutDeliveryGrupal({
     </div>
   )
 
+  // Los canjes se activan tocando las tarjetas: en el asistente los persiste
+  // "Guardar datos" y en la revisión previa se avisa en el momento, porque el
+  // pedido se crea con el estado ya guardado y no hay un paso que lo propague.
+  const notificarCanje = (envio: boolean, desc: boolean) => {
+    if (estoyEditando || !checkoutData || !sendMessage) return
+    const fee = envio ? 0 : feeBase
+    const descPuntos = desc ? montoDescuentoPuntos() : 0
+    const itemsTot = parseFloat(checkoutData.itemsTotal || itemsTotal || '0')
+    const nuevoTotal = Math.max(0, itemsTot + fee - (checkoutData.montoDescuento ?? montoDescuento) - descPuntos)
+    sendMessage({
+      type: 'MODIFICAR_CHECKOUT',
+      payload: {
+        clienteId,
+        updates: {
+          ...checkoutData,
+          canjeEnvioGratis: envio,
+          canjeDescuento: desc,
+          descuentoPuntos: descPuntos,
+          deliveryFee: fee,
+          total: nuevoTotal.toFixed(2),
+        },
+      },
+    })
+  }
+
+  // El backend cobra los dos canjes sobre el mismo saldo y aplica primero el envío,
+  // así que activar uno puede dejar al otro sin puntos: el par se resuelve junto y
+  // lo que no se manda también se apaga en pantalla.
+  const alternarCanjes = (quererEnvio: boolean, quererDescuento: boolean) => {
+    const envio = quererEnvio && puedeCanjearEnvio
+    const desc = quererDescuento
+      && descuentoHabilitado
+      && puntosActuales - (envio ? puntosRequeridosEnvio : 0) >= puntosRequeridosDescuento
+    setCanjeEnvioGratis(envio)
+    setCanjeDescuento(desc)
+    notificarCanje(envio, desc)
+    return { envio, desc }
+  }
+
+  const alternarCanjeEnvioGratis = () => {
+    if (!canjeEnvioGratis && !puedeCanjearEnvio) return
+    const { envio } = alternarCanjes(!canjeEnvioGratis, canjeDescuento)
+    if (envio) toast.success('¡Envío gratis activado!')
+  }
+
+  const alternarCanjeDescuento = () => {
+    if (!canjeDescuento && !puedeCanjearDescuento) return
+    const { desc } = alternarCanjes(canjeEnvioGratis, !canjeDescuento)
+    if (desc) toast.success('¡Descuento activado!')
+  }
+
+  const secPuntos = configPuntos && (puntosDisponibles !== null || loadingPuntosCheckout) ? (
+    <div className="space-y-3 rounded-2xl bg-amber-500/10 border border-amber-500/20 p-4">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400 font-bold text-sm">
+          <Sparkles className="w-4 h-4" />
+          <span>Tus Puntos de Club</span>
+        </div>
+        <span className="text-xs font-black bg-amber-500 text-white rounded-full px-2.5 py-0.5">
+          {loadingPuntosCheckout ? '...' : `${puntosDisponibles ?? 0} pts`}
+        </span>
+      </div>
+
+      <div className="space-y-2 pt-1">
+        {tipoPedido === 'delivery' && configPuntos.permiteCanjeEnvioGratis && deliveryFeeOriginal > 0 && (
+          <button
+            type="button"
+            disabled={!puedeCanjearEnvio && !canjeEnvioGratis}
+            onClick={alternarCanjeEnvioGratis}
+            className={`w-full flex items-center justify-between p-3 rounded-xl border text-left transition-all ${
+              canjeEnvioGratis
+                ? 'bg-amber-500/20 border-amber-500 text-foreground font-semibold'
+                : puedeCanjearEnvio
+                ? 'bg-background/60 border-border hover:bg-background'
+                : 'opacity-50 cursor-not-allowed bg-background/30 border-dashed border-border'
+            }`}
+          >
+            <div>
+              <p className="text-xs font-bold">Envío gratis</p>
+              <p className="text-[11px] text-muted-foreground">
+                Costo: {configPuntos.puntosEnvioGratis} pts
+                {!puedeCanjearEnvio && !canjeEnvioGratis && ` (Te faltan ${configPuntos.puntosEnvioGratis - (puntosDisponibles ?? 0)} pts)`}
+              </p>
+            </div>
+            <div className={`w-5 h-5 rounded-md flex items-center justify-center border ${canjeEnvioGratis ? 'bg-amber-500 border-amber-500 text-white' : 'border-muted-foreground/40'}`}>
+              {canjeEnvioGratis && <Check className="w-3.5 h-3.5" />}
+            </div>
+          </button>
+        )}
+
+        {configPuntos.permiteCanjeDescuento && (
+          <button
+            type="button"
+            disabled={!puedeCanjearDescuento && !canjeDescuento}
+            onClick={alternarCanjeDescuento}
+            className={`w-full flex items-center justify-between p-3 rounded-xl border text-left transition-all ${
+              canjeDescuento
+                ? 'bg-amber-500/20 border-amber-500 text-foreground font-semibold'
+                : puedeCanjearDescuento
+                ? 'bg-background/60 border-border hover:bg-background'
+                : 'opacity-50 cursor-not-allowed bg-background/30 border-dashed border-border'
+            }`}
+          >
+            <div>
+              <p className="text-xs font-bold">
+                Descuento de {configPuntos.descuentoTipo === 'porcentaje' ? `${configPuntos.descuentoValor}%` : `${configPuntos.descuentoValor}`}
+              </p>
+              <p className="text-[11px] text-muted-foreground">
+                Costo: {configPuntos.descuentoPuntosCosto} pts
+                {itemsTotalNum < Number(configPuntos.descuentoMontoMinimo || 0) && ` (Mínimo ${configPuntos.descuentoMontoMinimo})`}
+                {!puedeCanjearDescuento && !canjeDescuento && puntosRestantesDespuesEnvio < Number(configPuntos.descuentoPuntosCosto || 0) && ` (Te faltan ${Number(configPuntos.descuentoPuntosCosto || 0) - puntosRestantesDespuesEnvio} pts)`}
+              </p>
+            </div>
+            <div className={`w-5 h-5 rounded-md flex items-center justify-center border ${canjeDescuento ? 'bg-amber-500 border-amber-500 text-white' : 'border-muted-foreground/40'}`}>
+              {canjeDescuento && <Check className="w-3.5 h-3.5" />}
+            </div>
+          </button>
+        )}
+      </div>
+    </div>
+  ) : null
+
   const secExtras = (
     <div className="space-y-5">
       <div className="space-y-2">
@@ -1171,78 +1342,12 @@ export function CheckoutDeliveryGrupal({
         )
       )}
 
-      {configPuntos && (puntosDisponibles !== null || loadingPuntosCheckout) && (
-        <div className="space-y-3 rounded-2xl bg-amber-500/10 border border-amber-500/20 p-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400 font-bold text-sm">
-              <Sparkles className="w-4 h-4" />
-              <span>Tus Puntos de Club</span>
-            </div>
-            <span className="text-xs font-black bg-amber-500 text-white rounded-full px-2.5 py-0.5">
-              {loadingPuntosCheckout ? '...' : `${puntosDisponibles ?? 0} pts`}
-            </span>
-          </div>
+      {secPuntos}
 
-          <div className="space-y-2 pt-1">
-            {tipoPedido === 'delivery' && configPuntos.permiteCanjeEnvioGratis && deliveryFeeOriginal > 0 && (
-              <button
-                type="button"
-                disabled={!puedeCanjearEnvio && !canjeEnvioGratis}
-                onClick={() => setCanjeEnvioGratis(!canjeEnvioGratis)}
-                className={`w-full flex items-center justify-between p-3 rounded-xl border text-left transition-all ${
-                  canjeEnvioGratis
-                    ? 'bg-amber-500/20 border-amber-500 text-foreground font-semibold'
-                    : puedeCanjearEnvio
-                    ? 'bg-background/60 border-border hover:bg-background'
-                    : 'opacity-50 cursor-not-allowed bg-background/30 border-dashed border-border'
-                }`}
-              >
-                <div>
-                  <p className="text-xs font-bold">Envío gratis</p>
-                  <p className="text-[11px] text-muted-foreground">
-                    Costo: {configPuntos.puntosEnvioGratis} pts
-                    {!puedeCanjearEnvio && !canjeEnvioGratis && ` (Te faltan ${configPuntos.puntosEnvioGratis - (puntosDisponibles ?? 0)} pts)`}
-                  </p>
-                </div>
-                <div className={`w-5 h-5 rounded-md flex items-center justify-center border ${canjeEnvioGratis ? 'bg-amber-500 border-amber-500 text-white' : 'border-muted-foreground/40'}`}>
-                  {canjeEnvioGratis && <Check className="w-3.5 h-3.5" />}
-                </div>
-              </button>
-            )}
-
-            {configPuntos.permiteCanjeDescuento && (
-              <button
-                type="button"
-                disabled={!puedeCanjearDescuento && !canjeDescuento}
-                onClick={() => setCanjeDescuento(!canjeDescuento)}
-                className={`w-full flex items-center justify-between p-3 rounded-xl border text-left transition-all ${
-                  canjeDescuento
-                    ? 'bg-amber-500/20 border-amber-500 text-foreground font-semibold'
-                    : puedeCanjearDescuento
-                    ? 'bg-background/60 border-border hover:bg-background'
-                    : 'opacity-50 cursor-not-allowed bg-background/30 border-dashed border-border'
-                }`}
-              >
-                <div>
-                  <p className="text-xs font-bold">
-                    Descuento de {configPuntos.descuentoTipo === 'porcentaje' ? `${configPuntos.descuentoValor}%` : `${configPuntos.descuentoValor}`}
-                  </p>
-                  <p className="text-[11px] text-muted-foreground">
-                    Costo: {configPuntos.descuentoPuntosCosto} pts
-                    {itemsTotalNum < Number(configPuntos.descuentoMontoMinimo || 0) && ` (Mínimo ${configPuntos.descuentoMontoMinimo})`}
-                    {!puedeCanjearDescuento && !canjeDescuento && puntosRestantesDespuesEnvio < Number(configPuntos.descuentoPuntosCosto || 0) && ` (Te faltan ${Number(configPuntos.descuentoPuntosCosto || 0) - puntosRestantesDespuesEnvio} pts)`}
-                  </p>
-                </div>
-                <div className={`w-5 h-5 rounded-md flex items-center justify-center border ${canjeDescuento ? 'bg-amber-500 border-amber-500 text-white' : 'border-muted-foreground/40'}`}>
-                  {canjeDescuento && <Check className="w-3.5 h-3.5" />}
-                </div>
-              </button>
-            )}
-          </div>
-        </div>
-      )}
-
-      {codigoDescuentoEnabled && (
+      {/* El input manual depende del toggle del local; un cupón ya aplicado (por ejemplo, el que trajo
+          el link de una campaña en un local sin códigos propios) se muestra igual, para que el cliente
+          vea qué se le descontó y pueda sacarlo. */}
+      {(codigoDescuentoEnabled || Boolean(codigoDescuentoId)) && (
         <div className="space-y-2">
           <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-1">Código de descuento <span className="normal-case font-normal">(opcional)</span></Label>
           {codigoDescuentoId ? (
@@ -1329,11 +1434,12 @@ export function CheckoutDeliveryGrupal({
   }, [onTituloChange, estoyEditando, modo, paso, checkoutData, tipoPedido, pedidoHabitual])
 
   const descuentoEfectivo = checkoutData?.montoDescuento ?? montoDescuento
-  const feeEfectivo = checkoutData?.tipoPedido === 'delivery'
-    ? (checkoutData.deliveryFee ?? deliveryFee)
-    : (tipoPedido === 'delivery' ? deliveryFee : 0)
+  // El fee guardado puede venir en 0 por el canje de envío gratis: se usa el
+  // resuelto localmente para que el total refleje el canje en el momento.
+  const feeEfectivo = canjeEnvioActivo ? 0 : feeBase
   const itemsTotalEfectivo = checkoutData?.itemsTotal ? parseFloat(checkoutData.itemsTotal) : itemsTotalNum
-  const puntosDescEfectivo = checkoutData?.descuentoPuntos ?? descuentoPuntosValor
+  // El canje activo local manda: lo guardado todavía puede no reflejarlo.
+  const puntosDescEfectivo = (canjeDescuento && puedeCanjearDescuento ? descuentoPuntosValor : checkoutData?.descuentoPuntos) ?? descuentoPuntosValor
   const totalCalculado = Math.max(0, itemsTotalEfectivo + feeEfectivo - descuentoEfectivo - puntosDescEfectivo)
 
   const readOnlyHabitual = (
@@ -1573,22 +1679,22 @@ export function CheckoutDeliveryGrupal({
         <span className="text-muted-foreground">Subtotal · {totalItems} items <span className="sr-only">con variantes seleccionadas incluidas</span></span>
         <span className="font-semibold">${itemsTotal}</span>
       </div>
-      {checkoutData?.tipoPedido === 'delivery' && (checkoutData.deliveryFee ?? 0) > 0 && (
+      {tipoPedido === 'delivery' && feeBase > 0 && (
         <div className="flex justify-between text-sm">
           <span className="text-muted-foreground">Delivery</span>
-          <span className="font-semibold">${checkoutData.deliveryFee.toFixed(2)}</span>
+          <span className="font-semibold">${feeBase.toFixed(2)}</span>
         </div>
       )}
-      {(checkoutData?.canjeEnvioGratis || canjeEnvioGratis) && puedeCanjearEnvio && (
+      {canjeEnvioActivo && feeBase > 0 && (
         <div className="flex justify-between text-sm text-amber-600 dark:text-amber-400">
           <span className="flex items-center gap-1.5"><Sparkles className="w-3.5 h-3.5" /> Envío gratis (Canje)</span>
-          <span className="font-semibold">$0.00</span>
+          <span className="font-semibold">-${feeBase.toFixed(2)}</span>
         </div>
       )}
-      {(checkoutData?.canjeDescuento || canjeDescuento) && descuentoPuntosValor > 0 && (
+      {puntosDescEfectivo > 0 && (
         <div className="flex justify-between text-sm text-amber-600 dark:text-amber-400">
           <span className="flex items-center gap-1.5"><Sparkles className="w-3.5 h-3.5" /> Descuento por puntos</span>
-          <span className="font-semibold">-${descuentoPuntosValor.toFixed(2)}</span>
+          <span className="font-semibold">-${puntosDescEfectivo.toFixed(2)}</span>
         </div>
       )}
       {descuentoEfectivo > 0 && (
@@ -1728,6 +1834,7 @@ export function CheckoutDeliveryGrupal({
         {checkoutData && !estoyEditando && !alguienEditando && (
           <>
             {pedidoHabitual ? readOnlyHabitual : readOnly}
+            {!pedidoHabitual && canjesPuntosEnRevision && secPuntos}
             {!pedidoHabitual && totalSummary}
           </>
         )}

@@ -6,7 +6,7 @@ import { toast } from 'sonner'
 import {
     Trash2, Maximize2, Minimize2, Loader2,
     Package, Receipt, UtensilsCrossed, Utensils, Clock, Share2, User, Plus,
-    Check, Truck, Percent, Sparkles
+    Check, Sparkles
 } from 'lucide-react'
 import { ProductDetailDrawer } from '@/components/ProductDetailDrawer'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
@@ -19,7 +19,7 @@ import {
 } from '@/components/CheckoutDeliveryGrupal'
 import { redirectPedidoAlWhatsapp } from '@/lib/checkoutWhatsapp'
 import { guardarTemaRestaurante, leerTemaRestaurante, RestauranteTheme } from '@/components/RestauranteTheme'
-import { codigoPromocionalMarketing, configurarGtm, contextoParaPedidoMarketing, guardarContextoTracking, registrarEventoTrackingUnaVez } from '@/lib/tracking'
+import { codigoPromocionalMarketing, configurarGtm, configurarMetaPixel, contextoParaPedidoMarketing, guardarContextoTracking, registrarEventoPixel, registrarEventoPixelUnaVez, registrarEventoTrackingUnaVez } from '@/lib/tracking'
 
 type PedidoHistorico = {
     id: number
@@ -378,6 +378,7 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
                         return producto
                     }))
                     configurarGtm(data.data.restaurante.gtmContainerId)
+                    configurarMetaPixel(data.data.restaurante.metaPixelId)
                     const sessionKey = `${data.data.restaurante.id}:${username}`
                     if (sessionStartRef.current !== sessionKey) {
                         sessionStartRef.current = sessionKey
@@ -664,7 +665,13 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
                             }
                         })
                         setCartItems(itemsConDescuento)
-                        toast.success('Te dejamos tu pedido listo con descuento 🛒')
+                        // El toast promete lo que el resolver pudo verificar: si el cupón del toque ya
+                        // se usó o venció, el carrito se arma igual pero sin descuento que anunciar.
+                        if (data.descuento?.activo && pct > 0) {
+                            toast.success('Te dejamos tu pedido listo con descuento 🛒')
+                        } else {
+                            toast.success('Te dejamos tu pedido listo 🛒')
+                        }
                     } else if (data.descuento?.activo) {
                         toast.success(`Beneficio aplicado: ${data.descuento.porcentaje}% OFF 🎉`)
                     }
@@ -929,68 +936,28 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
 
     const puntosUsadosBeneficios = (canjeEnvioGratis && tieneEnvioGratisCanje ? costoEnvioGratis : 0) + (canjeDescuento && tieneDescuentoCanje ? costoDescuento : 0)
     const productosCanje = productos.filter(p => Number(p.puntosNecesarios) > 0)
-    const tieneOpcionesCanje = productosCanje.length > 0 || tieneEnvioGratisCanje || tieneDescuentoCanje
+    const tieneOpcionesCanje = productosCanje.length > 0
 
+    // Los canjes de envío gratis y descuento se activan desde el checkout, pero el
+    // presupuesto de puntos lo lleva el menú: incluye los canjes de productos que el
+    // carrito ya consume. Si al sumarlos no alcanza, se desactiva acá y se refleja en
+    // el checkout, que es el que arma el pedido.
     useEffect(() => {
         if (puntosCliente !== null) {
             const disponiblesAntes = (puntosCliente ?? 0) - puntosEnCarrito()
             if (canjeEnvioGratis && disponiblesAntes < costoEnvioGratis) {
                 setCanjeEnvioGratis(false)
+                setCheckoutDeliveryData((prev: any) => (prev ? { ...prev, canjeEnvioGratis: false } : prev))
+                if (checkoutDataRef.current) checkoutDataRef.current.canjeEnvioGratis = false
             }
             const disponiblesTrasEnvio = disponiblesAntes - (canjeEnvioGratis ? costoEnvioGratis : 0)
             if (canjeDescuento && disponiblesTrasEnvio < costoDescuento) {
                 setCanjeDescuento(false)
+                setCheckoutDeliveryData((prev: any) => (prev ? { ...prev, canjeDescuento: false } : prev))
+                if (checkoutDataRef.current) checkoutDataRef.current.canjeDescuento = false
             }
         }
     }, [puntosCliente, cartItems, canjeEnvioGratis, canjeDescuento, costoEnvioGratis, costoDescuento])
-
-    const handleToggleEnvioGratis = () => {
-        if (puntosCliente === null) {
-            setModalPuntosOpen(true)
-            toast.info('Identifícate con tu WhatsApp para canjear tus puntos')
-            return
-        }
-        if (canjeEnvioGratis) {
-            setCanjeEnvioGratis(false)
-            setCheckoutDeliveryData((prev: any) => (prev ? { ...prev, canjeEnvioGratis: false } : prev))
-            if (checkoutDataRef.current) checkoutDataRef.current.canjeEnvioGratis = false
-            toast.info('Envío gratis desactivado')
-            return
-        }
-        const disponibles = (puntosCliente || 0) - puntosEnCarrito() - (canjeDescuento ? costoDescuento : 0)
-        if (disponibles < costoEnvioGratis) {
-            toast.error(`Te faltan ${costoEnvioGratis - disponibles} pts para canjear envío gratis`)
-            return
-        }
-        setCanjeEnvioGratis(true)
-        setCheckoutDeliveryData((prev: any) => (prev ? { ...prev, canjeEnvioGratis: true } : prev))
-        if (checkoutDataRef.current) checkoutDataRef.current.canjeEnvioGratis = true
-        toast.success('¡Envío gratis activado!')
-    }
-
-    const handleToggleDescuento = () => {
-        if (puntosCliente === null) {
-            setModalPuntosOpen(true)
-            toast.info('Identifícate con tu WhatsApp para canjear tus puntos')
-            return
-        }
-        if (canjeDescuento) {
-            setCanjeDescuento(false)
-            setCheckoutDeliveryData((prev: any) => (prev ? { ...prev, canjeDescuento: false } : prev))
-            if (checkoutDataRef.current) checkoutDataRef.current.canjeDescuento = false
-            toast.info('Descuento desactivado')
-            return
-        }
-        const disponibles = (puntosCliente || 0) - puntosEnCarrito() - (canjeEnvioGratis ? costoEnvioGratis : 0)
-        if (disponibles < costoDescuento) {
-            toast.error(`Te faltan ${costoDescuento - disponibles} pts para canjear el descuento`)
-            return
-        }
-        setCanjeDescuento(true)
-        setCheckoutDeliveryData((prev: any) => (prev ? { ...prev, canjeDescuento: true } : prev))
-        if (checkoutDataRef.current) checkoutDataRef.current.canjeDescuento = true
-        toast.success('¡Descuento activado!')
-    }
 
     const productosPorCategoria = productos.reduce((acc, producto) => {
         const categoria = producto.categoria || 'Sin categoría'
@@ -1021,6 +988,12 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
             nombreProducto: selectedProduct.nombre,
             valor: selectedProduct.precio,
             ...extrasTrackingCampana(campana),
+        })
+        // Meta mide el mismo producto visto: `valor` unitario y un solo content_id.
+        registrarEventoPixelUnaVez('ViewContent', `producto-${selectedProduct.id}`, {
+            productoId: selectedProduct.id,
+            nombreProducto: selectedProduct.nombre,
+            valor: selectedProduct.precio,
         })
     }, [drawerOpen, restaurante?.id, selectedProduct?.id, selectedProduct?.precio, username, campana])
 
@@ -1096,6 +1069,14 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
         }
 
         setCartItems(prev => [...prev, newItem])
+
+        // Meta mide el agregado al carrito con el total de la línea y las unidades.
+        registrarEventoPixel('AddToCart', {
+            productoId: producto.id,
+            nombreProducto: newItem.nombre,
+            valor: (precioFinalNumber * cantidad).toFixed(2),
+            cantidad,
+        })
 
         const bumpCart = () => {
             setTimeout(() => {
@@ -1520,40 +1501,12 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
                                 </span>
                             ) : (
                                 <span className="text-xs text-muted-foreground">
-                                    Elegí productos o beneficios
+                                    Elegí productos para canjear
                                 </span>
                             )}
                         </div>
 
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 px-1">
-                            {tieneEnvioGratisCanje && (
-                                <BeneficioCanjeCard
-                                    tipo="envio"
-                                    titulo="Envío gratis"
-                                    descripcion={canjeEnvioGratis ? 'Activado para este pedido' : 'Bonifica el costo de envío'}
-                                    puntosNecesarios={costoEnvioGratis}
-                                    activo={canjeEnvioGratis}
-                                    onClick={handleToggleEnvioGratis}
-                                />
-                            )}
-
-                            {tieneDescuentoCanje && (
-                                <BeneficioCanjeCard
-                                    tipo="descuento"
-                                    titulo={configPuntos?.descuentoTipo === 'porcentaje'
-                                        ? `${Number(configPuntos?.descuentoValor || 0)}% de descuento`
-                                        : `$${Number(configPuntos?.descuentoValor || 0)} de descuento`}
-                                    descripcion={canjeDescuento
-                                        ? 'Activado para este pedido'
-                                        : (Number(configPuntos?.descuentoMontoMinimo || 0) > 0
-                                            ? `Mínimo $${configPuntos?.descuentoMontoMinimo}`
-                                            : 'Descuento en tu pedido')}
-                                    puntosNecesarios={costoDescuento}
-                                    activo={canjeDescuento}
-                                    onClick={handleToggleDescuento}
-                                />
-                            )}
-
                             {productosCanje.map((producto: any) => {
                                 const enCarrito = cartItems.find(it => it.productoId === producto.id && it.esCanjePuntos)
                                 return (
@@ -1766,6 +1719,7 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
                                 ...(campana ? { campaniaSlug: campana.slug, campanaId: campana.campanaId } : {}),
                             } : undefined}
                             codigoPromocionalInicial={descuentoGrowthCodigo || (username ? codigoPromocionalMarketing(username) : null)}
+                            canjesPuntosEnRevision
                             onConfirmarClick={() => {
                                 if (isSubmittingRef.current || !checkoutDataRef.current) return
                                 isSubmittingRef.current = true
@@ -1845,6 +1799,12 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
                                     onClick={() => {
                                         if (restaurante?.pausadoPorSuscripcion) return
                                         if (!estadoAbierto.abierto && !restaurante?.permitirPedidosProgramados) return
+                                        // Meta cuenta el inicio de checkout una vez por sesión: ir y
+                                        // volver del carrito no puede inflar el paso del embudo.
+                                        registrarEventoPixelUnaVez('InitiateCheckout', 'checkout', {
+                                            items: cartItems,
+                                            valor: Number(totalPedido),
+                                        })
                                         setEsPedidoHabitual(false)
                                         // El checkout pre-completado necesita un medio de pago válido del
                                         // local: el alta pública rechaza el pedido sin él. Se prioriza el
@@ -2183,65 +2143,6 @@ const ProductoCard = ({ producto, onClick, fullWidth }: { producto: any, onClick
 }
 
 export default MenuDelivery
-
-const BeneficioCanjeCard = ({
-    tipo,
-    titulo,
-    descripcion,
-    puntosNecesarios,
-    activo,
-    onClick,
-}: {
-    tipo: 'envio' | 'descuento'
-    titulo: string
-    descripcion: string
-    puntosNecesarios: number
-    activo: boolean
-    onClick: () => void
-}) => (
-    <div
-        className={`group relative flex min-h-24 w-full cursor-pointer items-center gap-3.5 overflow-hidden rounded-2xl border p-3 shadow-sm transition-all duration-300 ${
-            activo
-                ? 'border-primary bg-primary/10 shadow-md ring-1 ring-primary/30'
-                : 'border-primary/20 bg-card hover:border-primary/50 hover:bg-secondary/50'
-        }`}
-        onClick={onClick}
-    >
-        <div className={`w-16 h-16 shrink-0 rounded-xl overflow-hidden border flex items-center justify-center transition-colors ${
-            activo
-                ? 'bg-primary text-primary-foreground border-primary'
-                : 'bg-primary/10 text-primary border-primary/20'
-        }`}>
-            {tipo === 'envio' ? (
-                <Truck className="w-7 h-7" />
-            ) : (
-                <Percent className="w-7 h-7" />
-            )}
-        </div>
-        <div className="flex-1 min-w-0 flex flex-col justify-center">
-            <h3 className="break-words text-sm font-semibold leading-tight text-foreground [overflow-wrap:anywhere]">
-                {titulo}
-            </h3>
-            <p className={`text-xs line-clamp-1 mt-0.5 ${activo ? 'text-primary font-medium' : 'text-muted-foreground'}`}>
-                {descripcion}
-            </p>
-        </div>
-        <div className="flex flex-col items-end justify-center px-1 shrink-0">
-            <span className="text-[10px] font-bold text-primary mb-0.5">COSTO</span>
-            <span className="font-extrabold text-primary text-lg leading-none">{puntosNecesarios}</span>
-            <span className="text-[10px] font-medium text-primary mt-0.5">pts</span>
-            {activo ? (
-                <span className="mt-1.5 flex items-center gap-1 text-[11px] font-bold text-primary-foreground bg-primary px-2 py-0.5 rounded-full shadow-xs">
-                    <Check className="w-3 h-3 stroke-[2.5]" /> Activo
-                </span>
-            ) : (
-                <span className="mt-1.5 text-[11px] font-semibold text-primary bg-primary/10 group-hover:bg-primary group-hover:text-primary-foreground px-2 py-0.5 rounded-full transition-colors">
-                    Activar
-                </span>
-            )}
-        </div>
-    </div>
-)
 
 const ProductoCanjeCard = ({
     producto,

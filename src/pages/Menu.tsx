@@ -17,7 +17,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { CheckoutDeliveryGrupal } from '@/components/CheckoutDeliveryGrupal'
 import { redirectPedidoAlWhatsapp } from '@/lib/checkoutWhatsapp'
 import { guardarTemaRestaurante, leerTemaRestaurante, RestauranteTheme } from '@/components/RestauranteTheme'
-import { configurarGtm, contextoParaPedidoMarketing, registrarEventoTrackingUnaVez } from '@/lib/tracking'
+import { configurarGtm, configurarMetaPixel, contextoParaPedidoMarketing, registrarEventoPixel, registrarEventoPixelUnaVez, registrarEventoTrackingUnaVez } from '@/lib/tracking'
 
 type HorarioTurno = { diaSemana: number; horaApertura: string; horaCierre: string }
 
@@ -260,6 +260,12 @@ const Menu = () => {
       nombreProducto: selectedProduct.nombre,
       valor: selectedProduct.precio,
     })
+    // Meta mide el mismo producto visto: `valor` unitario y un solo content_id.
+    registrarEventoPixelUnaVez('ViewContent', `sala-${token ?? 'sin-token'}-producto-${selectedProduct.id}`, {
+      productoId: selectedProduct.id,
+      nombreProducto: selectedProduct.nombre,
+      valor: selectedProduct.precio,
+    })
   }, [drawerOpen, esSala, restaurante?.id, restaurante?.username, selectedProduct?.id, selectedProduct?.precio, token])
 
   // Lista ordenada de productos "hermanos" para saltar de uno a otro dentro del drawer
@@ -298,6 +304,13 @@ const Menu = () => {
         varianteSecundariaNombre: varianteSecundariaSeleccionada?.nombre,
         nota: nota?.trim() || undefined,
       },
+    })
+    // Meta mide el agregado al carrito con el total de la línea y las unidades.
+    registrarEventoPixel('AddToCart', {
+      productoId: producto.id,
+      nombreProducto: producto.nombre,
+      valor: (Number(precioUnitario) * cantidad).toFixed(2),
+      cantidad,
     })
   }
 
@@ -509,6 +522,7 @@ const Menu = () => {
         const data = await res.json()
         if (data.success && data.data) {
           configurarGtm(data.data.restaurante?.gtmContainerId)
+          configurarMetaPixel(data.data.restaurante?.metaPixelId)
           setPermitirProgramados(!!data.data.restaurante?.permitirPedidosProgramados)
           if (Array.isArray(data.data.horarios)) {
             setHorarios(data.data.horarios)
@@ -898,6 +912,12 @@ const Menu = () => {
                   disabled={localCerrado && !permitirProgramados}
                   onClick={() => {
                     if (localCerrado && !permitirProgramados) return
+                    // Meta cuenta el inicio de checkout una vez por sesión: ir y
+                    // volver del carrito no puede inflar el paso del embudo.
+                    registrarEventoPixelUnaVez('InitiateCheckout', 'checkout', {
+                      items: todosLosItems,
+                      valor: Number(totalPedido),
+                    })
                     if (esSala) {
                       setMostrarCheckoutEnCarrito(true)
                       setExpandido(false)

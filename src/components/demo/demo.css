@@ -1,0 +1,446 @@
+/*
+ * La demo de la tienda (components/demo/). Las escenas usan las piezas de las ilustraciones de la
+ * guía de marketers (marketers/src/components/escenas/escenas.css) y el celular es el marco de la
+ * landing (landing/src/components/marcos/Telefono.astro). Regla de oro de esas piezas: el estado
+ * final es el estilo normal y la animación sólo dice de dónde viene, así que con movimiento
+ * reducido (al final del archivo) queda la ilustración completa y quieta.
+ *
+ * El diálogo y las escenas usan la paleta de Piru, fija (no la del local ni el modo oscuro); el
+ * celular del primer paso, en cambio, muestra la tienda con el tema del local.
+ */
+
+/* ── Recorrido ────────────────────────────────────────────────────────────────────────────── */
+.demo-fondo[data-state='open'] {
+  animation: d-fundido-entra 0.3s ease both;
+}
+.demo-fondo[data-state='closed'] {
+  animation: d-fundido-sale 0.22s ease both;
+}
+.demo-caja {
+  color-scheme: light;
+}
+.demo-caja[data-state='open'] {
+  animation: d-caja-entra 0.5s cubic-bezier(0.22, 0.61, 0.36, 1) both;
+}
+.demo-caja[data-state='closed'] {
+  animation: d-caja-sale 0.22s ease both;
+}
+
+/* El texto entra desde el lado hacia el que se avanza; la escena, desde un poco más chica. */
+.demo-texto[data-dir='1'] {
+  animation: d-desde-derecha 0.45s cubic-bezier(0.22, 0.61, 0.36, 1) both;
+}
+.demo-texto[data-dir='-1'] {
+  animation: d-desde-izquierda 0.45s cubic-bezier(0.22, 0.61, 0.36, 1) both;
+}
+.demo-escena {
+  animation: d-escena 0.55s cubic-bezier(0.22, 0.61, 0.36, 1) both;
+}
+
+/* El escenario limita el alto de la escena: entra entera en cualquier pantalla. */
+.demo-marco {
+  container-type: size;
+  --alto-max: 100cqh;
+}
+
+/* ── Escenas: lienzo de tamaño fijo, escalado al lugar disponible ─────────────────────────── */
+.escena {
+  position: relative;
+  width: min(100%, calc(var(--alto-max, 100000px) * var(--escala-w) / var(--escala-h)));
+  margin-inline: auto;
+  aspect-ratio: var(--escala-w) / var(--escala-h);
+  container-type: inline-size;
+  color: #191512;
+  text-align: left;
+}
+.escena-lienzo {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: calc(var(--escala-w) * 1px);
+  height: calc(var(--escala-h) * 1px);
+  transform-origin: 0 0;
+  transform: scale(tan(atan2(100cqw, calc(var(--escala-w) * 1px))));
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* El fondo donde se apoyan: arena cálida con una trama de puntos. */
+.escenario {
+  background-color: #f7efe3;
+  background-image:
+    radial-gradient(circle at 1px 1px, rgb(25 21 18 / 0.075) 1px, transparent 0),
+    radial-gradient(85% 70% at 50% 0%, rgb(255 122 0 / 0.13), transparent 70%),
+    linear-gradient(180deg, #fff8ee, #f3eadd);
+  background-size:
+    20px 20px,
+    100% 100%,
+    100% 100%;
+}
+
+.e-tarjeta {
+  border-radius: 16px;
+  background: #fff;
+  box-shadow:
+    0 0 0 1px #ece4d8,
+    0 1px 2px rgb(40 24 8 / 0.05),
+    0 16px 32px -20px rgb(40 24 8 / 0.4);
+}
+.e-burbuja {
+  border-radius: 11px;
+  border-top-right-radius: 3px;
+  background: #d9fdd3;
+  color: #111b21;
+  box-shadow: 0 1px 0.5px rgb(11 20 26 / 0.13);
+}
+.e-burbuja-entra {
+  border-radius: 11px;
+  border-top-left-radius: 3px;
+  background: #fff;
+  color: #111b21;
+  box-shadow: 0 1px 0.5px rgb(11 20 26 / 0.13);
+}
+.e-chip {
+  border-radius: 14px;
+  background: rgb(255 255 255 / 0.96);
+  box-shadow:
+    0 0 0 1px #ece4d8,
+    0 14px 28px -16px rgb(40 24 8 / 0.5);
+}
+
+/* Entradas */
+.e-aparece {
+  animation: e-aparece 0.55s cubic-bezier(0.22, 0.61, 0.36, 1) var(--d, 0ms) both;
+}
+.e-sube {
+  animation: e-sube 0.6s cubic-bezier(0.22, 0.61, 0.36, 1) var(--d, 0ms) both;
+}
+.e-baja {
+  animation: e-baja 0.6s cubic-bezier(0.22, 0.61, 0.36, 1) var(--d, 0ms) both;
+}
+.e-izquierda {
+  animation: e-izquierda 0.65s cubic-bezier(0.22, 0.61, 0.36, 1) var(--d, 0ms) both;
+}
+.e-derecha {
+  animation: e-derecha 0.65s cubic-bezier(0.22, 0.61, 0.36, 1) var(--d, 0ms) both;
+}
+.e-pop {
+  animation: e-pop 0.55s cubic-bezier(0.34, 1.56, 0.64, 1) var(--d, 0ms) both;
+}
+.e-barra {
+  transform-origin: left center;
+  animation: e-barra 0.9s cubic-bezier(0.22, 0.61, 0.36, 1) var(--d, 0ms) both;
+}
+/* El celular del primer paso sube desde más abajo, como si lo sacaran del bolsillo. */
+.e-asoma {
+  animation: e-asoma 0.9s cubic-bezier(0.22, 0.61, 0.36, 1) var(--d, 0ms) both;
+}
+
+/* Bucles */
+.e-hormigas {
+  stroke-dasharray: 5 7;
+  animation: e-hormigas 1.1s linear infinite;
+}
+.e-viaja {
+  offset-path: var(--ruta);
+  offset-rotate: 0deg;
+  offset-anchor: center;
+  animation: e-viaja var(--t, 2.6s) cubic-bezier(0.45, 0, 0.25, 1) var(--d, 0ms) infinite both;
+}
+.e-llega {
+  animation: e-llega var(--t, 2.6s) ease-out var(--d, 0ms) infinite both;
+}
+.e-vuela {
+  offset-path: var(--ruta);
+  offset-rotate: 0deg;
+  offset-anchor: center;
+  opacity: 0;
+  animation: e-vuela 1.1s cubic-bezier(0.45, 0, 0.25, 1) var(--d, 0ms) both;
+}
+.e-latido {
+  animation: e-latido 2.2s ease-out var(--d, 0ms) infinite;
+}
+.e-flota {
+  animation: e-flota 5s ease-in-out var(--d, 0ms) infinite;
+}
+.e-onda {
+  animation: e-onda 0.9s ease-out var(--d, 0ms) both;
+}
+
+@keyframes d-fundido-entra {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes d-fundido-sale {
+  to {
+    opacity: 0;
+  }
+}
+@keyframes d-caja-entra {
+  from {
+    opacity: 0;
+    transform: translateY(28px) scale(0.97);
+  }
+}
+@keyframes d-caja-sale {
+  to {
+    opacity: 0;
+    transform: translateY(14px) scale(0.98);
+  }
+}
+@keyframes d-desde-derecha {
+  from {
+    opacity: 0;
+    transform: translateX(28px);
+  }
+}
+@keyframes d-desde-izquierda {
+  from {
+    opacity: 0;
+    transform: translateX(-28px);
+  }
+}
+@keyframes d-escena {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+}
+@keyframes e-aparece {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes e-sube {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+}
+@keyframes e-baja {
+  from {
+    opacity: 0;
+    transform: translateY(-14px);
+  }
+}
+@keyframes e-izquierda {
+  from {
+    opacity: 0;
+    transform: translateX(-26px);
+  }
+}
+@keyframes e-derecha {
+  from {
+    opacity: 0;
+    transform: translateX(26px);
+  }
+}
+@keyframes e-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+}
+@keyframes e-barra {
+  from {
+    transform: scaleX(0);
+  }
+}
+@keyframes e-asoma {
+  from {
+    opacity: 0;
+    transform: translateY(70px);
+  }
+}
+@keyframes e-hormigas {
+  to {
+    stroke-dashoffset: -12;
+  }
+}
+@keyframes e-viaja {
+  0% {
+    offset-distance: 0%;
+    opacity: 0;
+  }
+  12% {
+    opacity: 1;
+  }
+  80% {
+    opacity: 1;
+  }
+  92%,
+  100% {
+    offset-distance: 100%;
+    opacity: 0;
+  }
+}
+@keyframes e-llega {
+  0%,
+  78% {
+    opacity: 0;
+    transform: translateY(8px) scale(0.9);
+  }
+  86%,
+  94% {
+    opacity: 1;
+    transform: none;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+}
+@keyframes e-vuela {
+  0% {
+    offset-distance: 0%;
+    opacity: 0;
+  }
+  15%,
+  80% {
+    opacity: 1;
+  }
+  100% {
+    offset-distance: 100%;
+    opacity: 0;
+  }
+}
+@keyframes e-latido {
+  0% {
+    box-shadow: 0 0 0 0 rgb(255 122 0 / 0.5);
+  }
+  70% {
+    box-shadow: 0 0 0 12px rgb(255 122 0 / 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgb(255 122 0 / 0);
+  }
+}
+@keyframes e-flota {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-5px);
+  }
+}
+@keyframes e-onda {
+  from {
+    opacity: 0.55;
+    transform: scale(0.4);
+  }
+  to {
+    opacity: 0;
+    transform: scale(2.4);
+  }
+}
+
+/* ── Celular (el marco de la landing): pantalla de 390 × 844 en un bisel de 11 px ─────────── */
+.telefono {
+  position: relative;
+  width: 412px;
+  height: 866px;
+  padding: 11px;
+  border-radius: 64px;
+  background: linear-gradient(145deg, #2b2b2f, #0c0c0e 38%, #1b1b1e);
+  box-shadow:
+    inset 0 0 0 1.5px rgb(255 255 255 / 0.09),
+    inset 0 0 0 5px #09090a,
+    0 0 0 1px rgb(0 0 0 / 0.55),
+    0 40px 80px -30px rgb(40 20 5 / 0.55);
+}
+.telefono-pantalla {
+  position: relative;
+  width: 390px;
+  height: 844px;
+  overflow: hidden;
+  border-radius: 53px;
+  isolation: isolate;
+  -webkit-font-smoothing: antialiased;
+}
+.telefono-estado {
+  position: absolute;
+  z-index: 60;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 54px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 30px 0 44px;
+  color: var(--foreground);
+  pointer-events: none;
+}
+.telefono-hora {
+  font-size: 16.5px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.telefono-iconos {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.telefono-isla {
+  position: absolute;
+  z-index: 61;
+  top: 11px;
+  left: 50%;
+  width: 122px;
+  height: 35px;
+  translate: -50% 0;
+  border-radius: 999px;
+  background: #000;
+}
+.telefono-boton {
+  position: absolute;
+  width: 3.5px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, #1a1a1c, #3a3a3e);
+}
+.telefono-boton--accion {
+  left: -2.5px;
+  top: 132px;
+  height: 30px;
+}
+.telefono-boton--vol1 {
+  left: -2.5px;
+  top: 190px;
+  height: 58px;
+}
+.telefono-boton--vol2 {
+  left: -2.5px;
+  top: 262px;
+  height: 58px;
+}
+.telefono-boton--power {
+  right: -2.5px;
+  top: 216px;
+  height: 92px;
+  background: linear-gradient(270deg, #1a1a1c, #3a3a3e);
+}
+
+/* ── La isla: el pulso del ícono, que invita a tocarla ────────────────────────────────────── */
+.isla-pulso {
+  animation: e-latido 2.4s ease-out 1.2s infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .demo-fondo,
+  .demo-caja,
+  .demo-texto,
+  .demo-escena,
+  .escena *,
+  .isla-pulso {
+    animation: none !important;
+    transition: none !important;
+  }
+  .e-viaja,
+  .e-llega,
+  .e-vuela,
+  .e-onda {
+    display: none;
+  }
+}

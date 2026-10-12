@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo, lazy, Suspense } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router'
 import { Button } from '@/components/ui/button'
 import { Sheet, SheetContent } from '@/components/ui/sheet'
@@ -20,6 +20,11 @@ import {
 import { redirectPedidoAlWhatsapp } from '@/lib/checkoutWhatsapp'
 import { guardarTemaRestaurante, leerTemaRestaurante, RestauranteTheme } from '@/components/RestauranteTheme'
 import { codigoPromocionalMarketing, configurarGtm, configurarMetaPixel, contextoParaPedidoMarketing, guardarContextoTracking, registrarEventoPixel, registrarEventoPixelUnaVez, registrarEventoTrackingUnaVez } from '@/lib/tracking'
+import { armarPedidoDemo, CLIENTA_DEMO, DESCUENTO_DEMO, direccionDemo, restauranteDemo, type PedidoDemoInfo } from '@/lib/demo'
+
+// La demo (`?demo`) se descarga sólo cuando se usa. Si el archivo no llega (un deploy nuevo
+// cambió su nombre), la tienda sigue andando sin ella.
+const DemoTienda = lazy(() => import('@/components/demo/DemoTienda').catch(() => ({ default: () => <></> })))
 
 type PedidoHistorico = {
     id: number
@@ -205,6 +210,11 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
     const navigate = useNavigate()
     const { username } = useParams()
     const [searchParams, setSearchParams] = useSearchParams()
+    // `?demo`: el link de prospección (lib/demo.ts). La tienda se ve como la ve Martina, una clienta
+    // de ejemplo, y nada de ella sale del navegador: sin tracking, sin consultar su historial ni sus
+    // puntos y sin crear el pedido. El pedido en grupo sí es el de siempre.
+    const demo = searchParams.has('demo')
+    const [pedidoDemo, setPedidoDemo] = useState<PedidoDemoInfo | null>(null)
     const repAplicadoRef = useRef(false)
     const productoAplicadoRef = useRef(false)
     const tkAplicadoRef = useRef<string | null>(null)
@@ -246,7 +256,7 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
 
     const [restaurante, setRestaurante] = useState<any>(null)
     const [productos, setProductos] = useState<any[]>([])
-    const [sucursales, setSucursales] = useState<{ id: number }[]>([])
+    const [sucursales, setSucursales] = useState<{ id: number; direccionLat?: string | null; direccionLng?: string | null }[]>([])
     const [loading, setLoading] = useState(true)
     const [horarios, setHorarios] = useState<HorarioTurno[]>([])
     const [estadoAbierto, setEstadoAbierto] = useState<{ abierto: boolean; proximaApertura: string | null }>({ abierto: true, proximaApertura: null })
@@ -258,8 +268,10 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
     })
     const [creandoSala, setCreandoSala] = useState(false)
 
+    // La demo arma su propio carrito: el de la tienda de siempre no se toca.
+    const claveCarrito = demo ? `deliveryCart_${username}:demo` : `deliveryCart_${username}`
     const [cartItems, setCartItems] = useState<any[]>(() => {
-        const saved = localStorage.getItem(`deliveryCart_${username}`)
+        const saved = localStorage.getItem(claveCarrito)
         if (saved) {
             try { return JSON.parse(saved).items || [] } catch { return [] }
         }
@@ -268,16 +280,16 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
 
     useEffect(() => {
         if (restaurante) {
-            localStorage.setItem(`deliveryCart_${username}`, JSON.stringify({
+            localStorage.setItem(claveCarrito, JSON.stringify({
                 items: cartItems,
                 restauranteId: restaurante.id,
                 deliveryFee: restaurante.deliveryFee
             }))
         }
-    }, [cartItems, restaurante, username])
+    }, [cartItems, restaurante, claveCarrito])
 
     const [telefonoCliente, setTelefonoCliente] = useState(localStorage.getItem('cliente_telefono') || '')
-    const [puntosCliente, setPuntosCliente] = useState<number | null>(null)
+    const [puntosCliente, setPuntosCliente] = useState<number | null>(demo ? CLIENTA_DEMO.puntos : null)
     const [loadingPuntos, setLoadingPuntos] = useState(false)
     const [modalPuntosOpen, setModalPuntosOpen] = useState(false)
     const [canjeEnvioGratis, setCanjeEnvioGratis] = useState(false)
@@ -301,10 +313,10 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
 
     useEffect(() => {
         const telefono = (telefonoCliente || '').replace(/\D/g, '')
-        if (!restaurante?.id || telefono.length < 8) return
+        if (demo || !restaurante?.id || telefono.length < 8) return
         // Deja listo el historial local antes de que el cliente abra el checkout.
         void sincronizarDireccionesCliente(restaurante.id, telefono).catch(() => {})
-    }, [restaurante?.id, telefonoCliente])
+    }, [demo, restaurante?.id, telefonoCliente])
 
     // Function to fetch points
     const fetchPuntos = useCallback(async (telefono: string, restauranteId: number) => {
@@ -347,8 +359,11 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
                         || campana?.tipo === 'reactivacion'
                         || campana?.slug === 'reactivacion'
                     )) ? (campana?.descuentoPorcentaje && campana.descuentoPorcentaje > 0 ? campana.descuentoPorcentaje : 10) : 0
+                    // En la demo, Martina vuelve con el 10% del mensaje de recompra: la tienda queda
+                    // como al entrar por ese link (el banner de abajo y el descuento en la carta).
+                    const descuentoDemo = demo ? DESCUENTO_DEMO : 0
 
-                    setRestaurante(data.data.restaurante)
+                    setRestaurante(demo ? restauranteDemo(data.data.restaurante) : data.data.restaurante)
                     setSucursales(Array.isArray(data.data.sucursales) ? data.data.sucursales : [])
                     setProductos(data.data.productos.map((producto: any) => {
                         const ahora = Date.now()
@@ -374,26 +389,38 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
                                 descuentoFechaInicio: usaOfertaCampana ? campana?.fechaInicio : producto.descuentoFechaInicio,
                                 descuentoFechaFin: usaOfertaCampana ? campana?.fechaFin : producto.descuentoFechaFin,
                             }
+                        } else if (descuentoDemo > descuentoProductoActivo) {
+                            return { ...producto, descuento: descuentoDemo, descuentoFechaFin: null }
                         }
                         return producto
                     }))
-                    configurarGtm(data.data.restaurante.gtmContainerId)
-                    configurarMetaPixel(data.data.restaurante.metaPixelId)
-                    const sessionKey = `${data.data.restaurante.id}:${username}`
-                    if (sessionStartRef.current !== sessionKey) {
-                        sessionStartRef.current = sessionKey
-                        // El resolver de /c/:slug ya creó/actualizó la sesión y
-                        // sumó el contador compacto; no insertamos un evento de
-                        // apertura adicional por cada visita de campaña.
-                        if (!campana) registrarEventoTrackingUnaVez(data.data.restaurante.id, username!, 'session_start', 'storefront')
+                    if (!demo) {
+                        configurarGtm(data.data.restaurante.gtmContainerId)
+                        configurarMetaPixel(data.data.restaurante.metaPixelId)
+                        const sessionKey = `${data.data.restaurante.id}:${username}`
+                        if (sessionStartRef.current !== sessionKey) {
+                            sessionStartRef.current = sessionKey
+                            // El resolver de /c/:slug ya creó/actualizó la sesión y
+                            // sumó el contador compacto; no insertamos un evento de
+                            // apertura adicional por cada visita de campaña.
+                            if (!campana) registrarEventoTrackingUnaVez(data.data.restaurante.id, username!, 'session_start', 'storefront')
+                        }
                     }
-                    if (data.data.horarios) {
+                    // La demo siempre está abierta: el local la prueba cuando la recibe.
+                    if (data.data.horarios && !demo) {
                         setHorarios(data.data.horarios)
                         setEstadoAbierto(checkIsOpen(data.data.horarios))
                     }
                     guardarTemaRestaurante(`theme_${username}`, data.data.restaurante)
-                    if (data.data.restaurante.sistemaPuntos && telefonoCliente) {
+                    if (data.data.restaurante.sistemaPuntos && telefonoCliente && !demo) {
                         fetchPuntos(telefonoCliente, data.data.restaurante.id)
+                    }
+                    if (demo) {
+                        setBannerGrowth({
+                            texto: `¡Te extrañamos! Tenés un ${DESCUENTO_DEMO}% OFF aplicado a tu pedido 🎁`,
+                            porcentaje: DESCUENTO_DEMO,
+                            expiraAt: null,
+                        })
                     }
                 } else {
                     toast.error(data.message)
@@ -407,7 +434,7 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
         if (username) {
             fetchRestaurante()
         }
-    }, [username, campana])
+    }, [username, campana, demo])
 
     useEffect(() => {
         if (horarios.length === 0) return
@@ -708,7 +735,7 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
 
     useEffect(() => {
         const recomendacionKey = restaurante?.id && username ? `${restaurante.id}:${username}` : null
-        if (loading || !recomendacionKey || productos.length === 0 || recomendacionIntentadaRef.current === recomendacionKey) return
+        if (demo || loading || !recomendacionKey || productos.length === 0 || recomendacionIntentadaRef.current === recomendacionKey) return
         const esCampanaLoMismo = campana?.tipo === 'lo_mismo' || campana?.slug === 'lo-mismo'
         // Un Smart Link tiene prioridad sobre recomendación histórica, excepto si es la campaña "Lo Mismo de Siempre".
         if ((campana && !esCampanaLoMismo) || repAplicadoRef.current || productoAplicadoRef.current || searchParams.has('rep') || searchParams.has('producto') || searchParams.has('tk') || searchParams.has('c') || tkAplicadoRef.current) return
@@ -852,7 +879,7 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
         }
 
         cargarPedidoHabitual()
-    }, [loading, restaurante, productos, sucursales, cartItems.length, estadoAbierto.abierto, campana, searchParams])
+    }, [demo, loading, restaurante, productos, sucursales, cartItems.length, estadoAbierto.abierto, campana, searchParams])
 
     const cerrarCarrito = useCallback(() => {
         setCarritoAbierto(false)
@@ -982,7 +1009,7 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
     }
 
     useEffect(() => {
-        if (!drawerOpen || !selectedProduct?.id || !restaurante?.id || !username) return
+        if (demo || !drawerOpen || !selectedProduct?.id || !restaurante?.id || !username) return
         registrarEventoTrackingUnaVez(restaurante.id, username, 'product_view', `producto-${selectedProduct.id}`, {
             productoId: selectedProduct.id,
             nombreProducto: selectedProduct.nombre,
@@ -995,7 +1022,7 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
             nombreProducto: selectedProduct.nombre,
             valor: selectedProduct.precio,
         })
-    }, [drawerOpen, restaurante?.id, selectedProduct?.id, selectedProduct?.precio, username, campana])
+    }, [demo, drawerOpen, restaurante?.id, selectedProduct?.id, selectedProduct?.precio, username, campana])
 
     // Lista ordenada de productos "hermanos" para poder saltar de uno a otro dentro
     // del drawer (mismo orden en que se ven en pantalla). El canje por puntos queda
@@ -1071,7 +1098,7 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
         setCartItems(prev => [...prev, newItem])
 
         // Meta mide el agregado al carrito con el total de la línea y las unidades.
-        registrarEventoPixel('AddToCart', {
+        if (!demo) registrarEventoPixel('AddToCart', {
             productoId: producto.id,
             nombreProducto: newItem.nombre,
             valor: (precioFinalNumber * cantidad).toFixed(2),
@@ -1093,7 +1120,7 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
     }
 
     const totalPedido = cartItems.reduce((sum, item) => sum + (parseFloat(item.precio) * item.cantidad), 0).toFixed(2)
-    const tieneCodigoCampana = Boolean(descuentoGrowthCodigo || (username && codigoPromocionalMarketing(username)))
+    const tieneCodigoCampana = !demo && Boolean(descuentoGrowthCodigo || (username && codigoPromocionalMarketing(username)))
     const subtotalBaseOriginal = cartItems.reduce((sum, item) => sum + (parseFloat(item.precioOriginal || item.precio || 0) * item.cantidad), 0).toFixed(2)
     const itemsTotalCheckout = tieneCodigoCampana ? subtotalBaseOriginal : totalPedido
 
@@ -1105,6 +1132,17 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
 
     const submitOrder = useCallback(async (data: any) => {
         if (!data || !restaurante || !username) return
+
+        // La demo no crea el pedido: muestra el mensaje que le llegaría al local.
+        if (demo) {
+            setPedidoDemo(armarPedidoDemo(data, cartItems, restaurante))
+            setCartItems([])
+            setCanjeEnvioGratis(false)
+            setCanjeDescuento(false)
+            cerrarCarrito()
+            isSubmittingRef.current = false
+            return
+        }
 
         // Local pausado por suscripción (Tarea 8): cerrado temporalmente, no toma pedidos nuevos.
         if (restaurante?.pausadoPorSuscripcion) {
@@ -1262,7 +1300,7 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
                 isSubmittingRef.current = false
             }
         }
-    }, [restaurante, username, cartItems, navigate, horarios, campana])
+    }, [demo, cerrarCarrito, restaurante, username, cartItems, navigate, horarios, campana])
 
     const handleCheckoutMessage = useCallback((msg: any) => {
         if (msg.type === 'INICIAR_EDICION_CHECKOUT') {
@@ -1341,6 +1379,12 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
         }
     }
 
+    // La dirección guardada de Martina: a unas cuadras del local, dentro de su zona de delivery.
+    const direccionClienta = useMemo(
+        () => (demo && restaurante ? direccionDemo(restaurante, sucursales) : null),
+        [demo, restaurante, sucursales],
+    )
+
     const cachedTheme = leerTemaRestaurante(`theme_${username}`)
     const themeStyles = <RestauranteTheme restaurante={restaurante} cachedTheme={cachedTheme} />
 
@@ -1362,6 +1406,23 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
     return (
         <div className="min-h-screen pb-32 bg-background font-sans selection:bg-primary/20">
             {themeStyles}
+
+            {demo && (
+                <>
+                    {/* El lugar de la isla que lleva al panel: al abrir, no tapa el logo. */}
+                    <div aria-hidden className="h-16" />
+                    <Suspense fallback={null}>
+                        <DemoTienda
+                            username={username ?? ''}
+                            restaurante={restaurante}
+                            productos={productos}
+                            scrollDir={scrollDir}
+                            pedido={pedidoDemo}
+                            onCerrarPedido={() => setPedidoDemo(null)}
+                        />
+                    </Suspense>
+                </>
+            )}
 
             {restaurante?.pausadoPorSuscripcion ? (
                 // Local pausado por suscripción (Tarea 8): cerrado temporalmente, no toma pedidos.
@@ -1699,7 +1760,7 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
                             totalItems={cartItems.length}
                             sendMessage={handleCheckoutMessage}
                             clienteId="solo"
-                            clienteNombre={localStorage.getItem('cliente_nombre') || ''}
+                            clienteNombre={demo ? CLIENTA_DEMO.nombre : (localStorage.getItem('cliente_nombre') || '')}
                             checkoutData={checkoutDeliveryData}
                             editSemaphore={editSemaphoreLocal}
                             restauranteDireccion={restaurante?.direccionTexto ?? restaurante?.direccion ?? undefined}
@@ -1714,12 +1775,17 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
                             enviarPedidoWhatsapp={restaurante?.avisosWhatsappClienteEnabled === false}
                             submittingOrder={submittingOrder}
                             localCerrado={!estadoAbierto.abierto || !!restaurante?.pausadoPorSuscripcion}
-                            contextoMarketing={username ? {
+                            contextoMarketing={username && !demo ? {
                                 ...contextoParaPedidoMarketing(username),
                                 ...(campana ? { campaniaSlug: campana.slug, campanaId: campana.campanaId } : {}),
                             } : undefined}
-                            codigoPromocionalInicial={descuentoGrowthCodigo || (username ? codigoPromocionalMarketing(username) : null)}
+                            codigoPromocionalInicial={demo ? null : (descuentoGrowthCodigo || (username ? codigoPromocionalMarketing(username) : null))}
                             canjesPuntosEnRevision
+                            demo={direccionClienta ? {
+                                puntos: puntosCliente ?? CLIENTA_DEMO.puntos,
+                                configuracionPuntos: restaurante?.configuracionPuntos,
+                                direccion: direccionClienta,
+                            } : undefined}
                             onConfirmarClick={() => {
                                 if (isSubmittingRef.current || !checkoutDataRef.current) return
                                 isSubmittingRef.current = true
@@ -1801,7 +1867,7 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
                                         if (!estadoAbierto.abierto && !restaurante?.permitirPedidosProgramados) return
                                         // Meta cuenta el inicio de checkout una vez por sesión: ir y
                                         // volver del carrito no puede inflar el paso del embudo.
-                                        registrarEventoPixelUnaVez('InitiateCheckout', 'checkout', {
+                                        if (!demo) registrarEventoPixelUnaVez('InitiateCheckout', 'checkout', {
                                             items: cartItems,
                                             valor: Number(totalPedido),
                                         })
@@ -1814,17 +1880,27 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
                                         const metodoPagoInicial = metodoPagoHabitual && metodosDisponibles.has(metodoPagoHabitual)
                                             ? metodoPagoHabitual
                                             : (restaurante?.metodosPago?.[0]?.id ?? null)
+                                        // Los datos de quien ya pidió desde este navegador; en la
+                                        // demo, los de Martina, que vuelve a pedir.
+                                        const guardado = direccionClienta ? {
+                                            nombre: CLIENTA_DEMO.nombre,
+                                            telefono: CLIENTA_DEMO.telefono,
+                                            ...direccionClienta,
+                                            tipoDomicilio: 'casa' as const,
+                                        } : {
+                                            nombre: localStorage.getItem('cliente_nombre') || '',
+                                            telefono: localStorage.getItem('cliente_telefono') || '',
+                                            direccion: localStorage.getItem('cliente_direccion') || '',
+                                            lat: localStorage.getItem('cliente_lat') ? Number(localStorage.getItem('cliente_lat')) : null,
+                                            lng: localStorage.getItem('cliente_lng') ? Number(localStorage.getItem('cliente_lng')) : null,
+                                            tipoDomicilio: null,
+                                        }
                                         setCheckoutDeliveryData((prev: any) => {
                                             if (!prev) {
                                                 return {
                                                     tipoPedido: restaurante?.deliveryEnabled !== false ? 'delivery' : 'takeaway',
-                                                    nombre: localStorage.getItem('cliente_nombre') || '',
-                                                    telefono: localStorage.getItem('cliente_telefono') || '',
-                                                    direccion: localStorage.getItem('cliente_direccion') || '',
-                                                    lat: localStorage.getItem('cliente_lat') ? Number(localStorage.getItem('cliente_lat')) : null,
-                                                    lng: localStorage.getItem('cliente_lng') ? Number(localStorage.getItem('cliente_lng')) : null,
+                                                    ...guardado,
                                                     notas: '',
-                                                    tipoDomicilio: null,
                                                     deliveryFee: restaurante?.deliveryFee ? Number(restaurante.deliveryFee) : 0,
                                                     zonaNombre: null,
                                                     itemsTotal: itemsTotalCheckout,

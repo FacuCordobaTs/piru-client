@@ -9,6 +9,7 @@ import { AddressAutocomplete } from '@/components/AddressAutocomplete'
 import { AddressMapPreview } from '@/components/AddressMapPreview'
 import type { CheckoutDeliveryData, CheckoutEditSemaphore } from '@/store/mesaStore'
 import type { contextoParaPedidoMarketing } from '@/lib/tracking'
+import type { CheckoutDemo } from '@/lib/demo'
 
 type MetodoPublico = { id: string; label: string; automatico: boolean }
 type FranjaHorario = { id: number; nombre: string; horaInicio: string; horaFin: string }
@@ -200,6 +201,10 @@ interface CheckoutDeliveryGrupalProps {
    * el pedido; el pedido de sala usa el `deliveryFee` guardado, así que en sala
    * no se ofrecen. */
   canjesPuntosEnRevision?: boolean
+  /** Demo de la tienda (`?demo`, lib/demo.ts): la clienta de ejemplo trae sus puntos, el club y
+   * su dirección guardada. No se consultan su historial ni sus puntos y no se guarda nada en este
+   * navegador. */
+  demo?: CheckoutDemo
 }
 
 export function CheckoutDeliveryGrupal({
@@ -228,7 +233,9 @@ export function CheckoutDeliveryGrupal({
   contextoMarketing,
   codigoPromocionalInicial,
   canjesPuntosEnRevision = false,
+  demo,
 }: CheckoutDeliveryGrupalProps) {
+  const esDemo = Boolean(demo)
   const [tipoPedido, setTipoPedido] = useState<'delivery' | 'takeaway'>(checkoutData?.tipoPedido || 'delivery')
   const [nombre, setNombre] = useState(checkoutData?.nombre || localStorage.getItem('cliente_nombre') || '')
   const [telefono, setTelefono] = useState(checkoutData?.telefono || localStorage.getItem('cliente_telefono') || '')
@@ -257,7 +264,9 @@ export function CheckoutDeliveryGrupal({
   const [isLoadingRestaurante, setIsLoadingRestaurante] = useState(false)
   const [franjas, setFranjas] = useState<FranjaHorario[]>([])
   const [direccionesGuardadas, setDireccionesGuardadas] = useState<DireccionGuardada[]>(() =>
-    leerDireccionesCliente(restauranteId, checkoutData?.telefono || localStorage.getItem('cliente_telefono') || ''),
+    demo
+      ? [{ ...demo.direccion, usadaEn: Date.now() }]
+      : leerDireccionesCliente(restauranteId, checkoutData?.telefono || localStorage.getItem('cliente_telefono') || ''),
   )
 
   // El fee guardado ya puede venir en 0 por el canje de envío gratis; en ese caso
@@ -276,7 +285,7 @@ export function CheckoutDeliveryGrupal({
   const [codigoError, setCodigoError] = useState<string | null>(null)
   const [codigoAutomaticoProcesado, setCodigoAutomaticoProcesado] = useState<string | null>(null)
 
-  const [puntosDisponibles, setPuntosDisponibles] = useState<number | null>(null)
+  const [puntosDisponibles, setPuntosDisponibles] = useState<number | null>(demo ? demo.puntos : null)
   const [loadingPuntosCheckout, setLoadingPuntosCheckout] = useState(false)
   const [canjeEnvioGratis, setCanjeEnvioGratis] = useState(checkoutData?.canjeEnvioGratis ?? false)
   const [canjeDescuento, setCanjeDescuento] = useState(checkoutData?.canjeDescuento ?? false)
@@ -296,7 +305,9 @@ export function CheckoutDeliveryGrupal({
     ? zonaDeliveryFee
     : (direccionSoloTexto ? (parseFloat(restauranteData?.deliveryFee ?? '0') || 0) : 0)
 
-  const configPuntos = restauranteData?.sistemaPuntos ? restauranteData?.configuracionPuntos : null
+  const configPuntos = demo
+    ? demo.configuracionPuntos
+    : restauranteData?.sistemaPuntos ? restauranteData?.configuracionPuntos : null
   const puntosActuales = puntosDisponibles ?? 0
   const puntosRequeridosEnvio = configPuntos?.permiteCanjeEnvioGratis ? Number(configPuntos.puntosEnvioGratis || 0) : 0
   const puntosRequeridosDescuento = configPuntos?.permiteCanjeDescuento ? Number(configPuntos.descuentoPuntosCosto || 0) : 0
@@ -389,6 +400,7 @@ export function CheckoutDeliveryGrupal({
   }, [availablePaymentMethods])
 
   useEffect(() => {
+    if (esDemo) return
     const telefonoNormalizado = normalizarTelefonoDireccion(telefono)
     if (!restauranteId || telefonoNormalizado.length < 8 || !restauranteData?.sistemaPuntos) {
       setPuntosDisponibles(null)
@@ -420,9 +432,10 @@ export function CheckoutDeliveryGrupal({
       cancelado = true
       clearTimeout(timer)
     }
-  }, [restauranteId, telefono, restauranteData?.sistemaPuntos])
+  }, [esDemo, restauranteId, telefono, restauranteData?.sistemaPuntos])
 
   useEffect(() => {
+    if (esDemo) return
     const telefonoNormalizado = normalizarTelefonoDireccion(telefono)
     if (!restauranteId || telefonoNormalizado.length < 8) {
       setDireccionesGuardadas([])
@@ -459,7 +472,7 @@ export function CheckoutDeliveryGrupal({
       cancelado = true
       window.clearTimeout(timer)
     }
-  }, [restauranteId, telefono])
+  }, [esDemo, restauranteId, telefono])
 
   useEffect(() => {
     if (!checkoutData) return
@@ -723,7 +736,8 @@ export function CheckoutDeliveryGrupal({
     // comprando, no la del receptor: en una sala grupal guardar acá el celular
     // de otro participante hacía que los ítems siguientes se atribuyeran al
     // receptor y que el cliente propio del comensal no se registrara.
-    if (!clienteNombre?.trim() || esMismoComensal(nombre, clienteNombre)) {
+    // En la demo los datos son de la clienta de ejemplo: no se guardan.
+    if (!demo && (!clienteNombre?.trim() || esMismoComensal(nombre, clienteNombre))) {
       localStorage.setItem('cliente_nombre', nombre.trim())
       localStorage.setItem('cliente_telefono', telefono.trim())
     }
@@ -812,6 +826,10 @@ export function CheckoutDeliveryGrupal({
       total: nuevoTotal.toFixed(2),
     }
     sendMessage({ type: 'MODIFICAR_CHECKOUT', payload: { clienteId, updates } })
+    if (demo) {
+      setEditandoHabitual(false)
+      return
+    }
     if (!clienteNombre?.trim() || esMismoComensal(updates.nombre, clienteNombre)) {
       localStorage.setItem('cliente_nombre', updates.nombre)
       localStorage.setItem('cliente_telefono', updates.telefono)

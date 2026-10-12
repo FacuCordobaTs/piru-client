@@ -1,12 +1,12 @@
 import { useState, useEffect, useCallback, useRef, useMemo, lazy, Suspense } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router'
 import { Button } from '@/components/ui/button'
-import { Sheet, SheetContent } from '@/components/ui/sheet'
+import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet'
 import { toast } from 'sonner'
 import {
     Trash2, Maximize2, Minimize2, Loader2,
     Package, Receipt, UtensilsCrossed, Utensils, Clock, Share2, User, Plus,
-    Check, Sparkles
+    Check, Sparkles, Users, BadgePercent
 } from 'lucide-react'
 import { ProductDetailDrawer } from '@/components/ProductDetailDrawer'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
@@ -206,6 +206,21 @@ const extrasTrackingCampana = (campana: CampanaPublica | null, metadata: Record<
     } : {}),
 })
 
+/** El aviso de descuento de la parte alta de la carta: una línea, un título y la cifra que se
+ * aplica de verdad. El del 20% o más es la oferta exclusiva de 48 horas; el resto, el de recompra. */
+type AvisoDescuento = { titulo: string; detalle: string }
+
+const avisoDescuento = (porcentaje: number, exclusivo = false): AvisoDescuento => exclusivo
+    ? { titulo: 'Oferta exclusiva', detalle: `${porcentaje}% OFF por 48 horas, aplicado a tu pedido` }
+    : { titulo: '¡Te extrañamos!', detalle: `${porcentaje}% OFF aplicado a tu pedido` }
+
+// Los accesos de arriba de la carta (pedido en grupo, puntos): una píldora lisa, sin borde ni sombra.
+// El color de la marca queda en el ícono; el texto es el de la tienda, que lee bien en cualquier tema.
+const ACCESO_RAPIDO = 'inline-flex h-11 max-w-full items-center gap-2 rounded-full bg-secondary px-4 text-[13px] font-semibold text-foreground transition-[background-color,transform] duration-200 hover:bg-secondary/70 active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60'
+
+// Riel horizontal sin barra de scroll (`scrollbar-hide` no existe en este Tailwind).
+const RIEL_SIN_BARRA = '[scrollbar-width:none] [&::-webkit-scrollbar]:hidden'
+
 const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) => {
     const navigate = useNavigate()
     const { username } = useParams()
@@ -218,11 +233,7 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
     const repAplicadoRef = useRef(false)
     const productoAplicadoRef = useRef(false)
     const tkAplicadoRef = useRef<string | null>(null)
-    const [bannerGrowth, setBannerGrowth] = useState<{
-        texto: string
-        porcentaje: number
-        expiraAt: number | null
-    } | null>(null)
+    const [bannerGrowth, setBannerGrowth] = useState<AvisoDescuento | null>(null)
     const [descuentoGrowthCodigo, setDescuentoGrowthCodigo] = useState<string | null>(null)
 
     const [carritoAbierto, setCarritoAbierto] = useState(false)
@@ -232,6 +243,8 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
     const [cartAnimation, setCartAnimation] = useState(false)
     const [scrollDir, setScrollDir] = useState<'up' | 'down' | null>(null)
     const scrollTimerRef = useRef<number | null>(null)
+    // La sección "Canje de puntos": el acceso de puntos de arriba lleva hasta ahí.
+    const canjeRef = useRef<HTMLElement | null>(null)
 
     // El botón "Ver Pedido" reacciona a la dirección del scroll (efecto contra-scroll):
     // mientras scrollés hacia arriba baja un poco, mientras scrollés hacia abajo sube un
@@ -415,13 +428,7 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
                     if (data.data.restaurante.sistemaPuntos && telefonoCliente && !demo) {
                         fetchPuntos(telefonoCliente, data.data.restaurante.id)
                     }
-                    if (demo) {
-                        setBannerGrowth({
-                            texto: `¡Te extrañamos! Tenés un ${DESCUENTO_DEMO}% OFF aplicado a tu pedido 🎁`,
-                            porcentaje: DESCUENTO_DEMO,
-                            expiraAt: null,
-                        })
-                    }
+                    if (demo) setBannerGrowth(avisoDescuento(DESCUENTO_DEMO))
                 } else {
                     toast.error(data.message)
                 }
@@ -597,11 +604,8 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
                 if (data.descuento?.activo && data.descuento?.porcentaje > 0) {
                     const pct = data.descuento.porcentaje
                     const exp = data.descuento.expiraAt ? new Date(data.descuento.expiraAt).toISOString() : null
-                    const texto = pct >= 20
-                        ? '⏳ Oportunidad Exclusiva: 20% OFF por 48 horas aplicado a tu pedido'
-                        : `¡Te extrañamos! Tenés un ${pct}% OFF aplicado a tu pedido 🎁`
 
-                    setBannerGrowth({ texto, porcentaje: pct, expiraAt: data.descuento.expiraAt })
+                    setBannerGrowth(avisoDescuento(pct, pct >= 20))
                     if (data.descuento.codigoCupon) {
                         setDescuentoGrowthCodigo(data.descuento.codigoCupon)
                     }
@@ -717,11 +721,7 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
 
         if (campana.tipo === 'reactivacion' || campana.slug === 'reactivacion') {
             const pct = campana.descuentoPorcentaje > 0 ? campana.descuentoPorcentaje : 10
-            setBannerGrowth({
-                texto: `¡Te extrañamos! Tenés un ${pct}% OFF aplicado a tu pedido 🎁`,
-                porcentaje: pct,
-                expiraAt: null,
-            })
+            setBannerGrowth(avisoDescuento(pct))
             setProductos(prev => prev.map((prod: any) => {
                 const descActual = Number(prod.descuento || 0)
                 return {
@@ -964,6 +964,30 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
     const puntosUsadosBeneficios = (canjeEnvioGratis && tieneEnvioGratisCanje ? costoEnvioGratis : 0) + (canjeDescuento && tieneDescuentoCanje ? costoDescuento : 0)
     const productosCanje = productos.filter(p => Number(p.puntosNecesarios) > 0)
     const tieneOpcionesCanje = productosCanje.length > 0
+    // Lo que puede gastar ahora, y lo que va a tener con este pedido (menos los canjes, más lo que
+    // suma al cobrarse).
+    const puntosDisponibles = puntosCliente === null
+        ? null
+        : Math.max(0, puntosCliente - puntosEnCarrito() - puntosUsadosBeneficios)
+    const puntosConPedido = puntosCliente === null
+        ? null
+        : Math.max(0, puntosCliente - puntosEnCarrito() - puntosUsadosBeneficios + puntosGanadosCarrito())
+
+    // El acceso de puntos de arriba: sin identificar abre la consulta; identificado lleva a los
+    // canjes de producto y, si el local no tiene, cuenta dónde se usan (el checkout).
+    const verPuntos = () => {
+        if (puntosCliente === null) {
+            setModalPuntosOpen(true)
+            return
+        }
+        if (tieneOpcionesCanje && canjeRef.current) {
+            const sinMovimiento = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+            canjeRef.current.scrollIntoView({ behavior: sinMovimiento ? 'auto' : 'smooth', block: 'start' })
+            return
+        }
+        const canjes = [tieneEnvioGratisCanje && 'envío gratis', tieneDescuentoCanje && 'descuentos'].filter(Boolean).join(' y ')
+        toast.info(canjes ? `Canjeá tus puntos por ${canjes} al confirmar tu pedido` : 'Sumás puntos con cada pedido')
+    }
 
     // Los canjes de envío gratis y descuento se activan desde el checkout, pero el
     // presupuesto de puntos lo lleva el menú: incluye los canjes de productos que el
@@ -1002,6 +1026,8 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
     const categoriasOrdenadas = Object.keys(productosPorCategoria).sort(compararCategorias)
     const mostrarProductosEnGrid = categoriasOrdenadas.length >= 1 && categoriasOrdenadas.length <= 3
     const productoCampana = campana?.productoId != null ? productos.find((producto) => producto.id === campana.productoId) ?? null : null
+    // La landing de una campaña con producto va en lugar del pedido en grupo: la oferta antes que la carta.
+    const mostrarPedidoGrupal = !(productoCampana && campana) && restaurante?.orderGroupEnabled !== false
 
     const abrirDetalleProducto = (producto: any) => {
         setSelectedProduct(producto)
@@ -1449,125 +1475,89 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
                 </div>
             )}
 
-            <div className="max-w-2xl lg:max-w-5xl xl:max-w-6xl mx-auto px-5 pt-4 space-y-6">
-                {bannerGrowth && (
-                    <div className="rounded-2xl bg-gradient-to-r from-emerald-500/15 via-emerald-500/10 to-transparent border border-emerald-500/30 p-4 shadow-sm flex items-center justify-between gap-3 animate-in fade-in slide-in-from-top-2 duration-300">
-                        <div className="flex items-center gap-3 min-w-0">
-                            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 font-black text-sm">
-                                {bannerGrowth.porcentaje}%
+            <div className="max-w-2xl lg:max-w-5xl xl:max-w-6xl mx-auto px-5 pt-4 space-y-5">
+                {/* Lo primero que se ve es la marca y, si lo hay, el descuento; lo demás, chico: la carta
+                    tiene que entrar en la primera pantalla. */}
+                <header className="flex flex-col items-center gap-3.5">
+                    {restaurante.imagenUrl && (
+                        <img
+                            src={restaurante.imagenUrl}
+                            alt="logo"
+                            className={`size-32 rounded-3xl object-cover ${restaurante.imagenLightUrl ? 'hidden dark:block' : ''}`}
+                        />
+                    )}
+                    {restaurante.imagenLightUrl && (
+                        <img
+                            src={restaurante.imagenLightUrl}
+                            alt="logo"
+                            className="size-32 rounded-3xl object-cover block dark:hidden"
+                        />
+                    )}
+                    {bannerGrowth && (
+                        <p className="animate-in fade-in duration-300 inline-flex max-w-full items-center gap-2 rounded-2xl bg-emerald-500/10 px-3.5 py-2 text-[13px] leading-snug text-emerald-900 dark:bg-emerald-400/10 dark:text-emerald-100">
+                            <BadgePercent className="size-4 shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden />
+                            <span>
+                                <strong className="font-bold">{bannerGrowth.titulo}</strong> {bannerGrowth.detalle}
                             </span>
-                            <div className="min-w-0">
-                                <p className="text-sm font-bold text-foreground leading-snug">
-                                    {bannerGrowth.texto}
-                                </p>
-                                <p className="text-xs text-muted-foreground mt-0.5">
-                                    Se descontará automáticamente al confirmar tu compra
-                                </p>
-                            </div>
-                        </div>
-                        <span className="rounded-full bg-emerald-600 px-3 py-1 text-[11px] font-bold text-white shrink-0 shadow-sm">
-                            Aplicado
-                        </span>
-                    </div>
-                )}
-                <section className="space-y-4">
-                    <div className="flex items-center justify-center gap-4">
-                        {restaurante.imagenUrl && (
-                            <img
-                                src={restaurante.imagenUrl}
-                                alt="logo"
-                                className={`w-48 h-48 rounded-md object-cover ${restaurante.imagenLightUrl ? 'hidden dark:block' : ''}`}
-                            />
-                        )}
-                        {restaurante.imagenLightUrl && (
-                            <img
-                                src={restaurante.imagenLightUrl}
-                                alt="logo"
-                                className="w-48 h-48 rounded-md object-cover block dark:hidden"
-                            />
-                        )}
-                        {/* <div>
-                            <p className="text-sm text-muted-foreground font-medium mb-0.5">Bienvenido a</p>
-                            <h1 className="text-3xl font-extrabold tracking-tight text-primary">
-                                {restaurante.nombre}
-                            </h1>
-                        </div> */}
-                    </div>
-                </section>
+                        </p>
+                    )}
+                </header>
 
-                {productoCampana && campana ? (
+                {productoCampana && campana && (
                     <CampanaProductoHero campana={campana} producto={productoCampana} onClick={() => abrirDetalleProducto(productoCampana)} />
-                ) : restaurante?.orderGroupEnabled !== false && (
-                    <section
-                        role="button"
-                        aria-label="Crear pedido entre amigos"
-                        className="flex items-center gap-4 px-4 py-4 rounded-2xl bg-primary/5 border border-primary/15 cursor-pointer hover:bg-primary/10 hover:border-primary/30 transition-all duration-200 active:scale-[0.98] lg:max-w-2xl lg:mx-auto lg:w-full"
-                        onClick={onArmarPedidoClick}
-                    >
-                        <AvatarStack />
-                        <div className="flex-1 min-w-0">
-                            <p className="text-sm font-bold text-foreground leading-tight">¿Piden entre varios?</p>
-                            <p className="text-[11.5px] text-muted-foreground mt-0.5 leading-snug">Compartí un link y cada uno agrega lo suyo</p>
-                        </div>
-                        <div className="flex items-center gap-1.5 shrink-0 text-[11px] font-bold text-primary-foreground bg-primary rounded-full px-3 py-2 shadow-sm">
-                            {creandoSala ? (
-                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                            ) : (
-                                <Share2 className="w-3.5 h-3.5" />
-                            )}
-                            {creandoSala ? 'Creando…' : 'Crear link'}
-                        </div>
-                    </section>
                 )}
 
-                {restaurante?.sistemaPuntos && (
-                    <section className="bg-primary/10 border border-primary/20 p-4 rounded-xl flex items-center justify-between shadow-sm lg:max-w-2xl lg:mx-auto lg:w-full">
-                        <div className="flex flex-col">
-                            <div className="flex items-center gap-2 mb-1">
-                                <span className="bg-primary text-primary-foreground text-xs px-2 py-0.5 rounded-full font-bold">PUNTOS</span>
-                                {puntosCliente !== null && (
-                                    <span className="font-semibold text-foreground text-sm">
-                                        {Math.max(0, puntosCliente - puntosEnCarrito() - puntosUsadosBeneficios + puntosGanadosCarrito())} pts
-                                    </span>
+                {(mostrarPedidoGrupal || restaurante?.sistemaPuntos) && (
+                    <div className="flex flex-wrap items-center justify-center gap-2">
+                        {mostrarPedidoGrupal && (
+                            <button type="button" onClick={onArmarPedidoClick} aria-busy={creandoSala} className={ACCESO_RAPIDO}>
+                                {creandoSala
+                                    ? <Loader2 className="size-4 shrink-0 animate-spin" />
+                                    : <Users className="size-4 shrink-0 text-primary" />}
+                                <span className="truncate">{creandoSala ? 'Creando link…' : 'Pedir entre varios'}</span>
+                            </button>
+                        )}
+                        {restaurante?.sistemaPuntos && (
+                            <button
+                                type="button"
+                                onClick={verPuntos}
+                                aria-label={puntosConPedido === null ? undefined : `Tus puntos: ${puntosConPedido.toLocaleString('es-AR')} pts`}
+                                className={ACCESO_RAPIDO}
+                            >
+                                {loadingPuntos
+                                    ? <Loader2 className="size-4 shrink-0 animate-spin" />
+                                    : <Sparkles className="size-4 shrink-0 text-primary" />}
+                                {puntosConPedido === null ? 'Ver mis puntos' : (
+                                    <span className="tabular-nums">{puntosConPedido.toLocaleString('es-AR')} pts</span>
                                 )}
-                            </div>
-                            <p className="text-xs text-muted-foreground max-w-[200px]">
-                                {puntosCliente === null ? 'Identifícate para ver tus puntos disponibles y canjear.' : 'Puntos acumulados. Canjea por productos o beneficios.'}
-                            </p>
-                        </div>
-                        <div>
-                            {puntosCliente === null ? (
-                                <Button size="sm" onClick={() => setModalPuntosOpen(true)} className="bg-primary hover:bg-primary/90 text-primary-foreground shadow-sm font-semibold rounded-lg text-xs">
-                                    Identifícate
-                                </Button>
-                            ) : (
-                                <Button disabled variant="outline" size="sm" className="bg-background/80 border-primary/30 text-xs font-semibold text-primary/80">
-                                    Activo
-                                </Button>
-                            )}
-                        </div>
-                    </section>
+                            </button>
+                        )}
+                    </div>
                 )}
 
                 {restaurante?.sistemaPuntos && tieneOpcionesCanje && (
-                    <section className="space-y-3 pt-1 lg:max-w-2xl lg:mx-auto lg:w-full">
-                        <div className="flex items-center justify-between px-1">
-                            <h2 className="text-sm font-bold text-foreground uppercase tracking-wider flex items-center gap-1.5">
-                                <Sparkles className="w-4 h-4 text-primary" />
+                    <section ref={canjeRef} aria-label="Canje de puntos" className="scroll-mt-20 space-y-3">
+                        <div className="flex items-baseline justify-between gap-3 px-1">
+                            <h2 className="flex items-center gap-1.5 text-[15px] font-bold text-foreground">
+                                <Sparkles className="size-4 text-primary" />
                                 Canje de puntos
                             </h2>
-                            {puntosCliente !== null ? (
-                                <span className="text-xs text-muted-foreground font-medium">
-                                    Disponibles: <strong className="text-primary font-bold">{Math.max(0, (puntosCliente ?? 0) - puntosEnCarrito() - puntosUsadosBeneficios)} pts</strong>
+                            {puntosDisponibles !== null ? (
+                                <span className="text-xs text-muted-foreground">
+                                    Disponibles: <strong className="font-bold tabular-nums text-foreground">{puntosDisponibles.toLocaleString('es-AR')} pts</strong>
                                 </span>
                             ) : (
-                                <span className="text-xs text-muted-foreground">
-                                    Elegí productos para canjear
-                                </span>
+                                <button
+                                    type="button"
+                                    onClick={() => setModalPuntosOpen(true)}
+                                    className="text-xs font-semibold text-foreground underline underline-offset-4 decoration-foreground/30 hover:decoration-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60 rounded-sm"
+                                >
+                                    Identificate para canjear
+                                </button>
                             )}
                         </div>
 
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 px-1">
+                        <div className={`-mx-5 flex snap-x scroll-px-5 gap-3 overflow-x-auto px-5 py-1 lg:mx-0 lg:grid lg:grid-cols-2 lg:overflow-visible lg:px-0 xl:grid-cols-3 ${RIEL_SIN_BARRA}`}>
                             {productosCanje.map((producto: any) => {
                                 const enCarrito = cartItems.find(it => it.productoId === producto.id && it.esCanjePuntos)
                                 return (
@@ -1584,24 +1574,27 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
                 )}
 
                 {categorias.length > 1 && (
-                    <section className="space-y-3 pt-2">
-                        <h2 className="text-lg font-bold text-foreground px-1">Categorías</h2>
-                        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2 px-1">
-                            {categorias.map((category) => (
-                                <Button
-                                    key={category}
-                                    onClick={() => setSelectedCategory(category || 'All')}
-                                    variant={selectedCategory === category ? "default" : "secondary"}
-                                    className={`rounded-lg px-5 h-10 text-xs font-medium transition-all ${selectedCategory === category
-                                        ? "shadow-md"
-                                        : "bg-secondary/50 hover:bg-secondary border border-transparent"
-                                        }`}
-                                >
-                                    <span className="truncate">{category === 'All' ? 'Todas' : category}</span>
-                                </Button>
-                            ))}
+                    <nav aria-label="Categorías" className="-mx-5">
+                        <div className={`flex snap-x scroll-px-5 gap-2 overflow-x-auto px-5 py-1 lg:flex-wrap lg:justify-center lg:overflow-visible ${RIEL_SIN_BARRA}`}>
+                            {categorias.map((category) => {
+                                const activa = selectedCategory === category
+                                return (
+                                    <button
+                                        key={category}
+                                        type="button"
+                                        onClick={() => setSelectedCategory(category || 'All')}
+                                        aria-pressed={activa}
+                                        className={`h-10 shrink-0 snap-start whitespace-nowrap rounded-full px-4 text-[13px] font-semibold transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60 ${activa
+                                            ? 'bg-primary text-primary-foreground'
+                                            : 'bg-secondary text-secondary-foreground hover:bg-secondary/70'
+                                            }`}
+                                    >
+                                        {category === 'All' ? 'Todas' : category}
+                                    </button>
+                                )
+                            })}
                         </div>
-                    </section>
+                    </nav>
                 )}
 
                 <section className="space-y-8 min-h-[50vh]">
@@ -1941,16 +1934,16 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
                     <form onSubmit={handleLoginPuntos} className="p-4 py-8 space-y-6">
                         <div className="text-center space-y-2">
                             <div className="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center mx-auto text-primary mb-4">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2v20" /><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" /></svg>
+                                <Sparkles className="size-6" />
                             </div>
-                            <h3 className="text-xl font-bold">Consulta tus Puntos</h3>
-                            <p className="text-sm text-muted-foreground">Ingresa tu celular de WhatsApp para ver los puntos de pedidos anteriores.</p>
+                            <SheetTitle className="text-xl font-bold">Consultá tus puntos</SheetTitle>
+                            <SheetDescription>Ingresá tu celular de WhatsApp para ver los puntos de tus pedidos anteriores.</SheetDescription>
                         </div>
                         <div className="space-y-2">
                             <input type="tel" name="telefono" required defaultValue={telefonoCliente} className="w-full text-center py-4 rounded-xl border border-input bg-transparent text-lg placeholder:text-muted-foreground focus:ring-2 focus:ring-primary transition-all outline-none" placeholder="Tu número de celular" />
                         </div>
                         <Button type="submit" className="w-full h-12 rounded-xl text-base bg-primary hover:bg-primary/90 text-primary-foreground font-bold">
-                            {loadingPuntos ? 'Consultando...' : 'Ver Puntos'}
+                            {loadingPuntos ? 'Consultando...' : 'Ver mis puntos'}
                         </Button>
                     </form>
                 </SheetContent>
@@ -1979,7 +1972,7 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
                 <DialogContent className="max-w-sm rounded-3xl p-6">
                     <DialogHeader className="text-center sm:text-center">
                         <div className="mx-auto mb-4">
-                            <AvatarStack grande />
+                            <AvatarStack />
                         </div>
                         <DialogTitle className="text-xl">Pedido entre amigos</DialogTitle>
                         <DialogDescription className="text-center pt-1">
@@ -2060,24 +2053,20 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
 }
 
 // Pila de avatares con un lugar libre ("+"): el visual de "un grupo con lugar para vos".
-// Es lo que hace legible el pedido entre amigos sin leer ni una palabra.
-const AvatarStack = ({ grande }: { grande?: boolean }) => {
-    const circulo = grande ? 'w-11 h-11' : 'w-8 h-8'
-    const icono = grande ? 'w-5 h-5' : 'w-4 h-4'
-    return (
-        <div className={`flex shrink-0 ${grande ? '-space-x-3' : '-space-x-2.5'}`}>
-            <div className={`${circulo} rounded-full bg-primary text-primary-foreground flex items-center justify-center ring-2 ring-background z-[2]`}>
-                <User className={icono} />
-            </div>
-            <div className={`${circulo} rounded-full bg-primary/25 text-primary flex items-center justify-center ring-2 ring-background z-[1]`}>
-                <User className={icono} />
-            </div>
-            <div className={`${circulo} rounded-full border-2 border-dashed border-primary/40 text-primary/60 bg-background flex items-center justify-center`}>
-                <Plus className={icono} />
-            </div>
+// Es lo que hace legible el pedido entre amigos sin leer ni una palabra; la usa el diálogo.
+const AvatarStack = () => (
+    <div className="flex shrink-0 -space-x-3">
+        <div className="w-11 h-11 rounded-full bg-primary text-primary-foreground flex items-center justify-center ring-2 ring-background z-[2]">
+            <User className="w-5 h-5" />
         </div>
-    )
-}
+        <div className="w-11 h-11 rounded-full bg-primary/25 text-primary flex items-center justify-center ring-2 ring-background z-[1]">
+            <User className="w-5 h-5" />
+        </div>
+        <div className="w-11 h-11 rounded-full border-2 border-dashed border-primary/40 text-primary/60 bg-background flex items-center justify-center">
+            <Plus className="w-5 h-5" />
+        </div>
+    </div>
+)
 
 const CampanaProductoHero = ({ campana, producto, onClick }: { campana: CampanaProductoPublica; producto: any; onClick: () => void }) => {
     const precioOriginal = Number(producto.precio || 0)
@@ -2229,40 +2218,42 @@ const ProductoCanjeCard = ({
     cantidadEnCarrito?: number
     onClick: () => void
 }) => (
-    <div
-        className={`group relative flex min-h-24 w-full cursor-pointer items-center gap-3.5 overflow-hidden rounded-2xl border p-3 shadow-sm transition-all duration-300 ${
-            cantidadEnCarrito
-                ? 'border-primary/50 bg-primary/5'
-                : 'border-primary/20 bg-card hover:border-primary/50 hover:bg-secondary/50'
-        }`}
+    // Una fila corta, sin borde ni sombra, para que los canjes entren en un riel de una sola altura
+    // y no empujen la carta: la ficha completa (descripción, extras) está en el detalle del producto.
+    <button
+        type="button"
         onClick={onClick}
+        aria-label={`${producto.nombre}, ${producto.puntosNecesarios} puntos${cantidadEnCarrito ? `, en tu pedido (${cantidadEnCarrito})` : ', canjear'}`}
+        className={`group flex w-64 shrink-0 snap-start items-center gap-3 rounded-2xl p-2 pr-3 text-left transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60 lg:w-full ${
+            cantidadEnCarrito ? 'bg-primary/10 ring-1 ring-primary/40' : 'bg-secondary hover:bg-secondary/70'
+        }`}
     >
-        <div className="w-16 h-16 shrink-0 rounded-xl overflow-hidden bg-zinc-900 border border-border/50">
+        <span className="size-14 shrink-0 overflow-hidden rounded-xl bg-muted">
             {producto.imagenUrl ? (
-                <img src={producto.imagenUrl} alt={producto.nombre} className="w-full h-full object-cover" />
+                <img src={producto.imagenUrl} alt="" className="size-full object-cover" />
             ) : (
-                <div className="w-full h-full flex items-center justify-center bg-linear-to-br from-zinc-800 to-zinc-900">
-                    <Utensils className="w-6 h-6 text-primary" />
-                </div>
-            )}
-        </div>
-        <div className="flex-1 min-w-0 flex flex-col justify-center">
-            <h3 className="break-words text-sm font-semibold leading-tight text-foreground [overflow-wrap:anywhere]">{producto.nombre}</h3>
-            <p className="text-xs text-muted-foreground line-clamp-1 mt-0.5">{producto.descripcion || 'Canje de producto'}</p>
-        </div>
-        <div className="flex flex-col items-end justify-center px-1 shrink-0">
-            <span className="text-[10px] font-bold text-primary mb-0.5">COSTO</span>
-            <span className="font-extrabold text-primary text-lg leading-none">{producto.puntosNecesarios}</span>
-            <span className="text-[10px] font-medium text-primary mt-0.5">pts</span>
-            {cantidadEnCarrito ? (
-                <span className="mt-1.5 flex items-center gap-1 text-[11px] font-bold text-primary-foreground bg-primary px-2 py-0.5 rounded-full shadow-xs">
-                    <Check className="w-3 h-3 stroke-[2.5]" /> En pedido ({cantidadEnCarrito})
-                </span>
-            ) : (
-                <span className="mt-1.5 text-[11px] font-semibold text-primary bg-primary/10 group-hover:bg-primary group-hover:text-primary-foreground px-2 py-0.5 rounded-full transition-colors">
-                    Canjear
+                <span className="grid size-full place-items-center">
+                    <Utensils className="size-5 text-primary" />
                 </span>
             )}
-        </div>
-    </div>
+        </span>
+        <span className="min-w-0 flex-1">
+            <span className="line-clamp-2 block text-[13px] font-semibold leading-tight text-foreground [overflow-wrap:anywhere]">
+                {producto.nombre}
+            </span>
+            <span className="mt-1 block text-xs font-bold tabular-nums text-foreground/70">
+                {producto.puntosNecesarios} pts
+            </span>
+        </span>
+        {cantidadEnCarrito ? (
+            <span className="flex shrink-0 items-center gap-1 rounded-full bg-primary px-2.5 py-1 text-[11px] font-bold text-primary-foreground">
+                <Check className="size-3 stroke-[3]" />
+                {cantidadEnCarrito}
+            </span>
+        ) : (
+            <span className="shrink-0 rounded-full bg-background px-3 py-1.5 text-[11px] font-bold text-foreground transition-colors group-hover:bg-primary group-hover:text-primary-foreground">
+                Canjear
+            </span>
+        )}
+    </button>
 )

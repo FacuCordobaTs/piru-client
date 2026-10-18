@@ -221,6 +221,10 @@ const ACCESO_RAPIDO = 'inline-flex h-11 max-w-full items-center gap-2 rounded-fu
 // Riel horizontal sin barra de scroll (`scrollbar-hide` no existe en este Tailwind).
 const RIEL_SIN_BARRA = '[scrollbar-width:none] [&::-webkit-scrollbar]:hidden'
 
+// La grilla de la carta, la misma en "Todas" y en una categoría: una columna en el celular y una
+// más cada vez que la pantalla se ensancha. Sin rieles ni scroll horizontal en ningún ancho.
+const GRILLA_PRODUCTOS = 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 px-1'
+
 const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) => {
     const navigate = useNavigate()
     const { username } = useParams()
@@ -1024,7 +1028,6 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
         : productos.filter(p => p.categoria === selectedCategory)
 
     const categoriasOrdenadas = Object.keys(productosPorCategoria).sort(compararCategorias)
-    const mostrarProductosEnGrid = categoriasOrdenadas.length >= 1 && categoriasOrdenadas.length <= 3
     const productoCampana = campana?.productoId != null ? productos.find((producto) => producto.id === campana.productoId) ?? null : null
     // La landing de una campaña con producto va en lugar del pedido en grupo: la oferta antes que la carta.
     const mostrarPedidoGrupal = !(productoCampana && campana) && restaurante?.orderGroupEnabled !== false
@@ -1430,7 +1433,7 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
     }
 
     return (
-        <div className="min-h-screen pb-32 bg-background font-sans selection:bg-primary/20">
+        <div className="menu-delivery min-h-screen pb-32 bg-background selection:bg-primary/20">
             {themeStyles}
 
             {demo && (
@@ -1609,19 +1612,14 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
                                         <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider px-1">
                                             {categoriaNombre}
                                         </h3>
-                                        <div className={mostrarProductosEnGrid
-                                            ? "grid grid-cols-2 gap-4 px-1 lg:grid-cols-3 xl:grid-cols-4 lg:gap-5 lg:px-0"
-                                            : "flex gap-4 overflow-x-auto pb-3 ml-2 scrollbar-hide snap-x snap-mandatory lg:grid lg:grid-cols-3 xl:grid-cols-4 lg:gap-5 lg:ml-0 lg:pb-0 lg:overflow-visible lg:snap-none"
-                                        }>
+                                        <div className={GRILLA_PRODUCTOS}>
                                             {productosDeCategoria.map((producto: any) => (
                                                 <ProductoCard
                                                     key={producto.id}
                                                     producto={producto}
                                                     onClick={() => abrirDetalleProducto(producto)}
-                                                    fullWidth={mostrarProductosEnGrid}
                                                 />
                                             ))}
-                                            {!mostrarProductosEnGrid && <div className="min-w-1 shrink-0 lg:hidden" />}
                                         </div>
                                     </div>
                                 )
@@ -1635,13 +1633,12 @@ const MenuDelivery = ({ campana = null }: { campana?: CampanaPublica | null }) =
                                 <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider px-1">
                                     {selectedCategory}
                                 </h3>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 px-1">
+                                <div className={GRILLA_PRODUCTOS}>
                                     {productosFiltrados.map((producto: any) => (
                                         <ProductoCard
                                             key={producto.id}
                                             producto={producto}
                                             onClick={() => abrirDetalleProducto(producto)}
-                                            fullWidth
                                         />
                                     ))}
                                 </div>
@@ -2097,12 +2094,12 @@ const EmptyState = () => (
 )
 
 
-const ProductoCard = ({ producto, onClick, fullWidth }: { producto: any, onClick: () => void, fullWidth?: boolean }) => {
+const ProductoCard = ({ producto, onClick }: { producto: any, onClick: () => void }) => {
     const tieneDescuento = !!(producto.descuento && producto.descuento > 0)
     const precioOriginal = parseFloat(producto.precio)
     const precioFinal = tieneDescuento ? precioOriginal * (1 - producto.descuento / 100) : precioOriginal
     const nombreLength = String(producto.nombre ?? '').trim().length
-    const nombreClass = nombreLength > 70 ? 'text-[11px]' : nombreLength > 48 ? 'text-xs' : nombreLength > 30 ? 'text-[13px]' : 'text-[15px]'
+    const nombreClass = nombreLength > 70 ? 'text-lg' : nombreLength > 48 ? 'text-[19px]' : nombreLength > 30 ? 'text-xl' : 'text-[22px]'
 
     // ─────────────────────────────────────────────
     // DISEÑO 3: TEXT-ONLY (SIN IMAGEN)
@@ -2110,7 +2107,7 @@ const ProductoCard = ({ producto, onClick, fullWidth }: { producto: any, onClick
     if (!producto.imagenUrl) {
         return (
             <div
-                className={`group relative flex flex-col justify-between ${fullWidth ? 'w-full' : 'w-44 shrink-0 lg:w-full'} min-h-[140px] p-4.5 rounded-[24px] bg-card border border-border/50 shadow-sm hover:shadow-md transition-all duration-300 hover:border-primary/30 hover:bg-accent/20 hover:scale-[1.02] active:scale-[0.98] ${!fullWidth ? 'snap-start' : ''}`}
+                className="group relative flex flex-col justify-between w-full min-h-[140px] p-4.5 rounded-[24px] bg-card border border-border/50 shadow-sm hover:shadow-md transition-all duration-300 hover:border-primary/30 hover:bg-accent/20 hover:scale-[1.02] active:scale-[0.98]"
                 onClick={onClick}
             >
                 <div className="flex-1">
@@ -2125,14 +2122,14 @@ const ProductoCard = ({ producto, onClick, fullWidth }: { producto: any, onClick
                         )}
                     </div>
                     {producto.descripcion && (
-                        <p className="text-xs text-muted-foreground line-clamp-3 leading-relaxed font-medium">
+                        <p className="text-sm text-muted-foreground break-words leading-relaxed font-medium">
                             {producto.descripcion}
                         </p>
                     )}
                 </div>
 
-                <div className="mt-4 flex items-end gap-1.5">
-                    <span className={`font-black text-[18px] ${tieneDescuento ? 'text-emerald-600 dark:text-emerald-400' : 'text-primary'}`}>
+                <div className="mt-4 flex flex-wrap items-baseline justify-end gap-1.5 text-right">
+                    <span className={`font-black text-[22px] ${tieneDescuento ? 'text-emerald-600 dark:text-emerald-400' : 'text-primary'}`}>
                         ${precioFinal.toFixed(0)}
                     </span>
                     {tieneDescuento && (
@@ -2156,10 +2153,10 @@ const ProductoCard = ({ producto, onClick, fullWidth }: { producto: any, onClick
     // ─────────────────────────────────────────────
     return (
         <div
-            className={`group relative flex min-h-[260px] flex-col ${fullWidth ? 'w-full' : 'w-48 shrink-0 lg:w-full'} rounded-[24px] bg-card border border-border/50 shadow-md hover:shadow-xl transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] overflow-hidden ${!fullWidth ? 'snap-start' : ''}`}
+            className="group relative flex min-h-[260px] flex-col w-full rounded-[24px] bg-card border border-border/50 shadow-md hover:shadow-xl transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] overflow-hidden"
             onClick={onClick}
         >
-            <div className="w-full h-[130px] shrink-0 bg-zinc-900 relative">
+            <div className="w-full aspect-[3/2] shrink-0 bg-zinc-900 relative">
                 <img
                     src={producto.imagenUrl}
                     alt={producto.nombre}
@@ -2180,14 +2177,14 @@ const ProductoCard = ({ producto, onClick, fullWidth }: { producto: any, onClick
                         {producto.nombre}
                     </h3>
                     {producto.descripcion && (
-                        <p className="mt-1 text-xs text-muted-foreground line-clamp-2 leading-snug font-medium">
+                        <p className="mt-1 text-sm text-muted-foreground break-words leading-snug font-medium">
                             {producto.descripcion}
                         </p>
                     )}
                 </div>
 
-                <div className="flex items-baseline gap-1.5 mt-2">
-                    <span className={`font-black text-[17px] ${tieneDescuento ? 'text-emerald-600 dark:text-emerald-400' : 'text-primary'}`}>
+                <div className="flex flex-wrap items-baseline justify-end gap-1.5 mt-2 text-right">
+                    <span className={`font-black text-[22px] ${tieneDescuento ? 'text-emerald-600 dark:text-emerald-400' : 'text-primary'}`}>
                         ${precioFinal.toFixed(0)}
                     </span>
                     {tieneDescuento && (

@@ -1,62 +1,12 @@
-import { useState, useEffect, useLayoutEffect, useRef, type ReactNode } from 'react'
+import { useState, useEffect, useLayoutEffect, useRef, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react'
 import { Drawer, DrawerContent, DrawerTitle } from '@/components/ui/drawer'
-import { motion, AnimatePresence, useIsPresent, type PanInfo } from 'motion/react'
+import { motion, AnimatePresence, useIsPresent, useMotionValue, animate, type PanInfo } from 'motion/react'
 import { Check, ChevronLeft, ChevronRight, Clock } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Textarea } from '@/components/ui/textarea'
+import { fotosDeProducto } from '@/lib/fotosProducto'
 
-interface Ingrediente {
-  id: number
-  nombre: string
-}
-
-interface Agregado {
-  id: number
-  nombre: string
-  precio: string
-  grupo?: number
-}
-
-interface Variante {
-  id: number
-  nombre: string
-  precio: string
-}
-
-interface ConfiguracionPuntos {
-  pesosPorPunto?: number | string
-  modoAcumulacion?: string
-}
-
-interface Product {
-  id: number
-  nombre: string
-  descripcion: string | null
-  precio: number | string
-  imagenUrl: string | null
-  categoria?: string
-  ingredientes?: Ingrediente[]
-  agregados?: Agregado[]
-  agregadosPrimarios?: Agregado[]
-  agregadosSecundarios?: Agregado[]
-  variantes?: Variante[]
-  variantesSecundarias?: Variante[]
-  tituloVariantesPrimarias?: string
-  tituloVariantesSecundarias?: string
-  tituloExtrasPrimarios?: string
-  tituloExtrasSecundarios?: string
-  permiteNota?: boolean
-  tituloNota?: string
-  descuento?: number | null
-  descuentoFechaFin?: string | null
-  esCanjePuntos?: boolean
-  intentandoCanjear?: boolean
-  puntosNecesarios?: number | string | null
-  puntosDisponiblesUsuario?: number
-  puntosGanados?: number | string | null
-  sistemaPuntos?: boolean
-  configuracionPuntos?: ConfiguracionPuntos
-}
+import type { Agregado, ConfiguracionPuntos, Product, Variante } from '@/features/tienda/producto'
 
 interface ProductDetailDrawerProps {
   product: Product | null
@@ -69,7 +19,7 @@ interface ProductDetailDrawerProps {
   /** Se llama con el producto destino al navegar (el padre actualiza el producto abierto). */
   onNavigate?: (product: Product) => void
   sistemaPuntos?: boolean
-  configuracionPuntos?: ConfiguracionPuntos
+  configuracionPuntos?: ConfiguracionPuntos | null
 }
 
 function formatTimeLeft(fechaFin: string | Date | null): string | null {
@@ -85,10 +35,11 @@ function formatTimeLeft(fechaFin: string | Date | null): string | null {
   return `${days}d`
 }
 
-/** Precio sin decimales cuando es entero ($2000, no $2000.00); con dos decimales sólo si los tiene. */
+/** Precio sin decimales cuando es entero ($2.000, no $2.000,00); con dos decimales sólo si los tiene. */
 function formatPrecio(valor: number): string {
   if (!Number.isFinite(valor)) return '0'
-  return valor.toFixed(2).replace(/\.00$/, '')
+  const decimales = Math.round(valor * 100) % 100 !== 0 ? 2 : 0
+  return valor.toLocaleString('es-AR', { minimumFractionDigits: decimales, maximumFractionDigits: decimales })
 }
 
 /** "Cebolla" → "cebolla" para que "Sin cebolla" se lea como frase; las siglas ("BBQ") quedan como están. */
@@ -125,7 +76,7 @@ function Medido({ onAltura, className, children }: { onAltura: (alto: number) =>
 }
 
 /** Altura fija de la imagen (px). Ahora es idéntica en todas las etapas. */
-const IMG_H = 220
+const IMG_H = 260
 /** Cuánto sube la hoja inferior sobre la imagen (el `-mt-5` de la hoja). */
 const SOLAPA = 20
 const SPRING = { type: 'spring' as const, stiffness: 320, damping: 34 }
@@ -138,12 +89,20 @@ const SLIDE = { type: 'tween' as const, duration: 0.34, ease: [0.22, 1, 0.36, 1]
 const CRUCE_MS = 400
 /** Transición del deslizamiento horizontal al pasar de un producto a otro. */
 const NAV_SLIDE = { type: 'tween' as const, duration: 0.42, ease: [0.32, 0.72, 0, 1] as const }
+/** Paso entre fotos de la galería: sigue al dedo y se asienta con un resorte corto. */
+const FOTO_SPRING = { type: 'spring' as const, stiffness: 380, damping: 38 }
+/** Resistencia al tirar de la galería hacia un borde sin foto (ni producto) del otro lado. */
+const BORDE_ELASTICO = 0.3
 
 // Cada fila de la lista de variantes (py-3.5 + texto + gap). Sólo dimensiona el tope de esa lista:
 // el alto del drawer sale de medir el contenido (`Medido`), no de constantes.
 const ROW_H = 58
 // Máximo de variantes visibles antes de scroll
 const MAX_VISIBLE_VARIANTS = 3
+
+// El color de la marca para texto: la tienda (TiendaTheme) lo corrige si el acento no se lee sobre
+// el fondo (un amarillo sobre blanco); fuera de la tienda es el primario de siempre.
+const TXT_ACENTO = 'text-[color:var(--tienda-acento-legible,var(--primary))]'
 
 // ── Variante SIN IMAGEN: diseño plano (sin foto ni hoja superpuesta) ──
 // Espeja el card text-only de MenuDelivery: nombre/precio en texto foreground, todo al ras.
@@ -189,6 +148,16 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder, sibl
   const [cruzando, setCruzando] = useState(false)
   const cruceTimer = useRef<number | undefined>(undefined)
   const productId = product?.id
+  // Foto visible de la galería, atada al producto: al pasar a otro arranca en la portada desde el
+  // primer frame (un reset en efecto mostraría un frame con el índice del producto anterior).
+  const [foto, setFoto] = useState<{ productoId?: number; idx: number }>({ idx: 0 })
+  // Desplazamiento en vivo del dedo sobre la galería (px), sumado al paso de foto (%).
+  const arrastreFoto = useMotionValue(0)
+  // El gesto sobre la foto se decide en el primer movimiento: horizontal recorre fotos/productos,
+  // vertical queda para el scroll y para bajar el drawer.
+  const panHorizontal = useRef(false)
+  // Hubo arrastre en el gesto actual: el click con que termina no cuenta como toque.
+  const huboPan = useRef(false)
 
   useEffect(() => {
     if (open && productId !== undefined) {
@@ -242,7 +211,10 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder, sibl
     ? (product?.tituloExtrasSecundarios || 'Extras')
     : (product?.tituloExtrasPrimarios || 'Extras')
   // Producto sin foto → diseño plano (espeja el card text-only del menú).
-  const sinImagen = !product?.imagenUrl
+  const fotos = fotosDeProducto(product)
+  const sinImagen = fotos.length === 0
+  const multiFoto = fotos.length > 1
+  const fotoIdx = foto.productoId === productId ? Math.min(foto.idx, fotos.length - 1) : 0
 
   // ── Navegación entre productos ──
   const lista = siblings ?? []
@@ -257,7 +229,13 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder, sibl
     const target = lista[currentIndex + dir]
     if (!target) return
     setNavDir(dir)
+    arrastreFoto.set(0)
     onNavigate?.(target)
+  }
+
+  const irAFoto = (idx: number) => {
+    if (idx < 0 || idx >= fotos.length) return
+    setFoto({ productoId: productId, idx })
   }
 
   // Flechas del teclado en desktop.
@@ -271,6 +249,39 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder, sibl
     return () => window.removeEventListener('keydown', onKey)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, puedeNavegar, currentIndex, lista])
+
+  // ── Galería ──
+  // Con varias fotos, el swipe sobre la foto las recorre (la tira sigue al dedo) y, pasada la
+  // última o antes de la primera, salta al producto vecino, como en las historias. Los toques en
+  // los bordes de la foto también la cambian.
+  const onFotoPanStart = (_e: unknown, info: PanInfo) => {
+    huboPan.current = true
+    panHorizontal.current = Math.abs(info.offset.x) > Math.abs(info.offset.y)
+  }
+  const onFotoPan = (_e: unknown, info: PanInfo) => {
+    if (!panHorizontal.current) return
+    const dx = info.offset.x
+    const enBorde = (dx > 0 && fotoIdx === 0) || (dx < 0 && fotoIdx === fotos.length - 1)
+    arrastreFoto.set(enBorde ? dx * BORDE_ELASTICO : dx)
+  }
+  const onFotoPanEnd = (_e: unknown, info: PanInfo) => {
+    if (!panHorizontal.current) return
+    panHorizontal.current = false
+    const off = info.offset.x
+    const vel = info.velocity.x
+    const dir = off < -55 || vel < -450 ? 1 : off > 55 || vel > 450 ? -1 : 0
+    const destino = fotoIdx + dir
+    if (dir !== 0 && destino >= 0 && destino < fotos.length) irAFoto(destino)
+    else if (puedeNavegar && ((dir === 1 && hasNext) || (dir === -1 && hasPrev))) return irA(dir)
+    animate(arrastreFoto, 0, FOTO_SPRING)
+  }
+  const onFotoClick = (e: ReactMouseEvent<HTMLDivElement>) => {
+    if (huboPan.current) return
+    const rect = e.currentTarget.getBoundingClientRect()
+    const x = (e.clientX - rect.left) / rect.width
+    if (x < 0.3) irAFoto(fotoIdx - 1)
+    else if (x > 0.7) irAFoto(fotoIdx + 1)
+  }
 
   // Swipe horizontal sobre la foto (área del header) para saltar de producto.
   const onHeaderDragEnd = (_e: unknown, info: PanInfo) => {
@@ -410,9 +421,9 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder, sibl
   const mostrarResumen = stage !== 'primary' && resumen !== ''
 
   const timeLeft = tieneDescuento ? formatTimeLeft(product?.descuentoFechaFin ?? null) : null
-  // Misma escala que el nombre de las fichas de producto de MenuDelivery (`ProductoCard`).
+  // El nombre va en la letra de títulos de la tienda (`.tienda-display`): más grande cuanto más corto.
   const nombreLength = product?.nombre.trim().length ?? 0
-  const nombreClass = nombreLength > 70 ? 'text-lg' : nombreLength > 48 ? 'text-[19px]' : nombreLength > 30 ? 'text-xl' : 'text-[22px]'
+  const nombreClass = nombreLength > 70 ? 'text-xl' : nombreLength > 48 ? 'text-[22px]' : nombreLength > 30 ? 'text-2xl' : 'text-[30px]'
   const nombreLargo = nombreLength > 30
 
   // ── Altura del drawer ──
@@ -433,7 +444,7 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder, sibl
 
   return (
     <Drawer open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
-      <DrawerContent aria-describedby={undefined} className="overflow-hidden border-none bg-background p-0 outline-none [&>div:first-child]:hidden data-[vaul-drawer-direction=bottom]:max-h-dvh lg:mx-auto lg:max-w-md lg:rounded-t-[28px]">
+      <DrawerContent aria-describedby={undefined} className="overflow-hidden border-none bg-background p-0 outline-none [&>div:first-child]:hidden data-[vaul-drawer-direction=bottom]:max-h-dvh rounded-t-[32px] lg:mx-auto lg:max-w-md">
         <DrawerTitle className="sr-only">{product?.nombre ?? 'Producto'}</DrawerTitle>
         <motion.div
           className="relative overflow-hidden bg-background"
@@ -489,12 +500,27 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder, sibl
                   {/* CAPA DE IMAGEN — altura fija en ambas etapas (sólo con foto) */}
                   {!sinImagen && (
                     <div className="absolute inset-x-0 top-0 z-0 overflow-hidden bg-secondary" style={{ height: IMG_H }}>
-                      <img
-                        src={product.imagenUrl!}
-                        alt={product.nombre}
-                        draggable={false}
-                        className="h-full w-full select-none object-cover"
-                      />
+                      {/* Tira de fotos: el contenedor externo avanza de a una foto y el interno
+                          suma el arrastre del dedo, así el paso arranca donde lo soltó. */}
+                      <motion.div
+                        className="flex h-full"
+                        initial={false}
+                        animate={{ x: `${-fotoIdx * 100}%` }}
+                        transition={FOTO_SPRING}
+                      >
+                        <motion.div className="flex h-full w-full shrink-0" style={{ x: arrastreFoto }}>
+                          {fotos.map((src, i) => (
+                            <img
+                              key={src}
+                              src={src}
+                              alt={i === 0 ? product.nombre : `${product.nombre} (foto ${i + 1})`}
+                              draggable={false}
+                              decoding="async"
+                              className="h-full w-full shrink-0 select-none object-cover"
+                            />
+                          ))}
+                        </motion.div>
+                      </motion.div>
                       {/* Gradiente inferior — separa el nombre/precio de la imagen. */}
                       <div
                         aria-hidden
@@ -530,17 +556,65 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder, sibl
                         la fuente del sistema. */}
                     <motion.div
                       className={cn(
-                        'menu-delivery relative shrink-0 select-none',
-                        puedeNavegar && 'cursor-grab touch-pan-y active:cursor-grabbing'
+                        'menu-delivery group/galeria relative shrink-0 select-none',
+                        (puedeNavegar || multiFoto) && 'cursor-grab touch-pan-y active:cursor-grabbing'
                       )}
                       style={sinImagen ? undefined : { height: IMG_H }}
-                      drag={puedeNavegar ? 'x' : false}
-                      dragDirectionLock
-                      dragConstraints={{ left: 0, right: 0 }}
-                      dragElastic={0.18}
-                      dragSnapToOrigin
-                      onDragEnd={onHeaderDragEnd}
+                      // Con galería, el gesto mueve la tira de fotos (no el header) y decide entre
+                      // foto y producto al soltar; sin galería, el header entero salta de producto.
+                      {...(multiFoto
+                        ? {
+                            onPointerDown: () => { huboPan.current = false },
+                            onPanStart: onFotoPanStart,
+                            onPan: onFotoPan,
+                            onPanEnd: onFotoPanEnd,
+                            onClick: onFotoClick,
+                          }
+                        : {
+                            drag: puedeNavegar ? 'x' as const : false,
+                            dragDirectionLock: true,
+                            dragConstraints: { left: 0, right: 0 },
+                            dragElastic: 0.18,
+                            dragSnapToOrigin: true,
+                            onDragEnd: onHeaderDragEnd,
+                          })}
                     >
+                      {multiFoto && (
+                        <>
+                          {/* Indicador de fotos — centrado bajo el asa, como en las historias. */}
+                          <div aria-hidden className="pointer-events-none absolute inset-x-0 top-[26px] z-20 flex justify-center gap-1">
+                            {fotos.map((src, i) => (
+                              <span
+                                key={src}
+                                className={cn(
+                                  'h-1.5 rounded-full shadow-[0_0_4px_rgba(0,0,0,0.35)] transition-all duration-300',
+                                  i === fotoIdx ? 'w-4 bg-white' : 'w-1.5 bg-white/55'
+                                )}
+                              />
+                            ))}
+                          </div>
+                          {/* Flechas de foto — sólo con mouse, al pasar sobre la imagen. */}
+                          {[-1, 1].map(paso => {
+                            const destino = fotoIdx + paso
+                            if (destino < 0 || destino >= fotos.length) return null
+                            return (
+                              <button
+                                key={paso}
+                                type="button"
+                                aria-label={paso < 0 ? 'Foto anterior' : 'Foto siguiente'}
+                                onPointerDown={e => e.stopPropagation()}
+                                onClick={e => { e.stopPropagation(); irAFoto(destino) }}
+                                className={cn(
+                                  'absolute top-[78px] z-20 hidden h-8 w-8 items-center justify-center rounded-full bg-black/35 text-white opacity-0 backdrop-blur-md transition-opacity hover:bg-black/50 group-hover/galeria:opacity-100 focus-visible:opacity-100 [@media(hover:hover)]:flex',
+                                  paso < 0 ? 'left-3' : 'right-3'
+                                )}
+                              >
+                                {paso < 0 ? <ChevronLeft className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                              </button>
+                            )
+                          })}
+                        </>
+                      )}
                       {sinImagen ? (
                         <div className="px-6 pt-9">
                           {/* Botón volver del diseño plano — al ras, no sobre foto. Su hueco crece con
@@ -569,6 +643,9 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder, sibl
                             </AnimatePresence>
                           </motion.div>
                           <Medido onAltura={setCabeceraPlanaH}>
+                            {product.categoria && (
+                              <p className={cn('mb-2 text-[11px] font-semibold uppercase tracking-[0.2em]', TXT_ACENTO)}>{product.categoria}</p>
+                            )}
                             <div className="mb-2 flex flex-wrap items-center gap-2">
                               {esCanje && (
                                 <span className="rounded-full bg-amber-500 px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wide text-white">
@@ -587,7 +664,7 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder, sibl
                               )}
                             </div>
                             <div className={cn('flex gap-3', nombreLargo ? 'flex-col items-stretch gap-1' : 'items-end justify-between')}>
-                              <h3 className={cn('min-w-0 flex-1 break-words font-bold leading-tight text-foreground [overflow-wrap:anywhere]', nombreClass)}>
+                              <h3 className={cn('tienda-display min-w-0 flex-1 break-words font-bold leading-[1.02] text-foreground [overflow-wrap:anywhere]', nombreClass)}>
                                 {product.nombre}
                               </h3>
                               <div className={cn('shrink-0 text-right', nombreLargo && 'self-end')}>
@@ -601,7 +678,7 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder, sibl
                                     {puntosRequeridos} pts
                                   </p>
                                 ) : (
-                                  <p className={cn('text-[22px] font-black', tieneDescuento ? 'text-emerald-600 dark:text-emerald-400' : 'text-primary')}>
+                                  <p className={cn('text-[22px] font-black tabular-nums', tieneDescuento ? 'text-emerald-600 dark:text-emerald-400' : TXT_ACENTO)}>
                                     ${formatPrecio(total)}
                                   </p>
                                 )}
@@ -611,6 +688,9 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder, sibl
                         </div>
                       ) : (
                         <div className="absolute inset-x-0 bottom-0 px-6 pb-8">
+                          {product.categoria && (
+                            <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.2em] text-white/75">{product.categoria}</p>
+                          )}
                           <div className="mb-2 flex flex-wrap items-center gap-2">
                             {esCanje && (
                               <span className="rounded-full bg-amber-500 px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wide text-white">
@@ -629,7 +709,7 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder, sibl
                             )}
                           </div>
                           <div className={cn('flex gap-3', nombreLargo ? 'flex-col items-stretch gap-1' : 'items-end justify-between')}>
-                            <h3 className={cn('min-w-0 flex-1 break-words font-bold leading-tight text-white drop-shadow-sm [overflow-wrap:anywhere]', nombreClass)}>
+                            <h3 className={cn('tienda-display min-w-0 flex-1 break-words font-bold leading-[1.02] text-white drop-shadow-sm [overflow-wrap:anywhere]', nombreClass)}>
                               {product.nombre}
                             </h3>
                             <div className={cn('shrink-0 text-right', nombreLargo && 'self-end')}>
@@ -643,7 +723,7 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder, sibl
                                   {puntosRequeridos} pts
                                 </p>
                               ) : (
-                                <p className="text-[22px] font-black text-white drop-shadow-sm">
+                                <p className="text-[22px] font-black tabular-nums text-white drop-shadow-sm">
                                   ${formatPrecio(total)}
                                 </p>
                               )}
@@ -657,7 +737,7 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder, sibl
                         superpone a la imagen (borde redondeado); sin foto va al ras. */}
                     <div className={cn(
                       'relative flex min-h-0 flex-1 flex-col bg-background',
-                      !sinImagen && '-mt-5 rounded-t-[28px]'
+                      !sinImagen && '-mt-5 rounded-t-[32px]'
                     )}>
                       {/* Resumen de lo elegido — desde la segunda etapa ocupa el lugar de la
                           descripción. Su alto sigue el mismo resorte que el del drawer: crece hacia
@@ -724,16 +804,16 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder, sibl
                                               onClick={() => elegirVariante(v)}
                                               className={cn(rowBtn, sel ? 'bg-primary/10' : 'bg-secondary/50')}
                                             >
-                                              <span className={cn('text-[15px]', sel ? 'font-semibold text-primary' : 'text-foreground')}>
+                                              <span className={cn('text-[15px]', sel ? cn('font-semibold', TXT_ACENTO) : 'text-foreground')}>
                                                 {v.nombre}
                                               </span>
                                               <span className="flex items-center gap-2">
-                                                <span className={cn('text-[15px]', sel ? 'font-semibold text-primary' : 'text-muted-foreground')}>
+                                                <span className={cn('text-[15px]', sel ? cn('font-semibold', TXT_ACENTO) : 'text-muted-foreground')}>
                                                   {stage === 'secondary'
                                                     ? (parseFloat(v.precio) > 0 ? `+$${formatPrecio(parseFloat(v.precio))}` : 'Incluido')
                                                     : `$${formatPrecio(parseFloat(v.precio))}`}
                                                 </span>
-                                                {sel && <Check className="h-[18px] w-[18px] text-primary" />}
+                                                {sel && <Check className={cn('h-[18px] w-[18px]', TXT_ACENTO)} />}
                                               </span>
                                             </button>
                                           )
@@ -758,7 +838,7 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder, sibl
                                   {stage === 'note' ? (
                                     <div className="space-y-3">
                                       <div>
-                                        <p className="px-1 text-lg font-bold text-foreground">
+                                        <p className="tienda-display px-1 text-2xl font-bold leading-tight text-foreground">
                                           {product.tituloNota || '¿Querés aclarar algo?'}
                                         </p>
                                         <p className="px-1 pt-1 text-sm text-muted-foreground">Opcional</p>
@@ -777,7 +857,7 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder, sibl
 
                                   {stage === 'extrasPrimary' && tieneIngredientes && (
                                     <div className="space-y-1">
-                                      <p className="px-1 pb-1 text-lg font-bold text-foreground">
+                                      <p className="tienda-display px-1 pb-1 text-2xl font-bold leading-tight text-foreground">
                                         Ingredientes
                                       </p>
                                       <div className="flex flex-col gap-0.5">
@@ -808,7 +888,7 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder, sibl
 
                                   {isExtrasStage && currentExtras.length > 0 && (
                                     <div className="space-y-1">
-                                      <p className="px-1 pb-1 text-lg font-bold text-foreground">
+                                      <p className="tienda-display px-1 pb-1 text-2xl font-bold leading-tight text-foreground">
                                         {currentExtrasTitle}
                                       </p>
                                       <div className="flex flex-col gap-0.5">
@@ -821,14 +901,14 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder, sibl
                                               onClick={() => toggleAgregado(ag)}
                                               className={cn(rowBtn, sel ? 'bg-primary/10' : 'bg-secondary/50')}
                                             >
-                                              <span className={cn('text-[15px]', sel ? 'font-semibold text-primary' : 'text-foreground')}>
+                                              <span className={cn('text-[15px]', sel ? cn('font-semibold', TXT_ACENTO) : 'text-foreground')}>
                                                 {ag.nombre}
                                               </span>
                                               <span className="flex items-center gap-2">
-                                                <span className={cn('text-[15px]', sel ? 'font-semibold text-primary' : 'text-muted-foreground')}>
+                                                <span className={cn('text-[15px]', sel ? cn('font-semibold', TXT_ACENTO) : 'text-muted-foreground')}>
                                                   +${formatPrecio(parseFloat(ag.precio))}
                                                 </span>
-                                                {sel && <Check className="h-[18px] w-[18px] text-primary" />}
+                                                {sel && <Check className={cn('h-[18px] w-[18px]', TXT_ACENTO)} />}
                                               </span>
                                             </button>
                                           )
@@ -867,7 +947,7 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder, sibl
                                 onClick={handlePrimary}
                                 disabled={(!isDetailsStage && variantBloqueada) || puntosInsuficientes}
                                 className={cn(
-                                  'relative h-14 min-w-0 flex-1 overflow-hidden rounded-2xl text-[17px] font-semibold transition-all duration-300 active:scale-[0.98]',
+                                  'relative h-14 min-w-0 flex-1 overflow-hidden rounded-full text-[17px] font-semibold transition-all duration-300 active:scale-[0.98]',
                                   addCount > 0
                                     ? 'bg-emerald-500 text-white'
                                     : !isDetailsStage && variantBloqueada
@@ -949,7 +1029,7 @@ export function ProductDetailDrawer({ product, open, onClose, onAddToOrder, sibl
                               initial={{ opacity: 0, y: 8 }}
                               animate={{ opacity: 1, y: 0 }}
                               transition={{ duration: 0.25 }}
-                              className="h-14 w-full rounded-2xl bg-secondary text-[17px] font-semibold text-foreground transition-all duration-300 active:scale-[0.98]"
+                              className="h-14 w-full rounded-full bg-secondary text-[17px] font-semibold text-foreground transition-all duration-300 active:scale-[0.98]"
                             >
                               Cerrar
                             </motion.button>

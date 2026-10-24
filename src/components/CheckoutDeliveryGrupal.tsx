@@ -7,7 +7,7 @@ import { toast } from 'sonner'
 import { MapPin, Store, Truck, AlertTriangle, Loader2, Pencil, X, Tag, Home, Building2, Clock, CreditCard, Wallet, Banknote, ChevronLeft, Check, Zap, MessageCircle, UserRound, Sparkles } from 'lucide-react'
 import { AddressAutocomplete } from '@/components/AddressAutocomplete'
 import { AddressMapPreview } from '@/components/AddressMapPreview'
-import type { CheckoutDeliveryData, CheckoutEditSemaphore } from '@/store/mesaStore'
+import type { CheckoutDeliveryData, CheckoutEditSemaphore } from '@/features/tienda/checkout'
 import type { contextoParaPedidoMarketing } from '@/lib/tracking'
 import type { CheckoutDemo } from '@/lib/demo'
 
@@ -24,6 +24,14 @@ type DireccionGuardada = {
 }
 
 const MAX_DIRECCIONES_GUARDADAS = 6
+
+/** $12.500 / $12.500,50: sin decimales cuando el monto es entero. */
+const pesos = (valor: number | string) => {
+  const n = Number(valor)
+  if (!Number.isFinite(n)) return '$0'
+  const decimales = Math.round(n * 100) % 100 !== 0 ? 2 : 0
+  return `$${n.toLocaleString('es-AR', { minimumFractionDigits: decimales, maximumFractionDigits: decimales })}`
+}
 
 const normalizarTelefonoDireccion = (telefono?: string | null) => (telefono || '').replace(/\D/g, '')
 const normalizarDireccion = (direccion?: string | null) => (direccion || '')
@@ -946,9 +954,9 @@ export function CheckoutDeliveryGrupal({
                 seleccionada ? 'bg-primary/10 text-foreground' : 'bg-secondary/50 text-muted-foreground hover:bg-secondary/80 hover:text-foreground'
               }`}
             >
-              <MapPin className={`h-4 w-4 shrink-0 ${seleccionada ? 'text-primary' : ''}`} />
+              <MapPin className={`h-4 w-4 shrink-0 ${seleccionada ? 'text-[color:var(--tienda-acento-legible,var(--primary))]' : ''}`} />
               <span className="min-w-0 flex-1 truncate text-sm font-medium">{item.direccion}</span>
-              {seleccionada && <Check className="h-4 w-4 shrink-0 text-primary" />}
+              {seleccionada && <Check className="h-4 w-4 shrink-0 text-[color:var(--tienda-acento-legible,var(--primary))]" />}
             </button>
           )
         })}
@@ -976,7 +984,7 @@ export function CheckoutDeliveryGrupal({
             }`}
             onClick={() => (!restauranteData || delEn) && setTipoPedido('delivery')}
           >
-            <MapPin className={`w-4 h-4 ${tipoPedido === 'delivery' ? 'text-primary' : 'text-muted-foreground'}`} />
+            <MapPin className={`w-4 h-4 ${tipoPedido === 'delivery' ? 'text-[color:var(--tienda-acento-legible,var(--primary))]' : 'text-muted-foreground'}`} />
             <span className={`text-sm font-semibold ${tipoPedido === 'delivery' ? 'text-foreground' : 'text-muted-foreground'}`}>Delivery</span>
           </button>
           <button
@@ -988,7 +996,7 @@ export function CheckoutDeliveryGrupal({
             }`}
             onClick={() => (!restauranteData || tkEn) && setTipoPedido('takeaway')}
           >
-            <Store className={`w-4 h-4 ${tipoPedido === 'takeaway' ? 'text-primary' : 'text-muted-foreground'}`} />
+            <Store className={`w-4 h-4 ${tipoPedido === 'takeaway' ? 'text-[color:var(--tienda-acento-legible,var(--primary))]' : 'text-muted-foreground'}`} />
             <span className={`text-sm font-semibold ${tipoPedido === 'takeaway' ? 'text-foreground' : 'text-muted-foreground'}`}>Take Away</span>
           </button>
         </div>
@@ -1022,12 +1030,12 @@ export function CheckoutDeliveryGrupal({
                 onClick={() => setSucursalSeleccionada(s.id)}
                 className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-2xl transition-all duration-200 text-left ${sucursalSeleccionada === s.id ? 'bg-primary/10' : 'bg-secondary/50 hover:bg-secondary/80'}`}
               >
-                <Store className={`w-4 h-4 shrink-0 ${sucursalSeleccionada === s.id ? 'text-primary' : 'text-muted-foreground'}`} />
+                <Store className={`w-4 h-4 shrink-0 ${sucursalSeleccionada === s.id ? 'text-[color:var(--tienda-acento-legible,var(--primary))]' : 'text-muted-foreground'}`} />
                 <div className="flex-1 min-w-0">
                   <p className="font-semibold text-sm">{s.nombre}</p>
                   {s.direccion && <p className="text-xs text-muted-foreground mt-0.5">{s.direccion}</p>}
                 </div>
-                {sucursalSeleccionada === s.id && <Check className="w-4 h-4 text-primary shrink-0" />}
+                {sucursalSeleccionada === s.id && <Check className="w-4 h-4 text-[color:var(--tienda-acento-legible,var(--primary))] shrink-0" />}
               </button>
             ))}
           </div>
@@ -1098,7 +1106,7 @@ export function CheckoutDeliveryGrupal({
           className={`flex items-center justify-center gap-2 py-4 rounded-xl transition-all duration-200 cursor-pointer ${tipoDomicilio === 'casa' ? 'bg-background shadow-sm' : ''}`}
           onClick={() => { setTipoDomicilio('casa'); setPiso(''); setNumeroDepartamento('') }}
         >
-          <Home className={`w-4 h-4 ${tipoDomicilio === 'casa' ? 'text-primary' : 'text-muted-foreground'}`} />
+          <Home className={`w-4 h-4 ${tipoDomicilio === 'casa' ? 'text-[color:var(--tienda-acento-legible,var(--primary))]' : 'text-muted-foreground'}`} />
           <span className={`text-sm font-semibold ${tipoDomicilio === 'casa' ? 'text-foreground' : 'text-muted-foreground'}`}>Casa</span>
         </button>
         <button
@@ -1106,7 +1114,7 @@ export function CheckoutDeliveryGrupal({
           className={`flex items-center justify-center gap-2 py-4 rounded-xl transition-all duration-200 cursor-pointer ${tipoDomicilio === 'departamento' ? 'bg-background shadow-sm' : ''}`}
           onClick={() => setTipoDomicilio('departamento')}
         >
-          <Building2 className={`w-4 h-4 ${tipoDomicilio === 'departamento' ? 'text-primary' : 'text-muted-foreground'}`} />
+          <Building2 className={`w-4 h-4 ${tipoDomicilio === 'departamento' ? 'text-[color:var(--tienda-acento-legible,var(--primary))]' : 'text-muted-foreground'}`} />
           <span className={`text-sm font-semibold ${tipoDomicilio === 'departamento' ? 'text-foreground' : 'text-muted-foreground'}`}>Departamento</span>
         </button>
       </div>
@@ -1276,9 +1284,9 @@ export function CheckoutDeliveryGrupal({
                 onClick={() => setHorarioProgramado('')}
                 className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-2xl transition-all duration-200 ${horarioProgramado === '' ? 'bg-primary/10' : 'bg-secondary/50 hover:bg-secondary/80'}`}
               >
-                <Zap className={`w-4 h-4 shrink-0 ${horarioProgramado === '' ? 'text-primary' : 'text-muted-foreground'}`} />
-                <span className={`text-sm font-semibold ${horarioProgramado === '' ? 'text-primary' : 'text-foreground'}`}>Lo antes posible</span>
-                {horarioProgramado === '' && <Check className="w-4 h-4 text-primary shrink-0 ml-auto" />}
+                <Zap className={`w-4 h-4 shrink-0 ${horarioProgramado === '' ? 'text-[color:var(--tienda-acento-legible,var(--primary))]' : 'text-muted-foreground'}`} />
+                <span className={`text-sm font-semibold ${horarioProgramado === '' ? 'text-[color:var(--tienda-acento-legible,var(--primary))]' : 'text-foreground'}`}>Lo antes posible</span>
+                {horarioProgramado === '' && <Check className="w-4 h-4 text-[color:var(--tienda-acento-legible,var(--primary))] shrink-0 ml-auto" />}
               </button>
             )}
             {franjas.length > 0 ? (
@@ -1293,7 +1301,7 @@ export function CheckoutDeliveryGrupal({
                       onClick={() => setHorarioProgramado(selected && !franjaObligatoria ? '' : valor)}
                       className={`flex flex-col items-center justify-center p-3 rounded-2xl transition-all duration-200 ${selected ? 'bg-primary/10' : 'bg-secondary/50 hover:bg-secondary/80'}`}
                     >
-                      <span className={`font-semibold text-sm ${selected ? 'text-primary' : 'text-foreground'}`}>{f.nombre}</span>
+                      <span className={`font-semibold text-sm ${selected ? 'text-[color:var(--tienda-acento-legible,var(--primary))]' : 'text-foreground'}`}>{f.nombre}</span>
                       <span className="text-xs text-muted-foreground">{f.horaInicio} – {f.horaFin}</span>
                     </button>
                   )
@@ -1332,7 +1340,7 @@ export function CheckoutDeliveryGrupal({
                 className={`flex items-center justify-center gap-2 py-4 rounded-xl transition-all duration-200 cursor-pointer ${!programarPedido ? 'bg-background shadow-sm' : ''}`}
                 onClick={() => { setProgramarPedido(false); setHorarioProgramado('') }}
               >
-                <Zap className={`w-4 h-4 ${!programarPedido ? 'text-primary' : 'text-muted-foreground'}`} />
+                <Zap className={`w-4 h-4 ${!programarPedido ? 'text-[color:var(--tienda-acento-legible,var(--primary))]' : 'text-muted-foreground'}`} />
                 <span className={`text-sm font-semibold ${!programarPedido ? 'text-foreground' : 'text-muted-foreground'}`}>Lo antes posible</span>
               </button>
               <button
@@ -1340,7 +1348,7 @@ export function CheckoutDeliveryGrupal({
                 className={`flex items-center justify-center gap-2 py-4 rounded-xl transition-all duration-200 cursor-pointer ${programarPedido ? 'bg-background shadow-sm' : ''}`}
                 onClick={() => setProgramarPedido(true)}
               >
-                <Clock className={`w-4 h-4 ${programarPedido ? 'text-primary' : 'text-muted-foreground'}`} />
+                <Clock className={`w-4 h-4 ${programarPedido ? 'text-[color:var(--tienda-acento-legible,var(--primary))]' : 'text-muted-foreground'}`} />
                 <span className={`text-sm font-semibold ${programarPedido ? 'text-foreground' : 'text-muted-foreground'}`}>Programar</span>
               </button>
             </div>
@@ -1420,7 +1428,7 @@ export function CheckoutDeliveryGrupal({
                     {paymentIcon(m)}
                     <span className="text-sm font-semibold">{paymentTitle(m)}</span>
                   </div>
-                  {selected && <Check className="w-4 h-4 text-primary shrink-0" />}
+                  {selected && <Check className="w-4 h-4 text-[color:var(--tienda-acento-legible,var(--primary))] shrink-0" />}
                 </button>
               )
             })}
@@ -1501,7 +1509,7 @@ export function CheckoutDeliveryGrupal({
                   </p>
                 )}
               </div>
-              <p className="flex shrink-0 items-center py-3 text-sm font-black">${(parseFloat(item.precio) * item.cantidad).toFixed(0)}</p>
+              <p className="flex shrink-0 items-center py-3 text-sm font-black tabular-nums">{pesos(parseFloat(item.precio) * item.cantidad)}</p>
             </div>
           )
         })}
@@ -1561,18 +1569,18 @@ export function CheckoutDeliveryGrupal({
         ) : (
           <div className="space-y-3">
             <div className="flex items-start gap-3">
-              <UserRound className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+              <UserRound className="mt-0.5 h-4 w-4 shrink-0 text-[color:var(--tienda-acento-legible,var(--primary))]" />
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-bold leading-tight">{checkoutData?.nombre}</p>
                 <p className="mt-0.5 text-xs text-muted-foreground">{checkoutData?.telefono}</p>
               </div>
-              <button type="button" onClick={() => setEditandoHabitual(true)} className="rounded-full bg-primary/10 px-2.5 py-1.5 text-xs font-bold text-primary">
+              <button type="button" onClick={() => setEditandoHabitual(true)} className="rounded-full bg-primary/10 px-2.5 py-1.5 text-xs font-bold text-[color:var(--tienda-acento-legible,var(--primary))]">
                 Cambiar
               </button>
             </div>
             {checkoutData?.tipoPedido === 'delivery' && checkoutData.direccion && (
               <div className="flex items-start gap-3 pt-1">
-                <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-[color:var(--tienda-acento-legible,var(--primary))]" />
                 <div className="min-w-0">
                   <p className="text-sm font-semibold leading-snug">{checkoutData.direccion}</p>
                   {(checkoutData.deliveryFee ?? 0) > 0 && (
@@ -1583,7 +1591,7 @@ export function CheckoutDeliveryGrupal({
             )}
             {checkoutData?.tipoPedido === 'takeaway' && (
               <div className="flex items-center gap-3 pt-1">
-                <Store className="h-4 w-4 shrink-0 text-primary" />
+                <Store className="h-4 w-4 shrink-0 text-[color:var(--tienda-acento-legible,var(--primary))]" />
                 <p className="text-sm font-semibold">Retirás en el local</p>
               </div>
             )}
@@ -1607,29 +1615,29 @@ export function CheckoutDeliveryGrupal({
     <div className="space-y-3">
       <div className="flex items-center justify-between px-1">
         <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Datos guardados</span>
-        <button type="button" onClick={handleIniciarEdicion} className="flex items-center gap-1.5 text-sm font-semibold text-primary">
+        <button type="button" onClick={handleIniciarEdicion} className="flex items-center gap-1.5 text-sm font-semibold text-[color:var(--tienda-acento-legible,var(--primary))]">
           <Pencil className="w-3.5 h-3.5" />
           Editar
         </button>
       </div>
-      <div className="bg-secondary/40 rounded-2xl overflow-hidden">
+      <div className="bg-secondary/60 rounded-[22px] overflow-hidden">
         <div className="px-4 py-3.5">
           <p className="text-xs text-muted-foreground mb-0.5">Tipo</p>
           <p className="text-sm font-semibold">{checkoutData?.tipoPedido === 'delivery' ? 'Delivery' : 'Take Away'}</p>
         </div>
-        <div className="h-px bg-background mx-4" />
+        <div className="mx-4 border-t border-dashed border-border" />
         <div className="px-4 py-3.5">
           <p className="text-xs text-muted-foreground mb-0.5">Nombre</p>
           <p className="text-sm font-semibold">{checkoutData?.nombre}</p>
         </div>
-        <div className="h-px bg-background mx-4" />
+        <div className="mx-4 border-t border-dashed border-border" />
         <div className="px-4 py-3.5">
           <p className="text-xs text-muted-foreground mb-0.5">Celular</p>
           <p className="text-sm font-semibold">{checkoutData?.telefono}</p>
         </div>
         {checkoutData?.tipoPedido === 'delivery' && checkoutData.direccion && (
           <>
-            <div className="h-px bg-background mx-4" />
+            <div className="mx-4 border-t border-dashed border-border" />
             <div className="px-4 py-3.5">
               <p className="text-xs text-muted-foreground mb-0.5">Dirección</p>
               <p className="text-sm font-semibold">{checkoutData.direccion}</p>
@@ -1646,7 +1654,7 @@ export function CheckoutDeliveryGrupal({
         )}
         {checkoutData?.metodoPago && (
           <>
-            <div className="h-px bg-background mx-4" />
+            <div className="mx-4 border-t border-dashed border-border" />
             <div className="px-4 py-3.5">
               <p className="text-xs text-muted-foreground mb-0.5">Método de pago</p>
               <p className="text-sm font-semibold capitalize">{(checkoutData.metodoPago || '').replace(/_/g, ' ')}</p>
@@ -1655,7 +1663,7 @@ export function CheckoutDeliveryGrupal({
         )}
         {checkoutData?.horarioProgramado && (
           <>
-            <div className="h-px bg-background mx-4" />
+            <div className="mx-4 border-t border-dashed border-border" />
             <div className="px-4 py-3.5 flex items-center gap-2">
               <Clock className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
               <p className="text-sm">Programado para las <span className="font-semibold">{checkoutData.horarioProgramado}</span></p>
@@ -1664,7 +1672,7 @@ export function CheckoutDeliveryGrupal({
         )}
         {descuentoEfectivo > 0 && (
           <>
-            <div className="h-px bg-background mx-4" />
+            <div className="mx-4 border-t border-dashed border-border" />
             <div className="px-4 py-3.5 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Tag className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
@@ -1680,7 +1688,7 @@ export function CheckoutDeliveryGrupal({
         )}
         {checkoutData?.notas && (
           <>
-            <div className="h-px bg-background mx-4" />
+            <div className="mx-4 border-t border-dashed border-border" />
             <div className="px-4 py-3.5">
               <p className="text-xs text-muted-foreground mb-0.5">Notas</p>
               <p className="text-sm text-muted-foreground line-clamp-2">{checkoutData.notas}</p>
@@ -1692,38 +1700,38 @@ export function CheckoutDeliveryGrupal({
   )
 
   const totalSummary = (
-    <div className="bg-secondary/40 rounded-2xl px-4 py-4 space-y-2.5">
+    <div className="bg-secondary/60 rounded-[22px] px-4 py-4 space-y-2.5">
       <div className="flex justify-between text-sm">
         <span className="text-muted-foreground">Subtotal · {totalItems} items <span className="sr-only">con variantes seleccionadas incluidas</span></span>
-        <span className="font-semibold">${itemsTotal}</span>
+        <span className="font-semibold tabular-nums">{pesos(itemsTotal)}</span>
       </div>
       {tipoPedido === 'delivery' && feeBase > 0 && (
         <div className="flex justify-between text-sm">
           <span className="text-muted-foreground">Delivery</span>
-          <span className="font-semibold">${feeBase.toFixed(2)}</span>
+          <span className="font-semibold tabular-nums">{pesos(feeBase)}</span>
         </div>
       )}
       {canjeEnvioActivo && feeBase > 0 && (
         <div className="flex justify-between text-sm text-amber-600 dark:text-amber-400">
           <span className="flex items-center gap-1.5"><Sparkles className="w-3.5 h-3.5" /> Envío gratis (Canje)</span>
-          <span className="font-semibold">-${feeBase.toFixed(2)}</span>
+          <span className="font-semibold tabular-nums">-{pesos(feeBase)}</span>
         </div>
       )}
       {puntosDescEfectivo > 0 && (
         <div className="flex justify-between text-sm text-amber-600 dark:text-amber-400">
           <span className="flex items-center gap-1.5"><Sparkles className="w-3.5 h-3.5" /> Descuento por puntos</span>
-          <span className="font-semibold">-${puntosDescEfectivo.toFixed(2)}</span>
+          <span className="font-semibold tabular-nums">-{pesos(puntosDescEfectivo)}</span>
         </div>
       )}
       {descuentoEfectivo > 0 && (
         <div className="flex justify-between text-sm text-emerald-600 dark:text-emerald-400 font-medium">
           <span className="flex items-center gap-1.5"><Tag className="w-3.5 h-3.5" /> Descuento</span>
-          <span className="font-semibold">-${descuentoEfectivo.toFixed(2)}</span>
+          <span className="font-semibold tabular-nums">-{pesos(descuentoEfectivo)}</span>
         </div>
       )}
-      <div className="flex justify-between font-bold text-base pt-2.5">
+      <div className="flex justify-between items-baseline border-t border-dashed border-border pt-3 text-base font-bold">
         <span>Total</span>
-        <span>${totalCalculado.toFixed(2)}</span>
+        <span className="tabular-nums">{pesos(totalCalculado)}</span>
       </div>
     </div>
   )
@@ -1733,13 +1741,13 @@ export function CheckoutDeliveryGrupal({
   let footerButton: React.ReactNode
   if (pedidoHabitual && editandoHabitual) {
     footerButton = (
-      <Button className="w-full h-12 rounded-2xl font-bold text-base" onClick={guardarCambiosHabituales} disabled={submittingOrder || isCheckingZona || fueraDeZona}>
+      <Button className="w-full h-14 rounded-full font-semibold text-base" onClick={guardarCambiosHabituales} disabled={submittingOrder || isCheckingZona || fueraDeZona}>
         Guardar cambios
       </Button>
     )
   } else if (alguienEditando) {
     footerButton = (
-      <Button disabled className="w-full h-12 rounded-2xl font-bold text-base">
+      <Button disabled className="w-full h-14 rounded-full font-semibold text-base">
         <Loader2 className="w-4 h-4 mr-2 animate-spin" />
         {editSemaphore?.clienteNombre} está editando...
       </Button>
@@ -1748,7 +1756,7 @@ export function CheckoutDeliveryGrupal({
     const esUltimo = modo === 'pasos' ? paso === pasos.length - 1 : true
     footerButton = (
       <Button
-        className={`w-full h-12 rounded-2xl font-bold text-base ${enviarPedidoWhatsapp && esUltimo ? 'bg-green-600 hover:bg-green-700 text-white' : ''}`}
+        className={`w-full h-14 rounded-full font-semibold text-base ${enviarPedidoWhatsapp && esUltimo ? 'bg-green-600 hover:bg-green-700 text-white' : ''}`}
         onClick={modo === 'pasos' ? handleSiguiente : handleGuardarEdicion}
         disabled={accionDisabled || submittingOrder}
       >
@@ -1758,7 +1766,7 @@ export function CheckoutDeliveryGrupal({
     )
   } else if (checkoutData) {
     footerButton = datosCompletos ? (
-      <Button disabled={submittingOrder} className={`w-full h-12 rounded-2xl font-bold text-base ${
+      <Button disabled={submittingOrder} className={`w-full h-14 rounded-full font-semibold text-base ${
         enviarPedidoWhatsapp
           ? 'bg-green-600 hover:bg-green-700 text-white'
           : pedidoHabitual && checkoutData.metodoPago?.startsWith('mercadopago')
@@ -1770,7 +1778,7 @@ export function CheckoutDeliveryGrupal({
       </Button>
     ) : (
       <Button
-        className="w-full h-12 rounded-2xl font-bold text-base"
+        className="w-full h-14 rounded-full font-semibold text-base"
         onClick={() => (pedidoHabitual ? setEditandoHabitual(true) : handleIniciarEdicion())}
       >
         <Pencil className="w-4 h-4 mr-2" />
@@ -1779,7 +1787,7 @@ export function CheckoutDeliveryGrupal({
     )
   } else {
     footerButton = (
-      <Button className="w-full h-12 rounded-2xl font-bold text-base" onClick={handleIniciarEdicion}>
+      <Button className="w-full h-14 rounded-full font-semibold text-base" onClick={handleIniciarEdicion}>
         <Pencil className="w-4 h-4 mr-2" />
         Completar datos de envío
       </Button>
@@ -1805,14 +1813,14 @@ export function CheckoutDeliveryGrupal({
               {pasos.map((_, i) => (
                 <div
                   key={i}
-                  className={`h-1 rounded-full flex-1 transition-all duration-300 ${i <= paso ? 'bg-primary' : 'bg-secondary'}`}
+                  className={`h-1.5 rounded-full flex-1 transition-all duration-300 ${i <= paso ? 'bg-foreground' : 'bg-secondary'}`}
                 />
               ))}
             </div>
             <span className="text-xs font-semibold text-muted-foreground shrink-0">{paso + 1}/{pasos.length}</span>
           </>
         ) : (
-          <span className="text-sm font-bold">
+          <span className="text-sm font-semibold text-muted-foreground">
             {estoyEditando ? 'Datos de envío' : checkoutData ? 'Revisá tu pedido' : 'Datos de envío'}
           </span>
         )}
@@ -1869,12 +1877,12 @@ export function CheckoutDeliveryGrupal({
         {descuentoEfectivo > 0 && (
           <div className="flex justify-between items-center text-sm font-semibold text-emerald-600 dark:text-emerald-400">
             <span>Descuento aplicado</span>
-            <span>-${descuentoEfectivo.toFixed(2)}</span>
+            <span className="tabular-nums">-{pesos(descuentoEfectivo)}</span>
           </div>
         )}
         <div className="flex justify-between items-baseline">
           <span className="text-sm text-muted-foreground">Total</span>
-          <span className="text-2xl font-black tracking-tight">${totalCalculado.toFixed(2)}</span>
+          <span className="tienda-display text-[30px] leading-none tracking-tight tabular-nums">{pesos(totalCalculado)}</span>
         </div>
         {footerButton}
         {pedidoHabitual && checkoutData && !estoyEditando && (

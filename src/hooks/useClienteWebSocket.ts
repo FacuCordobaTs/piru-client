@@ -19,6 +19,7 @@ interface ItemPedido {
   imagenUrl?: string | null // URL de la imagen del producto
   ingredientesExcluidos?: number[] // IDs de ingredientes excluidos
   ingredientesExcluidosNombres?: string[] // Nombres de ingredientes excluidos
+  agregados?: { id?: number; nombre?: string; precio?: number | string }[]
   nota?: string | null
 }
 

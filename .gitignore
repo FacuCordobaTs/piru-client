@@ -24,3 +24,6 @@ package-lock.json
 *.sln
 *.sw?
 .env
+# Pruebas de la tienda
+playwright-report/
+test-results/

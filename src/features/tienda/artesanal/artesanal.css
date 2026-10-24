@@ -1,0 +1,26 @@
+/* Papel y mantel: recursos de esta plantilla, sin formas arqueadas ni imágenes de relleno. */
+.artesanal-papel {
+    background-color: var(--card);
+    background-image: radial-gradient(
+        color-mix(in srgb, var(--foreground) 7%, transparent) 0.5px,
+        transparent 0.5px
+    );
+    background-size: 5px 5px;
+}
+.artesanal-cuadros {
+    background-color: var(--background);
+    background-image:
+        linear-gradient(90deg, color-mix(in srgb, var(--tienda-marca) 28%, transparent) 50%, transparent 50%),
+        linear-gradient(color-mix(in srgb, var(--tienda-complemento) 28%, transparent) 50%, transparent 50%);
+    background-size: 22px 22px;
+}
+.artesanal-acciones > button {
+    min-height: 48px;
+    height: auto;
+    border-radius: 4px;
+    padding: 12px 16px;
+    font-size: 14px;
+}
+.artesanal-contacto {
+    --muted-foreground: color-mix(in srgb, var(--background) 75%, transparent);
+}

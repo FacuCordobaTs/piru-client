@@ -1,3 +1,6 @@
+import type { CheckoutDeliveryData, CheckoutEditSemaphore } from '@/features/tienda/checkout'
+import type { ProductoTienda, RestaurantePublico } from '@/features/tienda/datos'
+import type { RestauranteTienda } from '@/lib/tienda'
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 
@@ -8,7 +11,7 @@ interface Mesa {
   restauranteId: number
 }
 
-interface Restaurante {
+interface Restaurante extends RestauranteTienda {
   id: number
   nombre: string
   imagenUrl: string | null
@@ -27,26 +30,12 @@ interface Restaurante {
   transferenciaAlias?: string | null
   avisosWhatsappClienteEnabled?: boolean
   sistemaPuntos?: boolean | null
-  configuracionPuntos?: any
+  configuracionPuntos?: RestaurantePublico['configuracionPuntos']
 }
 
-interface Ingrediente {
-  id: number
-  nombre: string
-}
-
-interface Producto {
-  id: number
-  nombre: string
-  descripcion: string | null
+interface Producto extends ProductoTienda {
   precio: string
-  imagenUrl: string | null
   categoriaId: number | null
-  categoria: string | null
-  descuento?: number | null
-  ingredientes?: Ingrediente[]
-  permiteNota?: boolean
-  tituloNota?: string
 }
 
 interface Cliente {
@@ -94,44 +83,7 @@ export interface SubtotalPagado {
   metodo: 'efectivo' | 'mercadopago' | null
 }
 
-// Datos de checkout grupal (sala)
-export interface CheckoutDeliveryData {
-  tipoPedido: 'delivery' | 'takeaway'
-  nombre: string
-  telefono: string
-  direccion: string
-  lat: number | null
-  lng: number | null
-  notas: string
-  deliveryFee: number
-  zonaNombre: string | null
-  itemsTotal: string
-  total: string
-  codigoDescuentoId?: number | null
-  montoDescuento?: number
-  metodoPago?: string | null
-  horarioProgramado?: string
-  sucursalId?: number | null
-  tipoDomicilio?: 'casa' | 'departamento' | null
-  canjeEnvioGratis?: boolean
-  canjeDescuento?: boolean
-  descuentoPuntos?: number
-  // Contexto opcional de Growth; el pedido final de sala lo atribuye best-effort.
-  visitorId?: string
-  sesionUuid?: string
-  campaniaSlug?: string
-  campanaId?: number
-  recetaToken?: string
-  /** Participante que guardó el checkout; sólo éste emite el purchase de sala. */
-  trackingClienteId?: string
-}
-
-export interface CheckoutEditSemaphore {
-  clienteId: string
-  clienteNombre: string
-}
-
-interface MesaState {
+export interface MesaState {
   mesa: Mesa | null
   restaurante: Restaurante | null
   productos: Producto[]

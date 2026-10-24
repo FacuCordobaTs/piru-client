@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router'
-import MenuDelivery, { type CampanaPublica } from './MenuDelivery'
+import MenuDelivery from './MenuDelivery'
+import type { CampanaPublica } from '@/features/tienda/delivery/modelo'
 import { contextoParaResolverMarketing, guardarContextoTracking, limpiarContextoTracking } from '@/lib/tracking'
 
 type Destino = { tipo: 'tienda' } | { tipo: 'producto'; productoId: number } | { tipo: 'carrito'; carritoRep: string }

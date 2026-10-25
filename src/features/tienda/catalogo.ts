@@ -36,3 +36,16 @@ export function productosDeSecciones<T extends ProductoCarta>(secciones: Seccion
         return [...conFoto, ...sinFoto]
     })
 }
+
+
+/** Sólo el producto elegido por el local, si sigue vendiéndose. Nunca busca un reemplazo. */
+export function elegirProductoDestacado<T extends {
+    id: number
+    activo?: boolean | null
+    disponible?: boolean
+    soloCanjePuntos?: boolean
+    eventoSucursalId?: number | null
+}>(productos: T[], productoId: number | undefined): T | null {
+    if (!Number.isSafeInteger(productoId) || !productoId || productoId <= 0) return null
+    return productos.find(p => p.id === productoId && p.activo !== false && p.disponible !== false && !p.soloCanjePuntos && !p.eventoSucursalId) ?? null
+}

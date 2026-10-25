@@ -104,6 +104,7 @@ export function restaurante(plantilla?: string, completo = true) {
         tienda: completo
             ? {
                   plantilla,
+                  productoDestacadoId: 2,
                   frase: 'El placer de comer bien.',
                   bajada: 'Cocina de estación, buenos ingredientes y tiempo para disfrutar. Tu mesa está donde estés.',
                   portadaUrl: foto,

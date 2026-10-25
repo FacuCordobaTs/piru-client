@@ -1,3 +1,4 @@
+import { elegirProductoDestacado } from '@/features/tienda/catalogo'
 import { ProductDetailDrawer } from '@/components/ProductDetailDrawer'
 import { CargandoTienda } from '@/features/tienda/compartido/CargandoTienda'
 import { TiendaTheme } from '@/features/tienda/compartido/TiendaTheme'
@@ -51,6 +52,7 @@ function MenuGrupoPagina() {
             behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
         })
     const logo = logoPara(identidad, paleta.oscuro)
+    const destacado = elegirProductoDestacado(productosNavegables, tienda.productoDestacadoId)
     if (!modelo.isHydrated || (esSala && modelo.urlQrToken !== modelo.qrToken)) {
         return <CargandoTienda />
     }
@@ -81,6 +83,7 @@ function MenuGrupoPagina() {
                 portada={{
                     nombre: nombreLocal,
                     logo,
+                    destacado: destacado ? { producto: destacado, onAbrir: () => modelo.abrirDetalleProducto(destacado) } : null,
                     frase: 'Hola, ' + clienteNombre,
                     bajada: esSala
                         ? 'Cada uno elige lo suyo desde su celu y al final confirman juntos.'

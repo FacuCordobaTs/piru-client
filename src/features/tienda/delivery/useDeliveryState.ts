@@ -52,8 +52,6 @@ export function useDeliveryState(campana: CampanaPublica | null) {
 
     const [loading, setLoading] = useState(true)
 
-    const [semillaDestacado] = useState(() => Math.random())
-
     const restauranteCache = useMemo(() => leerTiendaCache(username), [username])
 
     const { tienda, paleta, fuentes } = useTienda(restaurante ?? restauranteCache)
@@ -198,7 +196,6 @@ export function useDeliveryState(campana: CampanaPublica | null) {
         setSucursales,
         loading,
         setLoading,
-        semillaDestacado,
         restauranteCache,
         tienda,
         paleta,

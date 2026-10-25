@@ -103,6 +103,7 @@ for (const plantilla of ['elegante', 'moderna', 'artesanal']) {
         await page.goto('/sala/prueba')
         await expect(page.locator('[data-plantilla]')).toHaveAttribute('data-plantilla', plantilla)
         await expect(page.getByText('Hola, Ana', { exact: true })).toBeVisible()
+        await expect(page.locator('[data-plantilla] > header').getByText(/Recomendado de la casa|Nuestro favorito|Una recomendación para vos/, { exact: true })).toHaveCount(1)
         await page.getByRole('button', { name: /Ver el pedido/ }).click()
         const carrito = page.getByRole('dialog')
         await expect(carrito.getByText('Pan de campo', { exact: true })).toBeVisible()
@@ -246,7 +247,7 @@ for (const width of [375, 1280]) {
             })
         )
         await page.goto('/casa-oliva')
-        const hero = page.getByRole('banner', { name: 'Presentación del restaurante' })
+        const hero = page.locator('[data-plantilla] > header')
         await expect(hero.getByRole('heading', { level: 1, name: 'Casa Oliva', exact: true })).toBeVisible()
         await expect(hero.getByText('Casa Oliva', { exact: true })).toHaveCount(1)
         const logo = hero.locator('img').first()
@@ -356,4 +357,22 @@ for (const width of [375, 1280]) {
             expect(errores).toEqual([])
         })
     }
+}
+
+
+for (const plantilla of ['elegante', 'moderna', 'artesanal']) {
+    test(`${plantilla}: sólo muestra el destacado elegido, sin reemplazos automáticos`, async ({ page }) => {
+        const { rest, errores } = await prepararTienda(page, plantilla)
+        for (const productoDestacadoId of [4, undefined, 999, 6]) {
+            await page.route('**/api/public/restaurante/casa-oliva', route => route.fulfill({ json: {
+                success: true, data: { restaurante: { ...rest, tienda: { ...rest.tienda, productoDestacadoId } }, productos, horarios: [], sucursales: [] },
+            } }))
+            await page.goto('/casa-oliva')
+            const hero = page.locator('[data-plantilla] > header')
+            await expect(hero.getByRole('heading', { level: 1, name: 'Casa Oliva', exact: true })).toBeVisible()
+            await expect(hero.getByText(/Recomendado de la casa|Nuestro favorito|Una recomendación para vos/, { exact: true })).toHaveCount(productoDestacadoId === 4 ? 1 : 0)
+            if (productoDestacadoId === 4) await expect(hero.getByText('Ravioles de calabaza', { exact: true })).toBeVisible()
+        }
+        expect(errores).toEqual([])
+    })
 }

@@ -12,6 +12,7 @@ export type TiendaConfig = {
     plantilla?: PlantillaId
     colores?: ColoresTienda
     fuentes?: { titulos?: string; cuerpo?: string; cssUrl?: string; pesoTitulos?: number }
+    productoDestacadoId?: number
     frase?: string
     bajada?: string
     portadaUrl?: string
@@ -82,6 +83,7 @@ export function leerTienda(bruto: unknown): TiendaConfig {
             cssUrl: typeof f.cssUrl === 'string' && /^https:\/\//.test(f.cssUrl) ? f.cssUrl : undefined,
             pesoTitulos: Number.isFinite(peso) && peso >= 100 && peso <= 900 ? peso : undefined,
         },
+        productoDestacadoId: typeof t.productoDestacadoId === 'number' && Number.isSafeInteger(t.productoDestacadoId) && t.productoDestacadoId > 0 ? t.productoDestacadoId : undefined,
         frase: texto(t.frase, 90),
         bajada: texto(t.bajada, 220),
         portadaUrl: enlace(t.portadaUrl),

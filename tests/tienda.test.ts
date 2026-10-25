@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { armarFuentes, armarPaleta, contraste, leerTienda } from '../src/lib/tienda'
 import { resolverPlantilla } from '../src/lib/plantillas'
-import { productosDeSecciones, seccionesDeProductos } from '../src/features/tienda/catalogo'
+import { elegirProductoDestacado, productosDeSecciones, seccionesDeProductos } from '../src/features/tienda/catalogo'
 import { checkIsOpen } from '../src/features/tienda/horarios'
 
 describe('contrato de tienda', () => {
@@ -72,4 +72,24 @@ test('horarios: la madrugada pertenece al turno anterior y la siguiente apertura
         proximaApertura: 'hoy a las 20:00',
     })
     expect(checkIsOpen([], new Date())).toEqual({ abierto: true, proximaApertura: null })
+})
+
+
+test('el destacado sólo aparece si el local elige un producto válido de su carta', () => {
+    const productos = [
+        { id: 1, nombre: 'Con oferta y foto', descuento: 20, imagenUrl: '/foto.jpg' },
+        { id: 2, nombre: 'Elegido sin foto' },
+        { id: 3, nombre: 'Premio', soloCanjePuntos: true },
+        { id: 4, nombre: 'No disponible', disponible: false },
+        { id: 5, nombre: 'Inactivo', activo: false },
+        { id: 6, nombre: 'Evento', eventoSucursalId: 7 },
+    ]
+    expect(elegirProductoDestacado(productos, undefined)).toBeNull()
+    expect(elegirProductoDestacado(productos, 2)?.nombre).toBe('Elegido sin foto')
+    for (const id of [0, 3, 4, 5, 6, 999]) expect(elegirProductoDestacado(productos, id)).toBeNull()
+    expect(elegirProductoDestacado([], 2)).toBeNull()
+    expect(leerTienda(JSON.stringify({ productoDestacadoId: 2 })).productoDestacadoId).toBe(2)
+    for (const id of [undefined, null, 0, -1, 1.5, '2', Number.MAX_SAFE_INTEGER + 1]) {
+        expect(leerTienda({ productoDestacadoId: id }).productoDestacadoId).toBeUndefined()
+    }
 })

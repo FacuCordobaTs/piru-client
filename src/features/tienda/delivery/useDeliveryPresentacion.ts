@@ -1,5 +1,5 @@
 import { direccionDemo } from '@/lib/demo'
-import { fotosDeProducto } from '@/lib/fotosProducto'
+import { elegirProductoDestacado } from '../catalogo'
 import { logoPara, textoEstado } from '@/lib/tienda'
 import { useMemo } from 'react'
 import type { useDeliveryProductos } from './useDeliveryProductos'
@@ -14,7 +14,7 @@ type Contexto = Pick<
     | 'paleta'
     | 'horarios'
     | 'estadoAbierto'
-    | 'semillaDestacado'
+    | 'tienda'
     | 'cartaRef'
 > &
     Pick<ReturnType<typeof useDeliveryProductos>, 'productosVenta' | 'productoCampana'>
@@ -29,7 +29,7 @@ export function useDeliveryPresentacion({
     estadoAbierto,
     productosVenta,
     productoCampana,
-    semillaDestacado,
+    tienda,
     cartaRef,
 }: Contexto) {
     const direccionClienta = useMemo(
@@ -58,15 +58,9 @@ export function useDeliveryPresentacion({
         !!restaurante?.pausadoPorSuscripcion ||
         (!estadoAbierto.abierto && !restaurante?.permitirPedidosProgramados)
 
-    const conFoto = productosVenta.filter((p) => fotosDeProducto(p).length > 0)
-
-    const enOferta = conFoto.filter((p) => Number(p.descuento) > 0)
-
-    const candidatos = enOferta.length > 0 ? enOferta : conFoto.length > 0 ? conFoto : productosVenta
-
     const destacado = productoCampana
         ? null
-        : (candidatos[Math.floor(semillaDestacado * candidatos.length)] ?? null)
+        : elegirProductoDestacado(productosVenta, tienda.productoDestacadoId)
 
     const verCarta = () => {
         const el = cartaRef.current
@@ -85,9 +79,6 @@ export function useDeliveryPresentacion({
         direccionLocal,
         estadoLocal,
         checkoutCerrado,
-        conFoto,
-        enOferta,
-        candidatos,
         destacado,
         verCarta,
     }

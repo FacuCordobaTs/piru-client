@@ -376,3 +376,48 @@ for (const plantilla of ['elegante', 'moderna', 'artesanal']) {
         expect(errores).toEqual([])
     })
 }
+
+test('el cupón de envío gratis bonifica el envío y se quita al elegir retiro', async ({ page }) => {
+    const { rest } = await prepararTienda(page, 'moderna')
+    await page.route('**/api/public/restaurante/casa-oliva', route => route.fulfill({
+        json: { success: true, data: { restaurante: { ...rest, codigoDescuentoEnabled: true }, productos, horarios: [], sucursales: [] } },
+    }))
+    await page.addInitScript(() => {
+        localStorage.setItem('cliente_nombre', 'Ana')
+        localStorage.setItem('cliente_telefono', '1112345678')
+        localStorage.setItem('cliente_direccion', 'Gorriti 4800')
+    })
+    let validacion: Record<string, unknown> = {}
+    await page.route('**/api/public/descuentos/validar', route => {
+        validacion = route.request().postDataJSON()
+        return route.fulfill({ json: { success: true, data: {
+            codigoDescuentoId: 42, codigo: 'ENVIO', tipo: 'envio_gratis', montoDescuento: '1200.00', totalConDescuento: '3500.00',
+        } } })
+    })
+    await page.goto('/casa-oliva')
+    await page.getByRole('button', { name: /Pan de campo/ }).click()
+    await page.getByRole('dialog').getByRole('button', { name: /Agregar/ }).click()
+    await page.getByRole('dialog').getByRole('button', { name: 'Cerrar', exact: true }).click()
+    await page.getByRole('button', { name: /Ver pedido/ }).click()
+    const pedido = page.getByRole('dialog')
+    await pedido.getByRole('button', { name: 'Continuar', exact: true }).click()
+    await pedido.getByRole('button', { name: 'Editar', exact: true }).click()
+    await pedido.getByRole('button', { name: 'Siguiente', exact: true }).click()
+    await pedido.getByRole('button', { name: 'Siguiente', exact: true }).click()
+    await pedido.getByRole('button', { name: 'Siguiente', exact: true }).click()
+    await pedido.getByRole('button', { name: 'Casa', exact: true }).click()
+    await pedido.getByRole('button', { name: 'Siguiente', exact: true }).click()
+    await pedido.locator('#codigo-grupal').fill('ENVIO')
+    await pedido.getByRole('button', { name: 'Aplicar', exact: true }).click()
+    await expect(pedido.getByText('Envío gratis · -$1200', { exact: true })).toBeVisible()
+    expect(validacion).toMatchObject({ restauranteId: 90, codigo: 'ENVIO', tipoPedido: 'delivery', costoEnvio: 1200, totalCarrito: 4700 })
+    await expect(pedido.getByText('$3.500', { exact: true }).last()).toBeVisible()
+    await page.screenshot({ path: 'test-results/cupon-checkout.png', fullPage: true })
+    for (let paso = 0; paso < 4; paso++) await pedido.getByRole('button', { name: 'Atrás', exact: true }).click()
+    await pedido.getByRole('button', { name: 'Take Away', exact: true }).click()
+    await pedido.getByRole('button', { name: 'Siguiente', exact: true }).click()
+    await pedido.getByRole('button', { name: 'Siguiente', exact: true }).click()
+    await pedido.getByRole('button', { name: 'Siguiente', exact: true }).click()
+    await expect(pedido.locator('#codigo-grupal')).toBeVisible()
+    await expect(pedido.getByText('Envío gratis · -$1200', { exact: true })).toHaveCount(0)
+})

@@ -108,6 +108,32 @@ export function leerTienda(bruto: unknown): TiendaConfig {
     }
 }
 
+/** Pesos que se piden a Google Fonts para las familias que ofrece el editor (admin/src/lib/tiendaPresets.ts).
+ * Pedir un peso inexistente invalida la hoja entera: las demás familias se piden sólo en su regular. */
+const PESOS_FUENTE: Record<string, string> = {
+    Lora: ':wght@400;500;600;700',
+    // Variable completa: Artesanal usa la itálica y los ejes SOFT y WONK en los títulos.
+    Fraunces: ':ital,opsz,wght,SOFT,WONK@0,9..144,300..900,0..100,0..1;1,9..144,300..900,0..100,0..1',
+    'DM Sans': ':wght@400;500;600;700;800',
+    Unbounded: ':wght@400;500;600;700;800',
+    Manrope: ':wght@400;500;600;700;800',
+    'Nunito Sans': ':wght@400;500;600;700;800',
+    Archivo: ':wght@400;500;600;700;800',
+    Barlow: ':wght@400;500;600;700',
+    'Libre Franklin': ':wght@400;500;600;700',
+    'Playfair Display': ':wght@400;600;700;800;900',
+    'Source Sans 3': ':wght@400;600;700',
+    'Cormorant Garamond': ':wght@400;500;600;700',
+    Inter: ':wght@400;500;600;700;800',
+    Outfit: ':wght@400;500;600;700;800',
+    Fredoka: ':wght@400;500;600;700',
+    Nunito: ':wght@400;600;700;800',
+    Rubik: ':wght@400;500;600;700;800',
+    Syne: ':wght@400;600;700;800',
+    'Work Sans': ':wght@400;500;600;700',
+    'Zilla Slab': ':wght@400;500;600;700',
+}
+
 export function armarFuentes(tienda: TiendaConfig): Fuentes {
     const base = BASES_PLANTILLA[resolverPlantilla(tienda.plantilla)]
     const f = {
@@ -121,15 +147,7 @@ export function armarFuentes(tienda: TiendaConfig): Fuentes {
         // Sin hoja propia se pide la familia a Google Fonts en su peso regular, que existe siempre.
         for (const nombre of [f.titulos, f.cuerpo]) {
             if (nombre && nombre !== 'Bricolage Grotesque') {
-                const pesos =
-                    nombre === 'Lora'
-                        ? ':wght@400;500;600;700'
-                        : nombre === 'Fraunces'
-                          ? // Variable completa: Artesanal usa la itálica y los ejes SOFT y WONK en los títulos.
-                            ':ital,opsz,wght,SOFT,WONK@0,9..144,300..900,0..100,0..1;1,9..144,300..900,0..100,0..1'
-                          : ['DM Sans', 'Unbounded', 'Manrope', 'Nunito Sans'].includes(nombre)
-                          ? ':wght@400;500;600;700;800'
-                          : ''
+                const pesos = PESOS_FUENTE[nombre] ?? ''
                 hojas.push(
                     `https://fonts.googleapis.com/css2?family=${encodeURIComponent(nombre).replace(/%20/g, '+')}${pesos}&display=swap`
                 )

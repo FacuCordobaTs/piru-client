@@ -1,4 +1,4 @@
-import { StrictMode } from 'react'
+import { StrictMode, lazy } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
 import { createBrowserRouter } from "react-router";
@@ -15,7 +15,11 @@ import PedidoStatus from './pages/PedidoStatus'
 import { TrackingBootstrap } from './components/TrackingBootstrap'
 import { CampanaLinkResolver, RecetaLinkResolver } from './pages/MarketingLinkResolver'
 
+// Sólo en desarrollo: una tienda inventada para mirar las plantillas (`/_ejemplo?plantilla=moderna`).
+const EjemploTienda = import.meta.env.DEV ? lazy(() => import('./pages/EjemploTienda')) : null
+
 const rutas = [
+  ...(EjemploTienda ? [{ path: "/_ejemplo", element: <EjemploTienda /> }] : []),
   {
     path: "/",
     element: <Welcome />,

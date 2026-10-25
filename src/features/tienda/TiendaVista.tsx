@@ -31,7 +31,7 @@ export function TiendaVista<T extends ProductoCarta>({
     ]
     return (
         <div data-plantilla={plantilla}>
-            <Portada {...portada} portadaUrl={tienda.portadaUrl} />
+            <Portada {...portada} portadaUrl={tienda.portadaUrl} cinta={tienda.cinta} />
             <main className={`mx-auto px-5 sm:px-8 ${plantilla === 'moderna' ? 'max-w-7xl' : 'max-w-6xl'}`}>
                 {antesDeCarta}
                 <div ref={cartaRef} className="pb-4 pt-16 sm:pt-20">

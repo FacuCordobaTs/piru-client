@@ -43,9 +43,14 @@ for (const plantilla of PLANTILLAS) {
             }
             const nombre = page.getByRole('heading', { level: 1 })
             const tintaNombre = await nombre.evaluate((el) => getComputedStyle(el).color)
-            expect(tintaNombre).not.toBe('rgb(23, 19, 15)')
-            expect(tintaNombre).not.toBe('rgb(57, 42, 32)')
-            expect(tintaNombre).not.toBe('rgb(23, 29, 43)')
+            // El nombre lleva la marca en su letra, o va sobre el campo de la marca (Moderna) con la
+            // tinta que se lee sobre ella.
+            const sobreMarca = await nombre.evaluate((el) => !!el.closest('[data-color-marca="primario"]'))
+            if (!sobreMarca) {
+                expect(tintaNombre).not.toBe('rgb(23, 19, 15)')
+                expect(tintaNombre).not.toBe('rgb(57, 42, 32)')
+                expect(tintaNombre).not.toBe('rgb(23, 29, 43)')
+            }
             const colores = await page.evaluate(() => {
                 const estilo = getComputedStyle(document.documentElement)
                 return Object.fromEntries(

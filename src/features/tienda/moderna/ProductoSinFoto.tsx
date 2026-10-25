@@ -1,8 +1,9 @@
-import { ArrowUpRight } from 'lucide-react'
+import { Plus } from 'lucide-react'
 import { Precio } from '../compartido/Precio'
 import type { ProductoCarta } from '../tipos'
 
-/** Una fila de carta diseñada alrededor del nombre y la descripción, sin una falsa imagen. */
+/** Un renglón grande alrededor del nombre y la descripción, sin una falsa imagen. Se enciende entero al
+ * pasar o tocar. */
 export function ProductoSinFotoModerna<T extends ProductoCarta>({
     producto,
     onAbrir,
@@ -14,23 +15,29 @@ export function ProductoSinFotoModerna<T extends ProductoCarta>({
         <button
             type="button"
             onClick={() => onAbrir(producto)}
-            className="group grid w-full min-w-0 grid-cols-[minmax(0,1fr)_auto] items-start gap-x-5 gap-y-4 border-b border-border py-6 text-left transition-colors hover:border-foreground/50 focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-4"
+            className="group flex w-full min-w-0 items-center gap-4 rounded-[22px] px-4 py-4 text-left transition-colors duration-200 hover:bg-secondary focus-visible:bg-secondary focus-visible:outline-none active:bg-secondary sm:gap-5 sm:px-5 sm:py-5"
         >
-            <span className="min-w-0">
-                <span className="tienda-display block text-[clamp(22px,2.2vw,30px)] leading-[1.2] tracking-[-0.035em] [overflow-wrap:anywhere]">
+            <span className="min-w-0 flex-1">
+                <span className="tienda-display block text-[19px] leading-[1.1] [overflow-wrap:anywhere] sm:text-[24px]">
                     {producto.nombre}
                 </span>
                 {producto.descripcion && (
-                    <span className="mt-3 block max-w-xl text-sm leading-relaxed text-muted-foreground sm:text-base">
+                    <span className="mt-1.5 block text-[14px] leading-relaxed text-muted-foreground sm:text-[15px]">
                         {producto.descripcion}
                     </span>
                 )}
-            </span>
-            <span className="flex max-w-36 flex-col items-end gap-4 pt-1 text-right">
-                <Precio producto={producto} />
-                <span className="inline-flex min-h-8 items-center gap-2 text-xs font-semibold text-muted-foreground transition-colors group-hover:text-foreground">
-                    Elegir <ArrowUpRight className="size-4" />
+                <span className="mt-2.5 block text-[15px] sm:hidden">
+                    <Precio producto={producto} />
                 </span>
+            </span>
+            <span className="hidden shrink-0 text-[17px] sm:block">
+                <Precio producto={producto} />
+            </span>
+            <span
+                aria-hidden
+                className="grid size-10 shrink-0 place-items-center rounded-full bg-foreground text-background transition-[background-color,color,transform] duration-300 group-hover:rotate-90 group-hover:bg-primary group-hover:text-primary-foreground group-active:scale-90 sm:size-11"
+            >
+                <Plus className="size-5" strokeWidth={2.5} />
             </span>
         </button>
     )

@@ -1,0 +1,44 @@
+/* Moderna: un afiche de patio de comidas. Campos enteros del color de la marca, una cinta que corre,
+   piezas redondas y la tipografía grande y apretada. */
+[data-plantilla='moderna'] .tienda-display {
+    letter-spacing: -0.045em;
+}
+.moderna-sobre-marca {
+    --muted-foreground: color-mix(in srgb, var(--tienda-marca-texto) 88%, transparent);
+}
+.moderna-acciones > button {
+    height: 56px;
+    border-radius: 9999px;
+    border-color: color-mix(in srgb, var(--tienda-marca-texto) 55%, transparent);
+    color: var(--tienda-marca-texto);
+}
+.moderna-acciones > button:hover {
+    background-color: var(--tienda-marca-texto);
+    border-color: var(--tienda-marca-texto);
+    color: var(--tienda-marca);
+}
+.moderna-dato {
+    background-color: color-mix(in srgb, var(--tienda-marca-texto) 14%, transparent);
+}
+@keyframes moderna-cinta {
+    to {
+        transform: translate3d(-50%, 0, 0);
+    }
+}
+.moderna-cinta {
+    animation: moderna-cinta 36s linear infinite;
+}
+@keyframes moderna-giro {
+    to {
+        transform: rotate(360deg);
+    }
+}
+.moderna-giro {
+    animation: moderna-giro 16s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+    .moderna-cinta,
+    .moderna-giro {
+        animation: none;
+    }
+}

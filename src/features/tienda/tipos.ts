@@ -24,6 +24,8 @@ export type PortadaProps = {
     frase?: string
     bajada?: string
     portadaUrl?: string
+    /** Palabras cortas del local (`tienda.cinta`) para las plantillas que las muestran. */
+    cinta?: string[]
     datos: ReactNode[]
     aviso?: ReactNode
     accionPrincipal: { texto: string; onClick: () => void }

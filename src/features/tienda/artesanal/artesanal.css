@@ -1,4 +1,11 @@
-/* Papel y mantel: recursos de esta plantilla, sin formas arqueadas ni imágenes de relleno. */
+/* Artesanal: un almacén de barrio. Toldo a rayas, mantel, papel, pizarrón con tiza, fotos pegadas con
+   cinta y la comanda. Las fotografías son siempre rectangulares: nada de arcos. */
+[data-plantilla='artesanal'] .tienda-display {
+    font-variation-settings:
+        'SOFT' 100,
+        'WONK' 1;
+    letter-spacing: -0.02em;
+}
 .artesanal-papel {
     background-color: var(--card);
     background-image: radial-gradient(
@@ -13,6 +20,91 @@
         linear-gradient(90deg, color-mix(in srgb, var(--tienda-marca) 28%, transparent) 50%, transparent 50%),
         linear-gradient(color-mix(in srgb, var(--tienda-complemento) 28%, transparent) 50%, transparent 50%);
     background-size: 22px 22px;
+}
+/* El toldo: rayas de la marca y del papel, con la orilla en dientes (no en ondas). */
+.artesanal-toldo {
+    --raya: 44px;
+    background-image:
+        linear-gradient(180deg, rgb(0 0 0 / 0.14), transparent 45%),
+        repeating-linear-gradient(
+            90deg,
+            var(--tienda-marca) 0 var(--raya),
+            var(--card) var(--raya) calc(var(--raya) * 2)
+        );
+    -webkit-mask: conic-gradient(from -45deg at bottom, #0000, #000 1deg 89deg, #0000 90deg) 0 0 / var(--raya)
+        100%;
+    mask: conic-gradient(from -45deg at bottom, #0000, #000 1deg 89deg, #0000 90deg) 0 0 / var(--raya) 100%;
+}
+@media (min-width: 640px) {
+    .artesanal-toldo {
+        --raya: 64px;
+    }
+}
+/* El pizarrón: la tinta del local como pizarra, la tiza en el color del fondo y un marco de madera. */
+.artesanal-pizarra {
+    background-color: color-mix(in srgb, var(--foreground) 94%, var(--tienda-marca));
+    background-image:
+        radial-gradient(
+            ellipse at 25% 15%,
+            color-mix(in srgb, var(--background) 9%, transparent),
+            transparent 55%
+        ),
+        radial-gradient(color-mix(in srgb, var(--background) 7%, transparent) 0.6px, transparent 0.6px);
+    background-size:
+        100% 100%,
+        4px 4px;
+    color: var(--background);
+    border: 8px solid color-mix(in srgb, var(--tienda-marca) 22%, #6a4528);
+    box-shadow: inset 0 0 0 2px rgb(0 0 0 / 0.25);
+    --muted-foreground: color-mix(in srgb, var(--background) 72%, transparent);
+    --tienda-acento-legible: var(--background);
+}
+@media (min-width: 640px) {
+    .artesanal-pizarra {
+        border-width: 12px;
+    }
+}
+/* Papel rayado para la carta de la casa. */
+.artesanal-renglones {
+    background-color: var(--card);
+    background-image:
+        linear-gradient(
+            90deg,
+            transparent 38px,
+            color-mix(in srgb, var(--primary) 45%, transparent) 38px 40px,
+            transparent 40px
+        ),
+        repeating-linear-gradient(
+            transparent 0 31px,
+            color-mix(in srgb, var(--foreground) 11%, transparent) 31px 32px
+        );
+}
+.artesanal-cinta-papel {
+    position: absolute;
+    z-index: 2;
+    width: 92px;
+    height: 26px;
+    background-color: color-mix(
+        in srgb,
+        color-mix(in srgb, var(--tienda-complemento) 30%, var(--card)) 78%,
+        transparent
+    );
+    clip-path: polygon(3% 0, 97% 6%, 100% 30%, 98% 62%, 100% 100%, 2% 94%, 0 64%, 2% 34%);
+    pointer-events: none;
+}
+.artesanal-lazo {
+    clip-path: polygon(0 0, 100% 0, calc(100% - 14px) 50%, 100% 100%, 0 100%, 14px 50%);
+    padding-inline: 30px;
+}
+.artesanal-sello {
+    border-radius: 9999px;
+    outline: 2px dashed currentColor;
+    outline-offset: -7px;
+}
+/* La comanda: papel con la orilla de arriba cortada en dientes. */
+.artesanal-comanda {
+    -webkit-mask: conic-gradient(from 135deg at top, #0000, #000 1deg 89deg, #0000 90deg) 0 0 / 16px 100%;
+    mask: conic-gradient(from 135deg at top, #0000, #000 1deg 89deg, #0000 90deg) 0 0 / 16px 100%;
 }
 .artesanal-acciones > button {
     min-height: 48px;

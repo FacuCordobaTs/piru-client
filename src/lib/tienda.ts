@@ -124,7 +124,10 @@ export function armarFuentes(tienda: TiendaConfig): Fuentes {
                 const pesos =
                     nombre === 'Lora'
                         ? ':wght@400;500;600;700'
-                        : ['DM Sans', 'Unbounded', 'Manrope', 'Fraunces', 'Nunito Sans'].includes(nombre)
+                        : nombre === 'Fraunces'
+                          ? // Variable completa: Artesanal usa la itálica y los ejes SOFT y WONK en los títulos.
+                            ':ital,opsz,wght,SOFT,WONK@0,9..144,300..900,0..100,0..1;1,9..144,300..900,0..100,0..1'
+                          : ['DM Sans', 'Unbounded', 'Manrope', 'Nunito Sans'].includes(nombre)
                           ? ':wght@400;500;600;700;800'
                           : ''
                 hojas.push(

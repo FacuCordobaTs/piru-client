@@ -27,3 +27,6 @@ package-lock.json
 # Pruebas de la tienda
 playwright-report/
 test-results/
+
+# Runtime de Páginas (scripts/build-runtime.ts): se sube a R2, no se versiona.
+dist-runtime

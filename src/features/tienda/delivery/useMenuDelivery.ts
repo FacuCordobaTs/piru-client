@@ -1,4 +1,5 @@
 import type { CampanaPublica } from './modelo'
+import { useAbrirPedidoPaginas } from './useAbrirPedidoPaginas'
 import { useCrearSala } from './useCrearSala'
 import { useDeliveryCampanas } from './useDeliveryCampanas'
 import { useDeliveryCheckout } from './useDeliveryCheckout'
@@ -14,6 +15,7 @@ import { usePrepararCheckout } from './usePrepararCheckout'
 export function useMenuDelivery(campana: CampanaPublica | null) {
     const estado = useDeliveryState(campana)
     const deliveryNavegacion = useDeliveryNavegacion({ ...estado })
+    useAbrirPedidoPaginas({ ...estado, abrirCarrito: deliveryNavegacion.abrirCarrito })
     const deliveryDatos = useDeliveryDatos({ ...estado })
     const deliveryPuntos = useDeliveryPuntos(estado)
     const deliveryProductos = useDeliveryProductos({ ...estado, ...deliveryPuntos })

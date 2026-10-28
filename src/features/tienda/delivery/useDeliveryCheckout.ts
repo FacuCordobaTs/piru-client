@@ -2,6 +2,7 @@ import { guardarDireccionCliente } from '@/components/CheckoutDeliveryGrupal'
 import { redirectPedidoAlWhatsapp } from '@/lib/checkoutWhatsapp'
 import { armarPedidoDemo } from '@/lib/demo'
 import { contextoParaPedidoMarketing, registrarEventoTrackingUnaVez } from '@/lib/tracking'
+import { rutaTienda } from '@/store-sites/actual'
 import { useCallback } from 'react'
 import { toast } from 'sonner'
 import type { CheckoutIndividual, CheckoutMensaje } from '../datos'
@@ -224,10 +225,10 @@ export function useDeliveryCheckout({
                             toast.error('No pudimos abrir WhatsApp', {
                                 description: 'Podés continuar desde el resumen de tu pedido.',
                             })
-                            navigate(`/${username}/success`)
+                            navigate(rutaTienda(username, 'success'))
                         }
                     } else {
-                        navigate(`/${username}/success`)
+                        navigate(rutaTienda(username, 'success'))
                     }
                 } else {
                     if (result.code === 'FUERA_DE_ZONA') {

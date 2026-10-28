@@ -3,13 +3,14 @@ import { useNavigate, useParams } from 'react-router'
 import MenuDelivery from './MenuDelivery'
 import type { CampanaPublica } from '@/features/tienda/delivery/modelo'
 import { contextoParaResolverMarketing, guardarContextoTracking, limpiarContextoTracking } from '@/lib/tracking'
+import { rutaTienda, usernameSitio } from '@/store-sites/actual'
 
 type Destino = { tipo: 'tienda' } | { tipo: 'producto'; productoId: number } | { tipo: 'carrito'; carritoRep: string }
 type Respuesta = { data?: { encontrada?: boolean; destino?: Destino; contexto?: { campaniaSlug?: string; campanaId?: number }; beneficio?: { codigoDescuentoId: number; codigo: string }; campana?: CampanaPublica } }
 const API_URL = (import.meta.env.VITE_API_URL || 'https://api.piru.app/api').replace(/\/$/, '')
 
 function urlDestino(username: string, destino?: Destino) {
-  const base = `/${encodeURIComponent(username)}`
+  const base = rutaTienda(username)
   if (destino?.tipo === 'producto') return `${base}?producto=${destino.productoId}`
   return destino?.tipo === 'carrito' ? `${base}?rep=${encodeURIComponent(destino.carritoRep)}` : base
 }
@@ -26,7 +27,8 @@ async function resolverLink(username: string, endpoint: 'campanas' | 'recetas', 
 /** La campaña es una landing real: MenuDelivery se monta en /c/:slug y la URL
  * no se reemplaza. Esto conserva el contexto durante toda la compra en sheet. */
 export function CampanaLinkResolver() {
-  const { username, slug } = useParams()
+  const { username: usernameRuta, slug } = useParams()
+  const username = usernameRuta ?? usernameSitio
   const [resuelta, setResuelta] = useState(false)
   const [campana, setCampana] = useState<CampanaPublica | null>(null)
 
@@ -77,7 +79,8 @@ export function CampanaLinkResolver() {
 
 function RecetaResolver() {
   const navigate = useNavigate()
-  const { username, token } = useParams()
+  const { username: usernameRuta, token } = useParams()
+  const username = usernameRuta ?? usernameSitio
   useEffect(() => {
     if (!username || !token) return
     const abortador = new AbortController()

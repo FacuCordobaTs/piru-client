@@ -1,5 +1,6 @@
 import { CLIENTA_DEMO, type PedidoDemoInfo } from '@/lib/demo'
 import { leerTiendaCache, useTienda } from '@/lib/tienda'
+import { usernameSitio } from '@/store-sites/actual'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router'
 import type { CheckoutIndividual, ItemCarritoTienda, ProductoTienda, RestaurantePublico } from '../datos'
@@ -8,7 +9,11 @@ import { type AvisoDescuento, type CampanaPublica, type HorarioTurno } from './m
 export function useDeliveryState(campana: CampanaPublica | null) {
     const navigate = useNavigate()
 
-    const { username } = useParams()
+    const { username: usernameRuta } = useParams()
+
+    // En `<tienda>.piru.app` la tienda vive en la raíz y el username sale del subdominio; en
+    // my.piru.app sigue saliendo de `/:username`.
+    const username = usernameRuta ?? usernameSitio ?? undefined
 
     const [searchParams, setSearchParams] = useSearchParams()
 

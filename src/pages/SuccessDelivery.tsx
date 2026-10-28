@@ -7,6 +7,8 @@ import { AddressMapPreview } from '@/components/AddressMapPreview'
 import { leerTemaRestaurante, RestauranteTheme } from '@/components/RestauranteTheme'
 import { orderItemLineSubtotalSession } from '@/lib/orderSummaryItem'
 import { configurarGtm, configurarMetaPixel } from '@/lib/tracking'
+import { rutaTienda, usernameSitio } from '@/store-sites/actual'
+import { leerVueltaSitio } from '@/features/tienda/carritoPaginas'
 import { initMercadoPago, CardPayment } from '@mercadopago/sdk-react'
 
 const MP_CHECKOUT_LAUNCHED_KEY = 'mpCheckoutLaunchedPedidoId'
@@ -39,7 +41,8 @@ function waMeDigits(phone: string | null | undefined): string | null {
 }
 
 const SuccessDelivery = () => {
-    const { username } = useParams()
+    const { username: usernameRuta } = useParams()
+    const username = usernameRuta ?? usernameSitio
     const navigate = useNavigate()
     const [searchParams] = useSearchParams()
     const mpCheckoutReturnParams = useMemo(
@@ -68,7 +71,7 @@ const SuccessDelivery = () => {
         if (savedInfo) {
             setOrderInfo(JSON.parse(savedInfo))
         } else {
-            navigate(`/${username}`)
+            navigate(rutaTienda(username))
         }
     }, [username, navigate])
 
@@ -777,8 +780,23 @@ const SuccessDelivery = () => {
                         <OrderItems />
                     </div>
                 )}
+                <VolverAlSitio username={username} />
             </div>
         </div>
+    )
+}
+
+/** Si el pedido empezó en un sitio de Páginas, el botón para volver (el sitio limpia su carrito con `?ok=1`). */
+function VolverAlSitio({ username }: { username: string | null | undefined }) {
+    const destino = leerVueltaSitio(username)
+    if (!destino) return null
+    return (
+        <a
+            href={destino}
+            className="mt-10 block w-full rounded-2xl border border-foreground/15 px-5 py-4 text-center text-sm font-semibold transition-colors hover:bg-foreground/5"
+        >
+            Volver a la tienda
+        </a>
     )
 }
 

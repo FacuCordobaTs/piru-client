@@ -1,0 +1,27 @@
+name = "piru-store-subdomains"
+main = "store-subdomains.ts"
+compatibility_date = "2026-10-28"
+workers_dev = false
+
+[vars]
+# Reemplazar por el dominio de producción real del proyecto Cloudflare Pages de `web/`.
+# Es una URL pública, no un secreto.
+CLIENT_PAGES_ORIGIN = "https://piru-client.pages.dev"
+# Páginas: lo único que puede llamar un sitio propio (CSP) y el host de las fotos.
+API_ORIGIN = "https://api.piru.app"
+IMAGES_ORIGIN = "https://images.piru.app"
+
+# Después de `wrangler deploy`, agregar la Route `*.piru.app/*` y las exclusiones de
+# infraestructura. Ver cloudflare/README.md y docs/TIENDAS_SUBDOMINIO.md.
+
+# Páginas (docs/PAGINAS_PROPIAS.md): sitios propios publicados desde pages.piru.app.
+# El Worker sólo lee: el backend escribe bundles/assets en R2 y el manifiesto en KV.
+# Sin sitio en KV, el subdominio sigue con el proxy de la tienda estándar.
+
+[[r2_buckets]]
+binding = "SITIOS"
+bucket_name = "piru-sitios"
+
+[[kv_namespaces]]
+binding = "SITIOS_KV"
+id = "77fe6ab7e1f74145bd0282b3b86dfa7a"

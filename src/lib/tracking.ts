@@ -41,8 +41,9 @@ declare global {
 }
 
 function storageSeguro(storage: Storage): Storage | null { try { const k = '__piru_tracking__'; storage.setItem(k, '1'); storage.removeItem(k); return storage } catch { return null } }
-function local(): Storage | null { return typeof window === 'undefined' ? null : storageSeguro(window.localStorage) }
-function sesion(): Storage | null { return typeof window === 'undefined' ? null : storageSeguro(window.sessionStorage) ?? local() }
+// Leer `window.localStorage` ya lanza en un iframe aislado (vista previa de Páginas): se trata como sin storage.
+function local(): Storage | null { try { return typeof window === 'undefined' ? null : storageSeguro(window.localStorage) } catch { return null } }
+function sesion(): Storage | null { try { return typeof window === 'undefined' ? null : storageSeguro(window.sessionStorage) ?? local() } catch { return local() } }
 function uuid() { return typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}-${Math.random().toString(36).slice(2)}` }
 function leer<T>(storage: Storage | null, key: string): T | null { try { const value = storage?.getItem(key); return value ? JSON.parse(value) as T : null } catch { return null } }
 function guardar(storage: Storage | null, key: string, value: unknown) { try { storage?.setItem(key, JSON.stringify(value)) } catch { /* best-effort */ } }

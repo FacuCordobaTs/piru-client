@@ -1,13 +1,15 @@
 import { useEffect } from 'react'
 import { Outlet, useLocation } from 'react-router'
 import { enviarEventosPendientes, obtenerSesionTracking } from '@/lib/tracking'
+import { usernameSitio } from '@/store-sites/actual'
 
 const RUTAS_SIN_USERNAME = new Set(['mesa', 'sala', 'menu', 'pedido-confirmado', 'agregar-producto', 'pedido-cerrado', 'pago', 'factura', 'esperando-pedido', 'pedido', 'pago-exitoso', 'pago-fallido', 'pago-pendiente'])
 
 export function TrackingBootstrap() {
   const location = useLocation()
   useEffect(() => {
-    const username = location.pathname.split('/').filter(Boolean)[0]
+    // En `<tienda>.piru.app` la tienda está en la raíz: el username no es el primer segmento.
+    const username = usernameSitio ?? location.pathname.split('/').filter(Boolean)[0]
     if (username && !RUTAS_SIN_USERNAME.has(username)) obtenerSesionTracking(username)
     void enviarEventosPendientes()
   }, [location.pathname])

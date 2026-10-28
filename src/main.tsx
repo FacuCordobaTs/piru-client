@@ -14,16 +14,35 @@ import SuccessGrupal from './pages/SuccessGrupal'
 import PedidoStatus from './pages/PedidoStatus'
 import { TrackingBootstrap } from './components/TrackingBootstrap'
 import { CampanaLinkResolver, RecetaLinkResolver } from './pages/MarketingLinkResolver'
+import CheckoutPaginas from './pages/CheckoutPaginas'
+import { storeSlugFromHostname } from './lib/store-domain'
+import { getStoreSite } from './store-sites/registry'
 
 // Sólo en desarrollo: una tienda inventada para mirar las plantillas (`/_ejemplo?plantilla=moderna`).
 const EjemploTienda = import.meta.env.DEV ? lazy(() => import('./pages/EjemploTienda')) : null
+
+/**
+ * `<tienda>.piru.app` es una tienda: la portada es la tienda misma, con su diseño propio si está
+ * registrado en `store-sites/registry.ts` o con la plantilla estándar si no. `my.piru.app` conserva
+ * la portada de Piru y las tiendas bajo `/:username`.
+ */
+const domainSlug = storeSlugFromHostname(window.location.hostname)
+const site = getStoreSite(domainSlug)
+if (site?.loadingBackground) document.documentElement.style.backgroundColor = site.loadingBackground
 
 const rutas = [
   ...(EjemploTienda ? [{ path: "/_ejemplo", element: <EjemploTienda /> }] : []),
   {
     path: "/",
-    element: <Welcome />,
+    element: domainSlug ? <MenuDelivery /> : <Welcome />,
   },
+  ...(domainSlug
+    ? [
+        { path: "/success", element: <SuccessDelivery /> },
+        { path: "/c/:slug", element: <CampanaLinkResolver /> },
+        { path: "/r/:token", element: <RecetaLinkResolver /> },
+      ]
+    : []),
   {
     path: "/mesa/:qrToken",
     element: <Nombre />,
@@ -56,6 +75,11 @@ const rutas = [
   {
     path: "/:username",
     element: <MenuDelivery />,
+  },
+  // Checkout de un sitio de Páginas (docs/PAGINAS_PROPIAS.md, §9).
+  {
+    path: "/:username/checkout",
+    element: <CheckoutPaginas />,
   },
   {
     path: "/:username/success",

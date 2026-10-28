@@ -4,7 +4,7 @@ import { Estado } from '@/features/tienda/compartido/Estado'
 import { TiendaTheme } from '@/features/tienda/compartido/TiendaTheme'
 import { ACCESO_SECUNDARIO, formatoPesos, logoPara } from '@/lib/tienda'
 import { BadgePercent, Loader2, Sparkles, Users } from 'lucide-react'
-import { lazy, Suspense } from 'react'
+import { lazy, Suspense, useEffect } from 'react'
 import { useParams, useSearchParams } from 'react-router'
 
 import { AvisoLocal } from '@/features/tienda/compartido/AvisoLocal'
@@ -16,6 +16,8 @@ import { DialogosDelivery } from '@/features/tienda/delivery/DialogosDelivery'
 import type { CampanaPublica } from '@/features/tienda/delivery/modelo'
 import { useMenuDelivery } from '@/features/tienda/delivery/useMenuDelivery'
 import { TiendaVista } from '@/features/tienda/TiendaVista'
+import { slugSitio, sitioActual, usernameSitio } from '@/store-sites/actual'
+import { storeSiteMeta } from '@/store-sites/meta'
 
 const DemoTienda = lazy(() => import('@/components/demo/DemoTienda').catch(() => ({ default: () => <></> })))
 
@@ -23,7 +25,7 @@ const DemoTienda = lazy(() => import('@/components/demo/DemoTienda').catch(() =>
 export default function MenuDelivery({ campana = null }: { campana?: CampanaPublica | null }) {
     const { username } = useParams()
     const [params] = useSearchParams()
-    return <MenuDeliveryPagina key={username + ':' + params.has('demo')} campana={campana} />
+    return <MenuDeliveryPagina key={(username ?? usernameSitio) + ':' + params.has('demo')} campana={campana} />
 }
 
 function MenuDeliveryPagina({ campana }: { campana: CampanaPublica | null }) {
@@ -76,6 +78,19 @@ function MenuDeliveryPagina({ campana }: { campana: CampanaPublica | null }) {
         restauranteCache,
     } = modelo
     const themeStyles = <TiendaTheme paleta={paleta} fuentes={fuentes} />
+    const Diseno = sitioActual?.Diseno
+
+    // En el subdominio, el HTML ya llega con el título del sitio desde el Worker; esto cubre el
+    // desarrollo local y la navegación dentro de la SPA.
+    useEffect(() => {
+        const meta = slugSitio ? storeSiteMeta[slugSitio] : null
+        if (!meta) return
+        document.title = meta.title
+        if (meta.themeColor) {
+            document.querySelector('meta[name="theme-color"]')?.setAttribute('content', meta.themeColor)
+        }
+    }, [])
+
     if (loading) {
         return (
             <>
@@ -119,7 +134,7 @@ function MenuDeliveryPagina({ campana }: { campana: CampanaPublica | null }) {
                 </>
             )}
 
-            {restaurante.pausadoPorSuscripcion ? (
+            {!Diseno && (restaurante.pausadoPorSuscripcion ? (
                 // Local pausado por suscripción (Tarea 8): cerrado temporalmente, no toma pedidos.
                 // Tiene prioridad sobre el aviso de horario y no se puede sortear con pedidos programados.
                 <AvisoLocal tono="cerrado">
@@ -133,8 +148,21 @@ function MenuDeliveryPagina({ campana }: { campana: CampanaPublica | null }) {
                         Estamos cerrados. Podés programar tu pedido para después.
                     </AvisoLocal>
                 )
-            )}
+            ))}
 
+            {Diseno ? (
+                <Suspense
+                    fallback={
+                        <div
+                            role="status"
+                            aria-label="Cargando tienda"
+                            style={{ minHeight: '100dvh', background: sitioActual?.loadingBackground }}
+                        />
+                    }
+                >
+                    <Diseno modelo={modelo} />
+                </Suspense>
+            ) : (
             <TiendaVista
                 tienda={tienda}
                 portada={{
@@ -241,6 +269,7 @@ function MenuDeliveryPagina({ campana }: { campana: CampanaPublica | null }) {
                     pulso: cartAnimation,
                 }}
             />
+            )}
 
             <CarritoDelivery modelo={modelo} />
             <DialogosDelivery modelo={modelo} />

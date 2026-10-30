@@ -3,6 +3,7 @@
  * avisos. Un store mínimo (sin dependencias) que los hooks leen con `useSyncExternalStore`.
  */
 import { claveLinea, leerLineasGuardadas, sinClave, type DatosTienda, type LineaGuardada } from './datos'
+import type { PedidoDemoInfo } from '@/lib/demo'
 import type { Campana, EstadoCarga, Sitio } from './tipos'
 
 export type ConfigSitio = {
@@ -13,6 +14,8 @@ export type ConfigSitio = {
     api: string
     /** `https://my.piru.app/<username>` */
     tiendaEstandar: string
+    /** `?demo`: el sitio corre la demo de prospección sobre su propio diseño (sdk/demo.tsx). */
+    demo?: boolean
     preview?: boolean
 }
 
@@ -32,16 +35,18 @@ export type EstadoRuntime = {
     checkoutMontado: boolean
     campana: Campana | null
     aviso: { texto: string; tono: 'info' | 'ok' | 'error' } | null
+    /** El pedido de prueba de la demo (`?demo`): no se crea, se muestra el mensaje de WhatsApp. */
+    pedidoDemo: PedidoDemoInfo | null
 }
 
 export type Tienda = ReturnType<typeof crearTienda>
 
-const claveCarrito = (username: string) => `piruCarrito:${username}`
+const claveCarrito = (username: string, demo: boolean) => `piruCarrito:${username}${demo ? ':demo' : ''}`
 
-function leerCarrito(username: string, preview: boolean): LineaGuardada[] {
+function leerCarrito(username: string, preview: boolean, demo: boolean): LineaGuardada[] {
     if (preview) return []
     try {
-        return leerLineasGuardadas(JSON.parse(sessionStorage.getItem(claveCarrito(username)) ?? '[]'))
+        return leerLineasGuardadas(JSON.parse(sessionStorage.getItem(claveCarrito(username, demo)) ?? '[]'))
     } catch {
         return []
     }
@@ -49,6 +54,7 @@ function leerCarrito(username: string, preview: boolean): LineaGuardada[] {
 
 export function crearTienda(config: ConfigSitio) {
     const preview = config.preview === true
+    const demo = config.demo === true
     let estado: EstadoRuntime = {
         sitio: {
             slug: config.slug,
@@ -60,7 +66,7 @@ export function crearTienda(config: ConfigSitio) {
         config,
         estado: 'cargando',
         datos: null,
-        lineas: leerCarrito(config.username, preview),
+        lineas: leerCarrito(config.username, preview, demo),
         submitting: false,
         error: null,
         hoja: null,
@@ -68,6 +74,7 @@ export function crearTienda(config: ConfigSitio) {
         checkoutMontado: false,
         campana: null,
         aviso: null,
+        pedidoDemo: null,
     }
     const oyentes = new Set<() => void>()
     let timerAviso: ReturnType<typeof setTimeout> | null = null
@@ -77,7 +84,7 @@ export function crearTienda(config: ConfigSitio) {
         if ('lineas' in cambio && !preview) {
             try {
                 sessionStorage.setItem(
-                    claveCarrito(config.username),
+                    claveCarrito(config.username, demo),
                     JSON.stringify(estado.lineas.map(sinClave))
                 )
             } catch {

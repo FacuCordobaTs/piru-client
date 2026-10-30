@@ -7,6 +7,7 @@
  */
 import { elegirProductoDestacado, seccionesDeProductos } from '@/features/tienda/catalogo'
 import { checkIsOpen } from '@/features/tienda/horarios'
+import { DESCUENTO_DEMO, direccionDemo, restauranteDemo, type DireccionDemo } from '@/lib/demo'
 import { fotosDeProducto } from '@/lib/fotosProducto'
 import { formatoPesos, leerTienda, ordenVisual, precioProducto, textoEstado } from '@/lib/tienda'
 import type {
@@ -115,6 +116,8 @@ export type DatosCheckout = {
     sucursales: SucursalCheckout[]
     franjas: Franja[]
     zonasEspeciales: ZonaEspecialCheckout[]
+    /** `?demo`: la dirección de Martina, cerca del local, para que el envío se calcule igual. */
+    demoDireccion: DireccionDemo | null
 }
 
 export type DatosTienda = {
@@ -319,7 +322,7 @@ function zonasEspecialesCheckout(bruto: unknown): ZonaEspecialCheckout[] {
         }))
 }
 
-export function normalizarTienda(respuesta: RespuestaTienda, ahora = new Date()): DatosTienda {
+export function normalizarTienda(respuesta: RespuestaTienda, ahora = new Date(), demo = false): DatosTienda {
     const r = respuesta.restaurante
     const horarios = Array.isArray(respuesta.horarios) ? respuesta.horarios : []
     const estado = checkIsOpen(horarios, ahora)
@@ -378,6 +381,12 @@ export function normalizarTienda(respuesta: RespuestaTienda, ahora = new Date())
         sucursales: sucursalesCheckout(respuesta.sucursales),
         franjas: Array.isArray(respuesta.franjas) ? respuesta.franjas : [],
         zonasEspeciales: zonasEspecialesCheckout(respuesta.zonasEspeciales ?? r.zonasEspeciales),
+        demoDireccion: demo
+            ? direccionDemo(
+                  r as Parameters<typeof direccionDemo>[0],
+                  (respuesta.sucursales ?? []) as Parameters<typeof direccionDemo>[1]
+              )
+            : null,
     }
     return {
         local,
@@ -387,6 +396,26 @@ export function normalizarTienda(respuesta: RespuestaTienda, ahora = new Date())
         destacado: elegirProductoDestacado(productos, tiendaBruta.productoDestacadoId),
         contenido,
         checkout,
+    }
+}
+
+/**
+ * La tienda como la ve Martina en la demo (`lib/demo.ts`): abierta aunque el local esté cerrado o
+ * pausado, con el club de puntos del local o el de ejemplo y el 10% del mensaje de recompra en la
+ * carta. El resto (productos, checkout, sucursales) es el real.
+ */
+export function aplicarDemo(respuesta: RespuestaTienda): RespuestaTienda {
+    return {
+        ...respuesta,
+        restaurante: restauranteDemo(respuesta.restaurante),
+        // Sin turnos, `checkIsOpen` la da por abierta: la demo se prueba a cualquier hora.
+        horarios: [],
+        productos: respuesta.productos.map((producto) => {
+            const actual = Number(producto.descuento) || 0
+            return DESCUENTO_DEMO > actual
+                ? { ...producto, descuento: DESCUENTO_DEMO, descuentoFechaInicio: null, descuentoFechaFin: null }
+                : producto
+        }),
     }
 }
 

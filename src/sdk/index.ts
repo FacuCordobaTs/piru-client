@@ -2,8 +2,8 @@
  * `@piru/tienda`: el SDK público de los sitios de Páginas (docs/PAGINAS_PROPIAS.md, §6).
  *
  * Lo que se exporta acá es contrato: `ApiTienda` (en `tipos.ts`) lo declara y la Guía para Claude lo
- * documenta. El runtime además exporta `PiruSiteRoot`, `crearTienda` y los helpers de la vista previa,
- * que usa sólo el boot (`boot.ts`, `preview.ts`), no los sitios.
+ * documenta. El runtime además exporta `PiruSiteRoot`, `crearTienda` y los helpers de la vista
+ * previa, que usan sólo el boot y la demo (`sdk/demo.tsx`), no los sitios.
  */
 import { DIAS, formatoPesos, hhmm, ordenVisual, precioProducto, SEMANA, textoEstado, turnosDelDia } from '@/lib/tienda'
 import { fotosDeProducto } from '@/lib/fotosProducto'

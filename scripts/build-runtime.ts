@@ -1,7 +1,8 @@
 /**
  * Compila el runtime `v1` de Páginas (docs/PAGINAS_PROPIAS.md, §7): los módulos compartidos que
- * cargan todos los sitios por import map, el SDK `@piru/tienda`, el boot y la vista previa, y el
- * `.d.ts` del SDK para el editor y la Guía para Claude.
+ * cargan todos los sitios por import map, el SDK `@piru/tienda`, el boot, la vista previa y la demo
+ * de `?demo` (con su CSS de Tailwind compilado), y el `.d.ts` del SDK para el editor y la Guía para
+ * Claude.
  *
  *   bun scripts/build-runtime.ts            → dist-runtime/v1/*
  *
@@ -10,6 +11,8 @@
  * `../backend/src/lib/sitios-sdk-tipos.generado.ts` (la guía), si esas carpetas existen. Un mismo
  * build alimenta R2, el editor y la guía: no se desincronizan.
  */
+import { compile, optimize } from '@tailwindcss/node'
+import { Scanner } from '@tailwindcss/oxide'
 import { createHash } from 'node:crypto'
 import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
@@ -22,6 +25,7 @@ const salida = path.join(raiz, 'dist-runtime', RUNTIME_VERSION)
 const temporal = path.join(raiz, 'node_modules', '.tmp', 'runtime-entradas')
 const requerir = createRequire(path.join(raiz, 'package.json'))
 const API_URL = process.env.PIRU_API_URL || 'https://api.piru.app/api'
+const ADMIN_URL = process.env.VITE_ADMIN_URL || 'https://admin.piru.app'
 
 process.env.NODE_ENV = 'production'
 
@@ -35,7 +39,17 @@ function envolturaCjs(paquete: string): string {
     ].join('\n')
 }
 
-const EXTERNOS = ['react', 'react/jsx-runtime', 'react-dom', 'react-dom/client', 'motion/react', 'react-router', '@piru/tienda']
+const EXTERNOS = [
+    'react',
+    'react/jsx-runtime',
+    'react-dom',
+    'react-dom/client',
+    'motion/react',
+    'react-router',
+    '@piru/tienda',
+    // La demo se carga aparte, sólo cuando el HTML trae `demo: true` (ver sdk/componentes.tsx).
+    '@piru/demo',
+]
 
 /** `@/…` → `src/…`, como el alias de Vite. */
 const aliasArroba = {
@@ -59,6 +73,59 @@ const externosExactos = (lista: string[]) => ({
     },
 })
 
+/**
+ * Quita las capas de Tailwind (`@layer theme|utilities|properties`) dejando su contenido en su
+ * lugar. La demo convive con el CSS del sitio, que es CSS normal (sin capas): una regla suelta como
+ * `button { font: inherit }` le ganaría a cualquier utilidad que esté dentro de `@layer`. Al
+ * deshacer las capas, las clases de la demo (más específicas y posteriores) vuelven a mandar.
+ */
+function sinCapas(css: string): string {
+    let salida = ''
+    let i = 0
+    for (;;) {
+        const inicio = css.indexOf('@layer ', i)
+        if (inicio === -1) return salida + css.slice(i)
+        salida += css.slice(i, inicio)
+        const llave = css.indexOf('{', inicio)
+        if (llave === -1) return salida + css.slice(inicio)
+        let nivel = 0
+        let fin = llave
+        for (; fin < css.length; fin++) {
+            if (css[fin] === '{') nivel++
+            else if (css[fin] === '}' && --nivel === 0) break
+        }
+        salida += sinCapas(css.slice(llave + 1, fin))
+        i = fin + 1
+    }
+}
+
+/**
+ * Compila el CSS de la demo (`src/sdk/demo.css`) con Tailwind, sin preflight y sólo con las clases
+ * de `components/demo/`. El runtime lo inyecta bajo `@scope ([data-piru-demo])`, así conserva el
+ * diseño de la tienda estándar sin agregar Tailwind al sitio ni tocar su CSS.
+ */
+async function compilarCssDemo(): Promise<string> {
+    const entrada = path.join(raiz, 'src/sdk/demo.css')
+    const compiler = await compile(readFileSync(entrada, 'utf8'), {
+        base: path.dirname(entrada),
+        onDependency: () => {},
+    })
+    const scanner = new Scanner({ sources: compiler.sources })
+    const css = optimize(compiler.build([...scanner.scan()]), { minify: true }).code
+    // `@scope` limita las utilidades y las escenas al contenedor de la demo: no tocan el sitio.
+    // Las variables del tema, que Tailwind emite en `:root,:host`, van a la raíz del scope.
+    return `@scope ([data-piru-demo]){${sinCapas(css).replace(/:root,:host/g, ':scope')}}`
+}
+
+/** `import CSS_DEMO from 'piru:demo-css'`: el CSS ya compilado, dentro del bundle de la demo. */
+const cssDemoVirtual = (css: string) => ({
+    name: 'demo-css',
+    setup(build: import('bun').PluginBuilder) {
+        build.onResolve({ filter: /^piru:demo-css$/ }, () => ({ path: 'piru:demo-css', namespace: 'demo-css' }))
+        build.onLoad({ filter: /.*/, namespace: 'demo-css' }, () => ({ contents: `export default ${JSON.stringify(css)}`, loader: 'js' }))
+    },
+})
+
 type Modulo = { nombre: string; entrada: string; externos: string[] }
 
 async function main() {
@@ -73,6 +140,9 @@ async function main() {
         return archivo
     }
 
+    const cssDemo = await compilarCssDemo()
+    console.log(`  demo.css  ${(cssDemo.length / 1024).toFixed(1)} KB (Tailwind, sólo la demo)`)
+
     const modulos: Modulo[] = [
         { nombre: 'react', entrada: escribir('react.js', envolturaCjs('react')), externos: [] },
         { nombre: 'react-jsx-runtime', entrada: escribir('react-jsx-runtime.js', envolturaCjs('react/jsx-runtime')), externos: ['react'] },
@@ -85,6 +155,8 @@ async function main() {
         { nombre: 'sdk', entrada: path.join(raiz, 'src/sdk/index.ts'), externos: EXTERNOS.filter((e) => e !== '@piru/tienda') },
         { nombre: 'boot', entrada: path.join(raiz, 'src/sdk/boot.tsx'), externos: EXTERNOS },
         { nombre: 'preview', entrada: path.join(raiz, 'src/sdk/preview.tsx'), externos: EXTERNOS },
+        // Recorrido, isla y pedido de prueba de `?demo`; sólo se descarga en la demo.
+        { nombre: 'demo', entrada: path.join(raiz, 'src/sdk/demo.tsx'), externos: EXTERNOS },
     ]
 
     const hashes: Record<string, string> = {}
@@ -95,11 +167,12 @@ async function main() {
             format: 'esm',
             minify: true,
             splitting: false,
-            plugins: [externosExactos(modulo.externos), aliasArroba],
+            plugins: [externosExactos(modulo.externos), aliasArroba, cssDemoVirtual(cssDemo)],
             jsx: { runtime: 'automatic', importSource: 'react' },
             define: {
                 'process.env.NODE_ENV': '"production"',
                 'import.meta.env.VITE_API_URL': JSON.stringify(API_URL),
+                'import.meta.env.VITE_ADMIN_URL': JSON.stringify(ADMIN_URL),
             },
         })
         if (!resultado.success) {

@@ -215,6 +215,12 @@ export async function irAlCheckout(tienda: Tienda): Promise<void> {
         tienda.set({ checkoutAbierto: true, error: null })
         return
     }
+    // En la demo el pedido no se envía. Si la página no incluye `<PiruCheckout />`, no se navega al
+    // checkout de plataforma (ahí sí se crearía): se avisa y se sigue recorriendo el sitio.
+    if (estado.config.demo === true) {
+        tienda.avisar('En la demo el pedido no se envía: se prueba en el checkout de la página.')
+        return
+    }
     if (estado.sitio.isPreview) {
         tienda.avisar('En la vista previa no se compra: el checkout se abre en el sitio publicado.')
         return

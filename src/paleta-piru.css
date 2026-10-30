@@ -1,0 +1,16 @@
+/*
+ * La paleta fija de Piru (la de la landing y las apps): no la cambian el tema del local ni el modo
+ * oscuro. La usan la demo de la tienda estándar (`components/demo/`, `index.css`) y la demo del
+ * runtime de Páginas (`src/sdk/demo.css` compila este mismo `@theme` con Tailwind).
+ */
+@theme {
+  --color-brand: #ff7a00;
+  --color-brand-deep: #e66e00;
+  --color-brand-soft: #fff2e3;
+  --color-ink: #191512;
+  --color-ink-2: #4a433c;
+  --color-ink-3: #80776e;
+  --color-paper: #fffbf0;
+  --color-sand: #f6f0e6;
+  --color-line: #ece4d8;
+}

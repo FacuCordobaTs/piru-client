@@ -41,6 +41,7 @@ import {
     X,
     Zap,
 } from 'lucide-react'
+import { armarPedidoDemo, CLIENTA_DEMO } from '@/lib/demo'
 import { formatoPesos } from '@/lib/tienda'
 import { buildWhatsappOrderMessage } from '@/lib/whatsappOrderMessage'
 import {
@@ -201,6 +202,8 @@ export function PiruCheckout({
     const datos = tienda.get().datos
     const datosCheckout = datos?.checkout ?? null
     const preview = sitio.isPreview
+    const demo = config.demo === true
+    const demoDireccion = datosCheckout?.demoDireccion ?? null
     const tituloId = useId()
     const lineas = tienda.get().lineas
     const items = useMemo(
@@ -211,13 +214,13 @@ export function PiruCheckout({
 
     const [paso, setPaso] = useState(0)
     const [tipoPedido, setTipoPedido] = useState<TipoPedido>('delivery')
-    const [nombre, setNombre] = useState('')
-    const [telefono, setTelefono] = useState('')
-    const [direccion, setDireccion] = useState('')
-    const [lat, setLat] = useState<number | null>(null)
-    const [lng, setLng] = useState<number | null>(null)
+    const [nombre, setNombre] = useState(demo ? CLIENTA_DEMO.nombre : '')
+    const [telefono, setTelefono] = useState(demo ? CLIENTA_DEMO.telefono : '')
+    const [direccion, setDireccion] = useState(demo ? (demoDireccion?.direccion ?? '') : '')
+    const [lat, setLat] = useState<number | null>(demo ? (demoDireccion?.lat ?? null) : null)
+    const [lng, setLng] = useState<number | null>(demo ? (demoDireccion?.lng ?? null) : null)
     const [verificandoDireccion, setVerificandoDireccion] = useState(false)
-    const [tipoDomicilio, setTipoDomicilio] = useState<'casa' | 'departamento' | null>(null)
+    const [tipoDomicilio, setTipoDomicilio] = useState<'casa' | 'departamento' | null>(demo ? 'casa' : null)
     const [piso, setPiso] = useState('')
     const [numeroDepartamento, setNumeroDepartamento] = useState('')
     const [notas, setNotas] = useState('')
@@ -231,7 +234,7 @@ export function PiruCheckout({
     const [sucursalDelivery, setSucursalDelivery] = useState<number | null>(null)
     const [fueraDeZona, setFueraDeZona] = useState(false)
     const [verificandoZona, setVerificandoZona] = useState(false)
-    const [puntos, setPuntos] = useState<number | null>(null)
+    const [puntos, setPuntos] = useState<number | null>(demo ? CLIENTA_DEMO.puntos : null)
     const [buscandoPuntos, setBuscandoPuntos] = useState(false)
     const [puntosTick, setPuntosTick] = useState(0)
     const [canjeEnvio, setCanjeEnvio] = useState(false)
@@ -261,6 +264,15 @@ export function PiruCheckout({
     const metodos = useMemo(() => local?.metodosPago ?? [], [local?.metodosPago])
 
     useBloqueoDeScroll(abierto)
+
+    // La demo atiende como Martina: sus datos y su dirección, cerca del local para que el envío
+    // se calcule con la zona real. La tienda no guarda nada de esto.
+    useEffect(() => {
+        if (!demo || !demoDireccion) return
+        setDireccion((valor) => (valor.trim() ? valor : demoDireccion.direccion))
+        setLat((valor) => valor ?? demoDireccion.lat)
+        setLng((valor) => valor ?? demoDireccion.lng)
+    }, [demo, demoDireccion])
 
     // El checkout existe en la página: `carrito.checkout()` lo abre en vez de navegar
     // al checkout de la tienda estándar.
@@ -369,8 +381,13 @@ export function PiruCheckout({
         if (local && datosCheckout?.permiteProgramados && (datosCheckout.soloProgramados || !local.abierto)) setProgramar(true)
     }, [local, datosCheckout?.permiteProgramados, datosCheckout?.soloProgramados])
 
-    // Saldo de puntos del teléfono que se está escribiendo.
+    // Saldo de puntos del teléfono que se está escribiendo. En la demo son los de Martina.
     useEffect(() => {
+        if (demo) {
+            setPuntos(CLIENTA_DEMO.puntos)
+            setBuscandoPuntos(false)
+            return
+        }
         const normalizado = soloDigitos(telefono)
         if (preview || !local?.sistemaPuntos || normalizado.length < 8) {
             setPuntos(null)
@@ -396,7 +413,7 @@ export function PiruCheckout({
             cancelado = true
             window.clearTimeout(timer)
         }
-    }, [telefono, local?.sistemaPuntos, config.api, config.restauranteId, preview, puntosTick])
+    }, [telefono, local?.sistemaPuntos, config.api, config.restauranteId, preview, puntosTick, demo])
 
     // Zona de delivery: apenas hay coordenadas, el backend dice si está dentro y cuánto cuesta.
     useEffect(() => {
@@ -732,15 +749,94 @@ export function PiruCheckout({
             return
         }
         if (!validarTodo()) return
+        const notasFinal =
+            tipoPedido === 'delivery' && tipoDomicilio === 'departamento'
+                ? `Piso ${piso.trim()} Dpto ${numeroDepartamento.trim()}${notas.trim() ? `\n${notas.trim()}` : ''}`
+                : notas.trim()
+
+        // La demo no crea el pedido: muestra el mensaje que le llegaría al local por WhatsApp, como
+        // la tienda estándar (`armarPedidoDemo`). Es lo único que no se guarda ni se envía.
+        if (demo) {
+            tienda.set({
+                pedidoDemo: armarPedidoDemo(
+                    {
+                        tipoPedido,
+                        nombre: nombre.trim(),
+                        direccion:
+                            tipoPedido === 'delivery'
+                                ? zonaEspecial
+                                    ? `Country · ${zonaEspecial.nombre}`
+                                    : direccion.trim()
+                                : null,
+                        deliveryFee: totales.envio,
+                        zonaNombre,
+                        montoDescuento,
+                        descuentoPuntos: descuentoPuntosValor,
+                        metodoPago,
+                        horarioProgramado: horarioFinal,
+                        notas: notasFinal,
+                    },
+                    carrito.lines.map((linea) => {
+                        const cruda = lineas.find((l) => l.key === linea.key)
+                        const producto = datos?.productos.find((p) => p.id === linea.productoId)
+                        return {
+                            nombre: [
+                                linea.nombre,
+                                ...linea.opciones.filter(
+                                    (o) => !o.startsWith('+ ') && !o.startsWith('Sin ') && !o.startsWith('“')
+                                ),
+                            ].join(' - '),
+                            precio: linea.precioUnitario,
+                            cantidad: linea.cantidad,
+                            categoria: producto?.categoria ?? undefined,
+                            agregados: (cruda?.agregados ?? []).flatMap((id) => {
+                                const agregado = producto?.agregados.find((a) => a.id === id)
+                                return agregado
+                                    ? [{ id: agregado.id, nombre: agregado.nombre, precio: String(agregado.precio) }]
+                                    : []
+                            }),
+                            ingredientesExcluidosNombres: (cruda?.ingredientesExcluidos ?? []).flatMap((id) => {
+                                const ingrediente = producto?.ingredientes.find((i) => i.id === id)
+                                return ingrediente ? [ingrediente.nombre] : []
+                            }),
+                            nota: cruda?.nota ?? null,
+                            puntosGanados: producto?.puntosGanados ?? 0,
+                            esCanjePuntos: producto?.soloCanjePuntos ?? false,
+                        }
+                    }),
+                    {
+                        nombre: local?.nombre,
+                        direccion: local?.direccion,
+                        transferenciaAlias: datosCheckout?.transferenciaAlias,
+                        configuracionPuntos: configPuntos
+                            ? { ...configPuntos, pesosPorPunto: local?.configuracionPuntos?.pesosPorPunto ?? null }
+                            : (local?.configuracionPuntos ?? null),
+                    }
+                ),
+                lineas: [],
+                checkoutAbierto: false,
+            })
+            setPaso(0)
+            setError(null)
+            setCanjeEnvio(false)
+            setCanjeDescuento(false)
+            setCodigo('')
+            setCodigoId(null)
+            setMontoDescuento(0)
+            setCuponEnvioGratis(false)
+            setErrorCodigo(null)
+            setMensajeCodigo(null)
+            setHorario('')
+            setProgramar(false)
+            setNotas('')
+            return
+        }
+
         setEnviando(true)
         setError(null)
         if (!slotIdempotencia.current) slotIdempotencia.current = crypto.randomUUID()
         const endpoint = tipoPedido === 'delivery' ? '/public/delivery/create' : '/public/takeaway/create'
         const tracking = obtenerContextoTracking(config.username)
-        const notasFinal =
-            tipoPedido === 'delivery' && tipoDomicilio === 'departamento'
-                ? `Piso ${piso.trim()} Dpto ${numeroDepartamento.trim()}${notas.trim() ? `\n${notas.trim()}` : ''}`
-                : notas.trim()
         const sucursalFinal =
             tipoPedido === 'delivery'
                 ? zonaEspecialId

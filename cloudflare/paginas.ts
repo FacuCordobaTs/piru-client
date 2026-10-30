@@ -63,7 +63,7 @@ const TIPOS: Record<string, string> = {
     webm: 'video/webm',
     'd.ts': 'text/plain; charset=utf-8',
 }
-const MODULOS_RUNTIME = new Set(['react', 'react-jsx-runtime', 'react-dom', 'react-dom-client', 'motion', 'react-router', 'sdk', 'boot'])
+const MODULOS_RUNTIME = new Set(['react', 'react-jsx-runtime', 'react-dom', 'react-dom-client', 'motion', 'react-router', 'sdk', 'boot', 'demo'])
 
 export const IMPORTS_RUNTIME = (v: string) => ({
     react: `/_piru/runtime/${v}/react.js`,
@@ -73,6 +73,8 @@ export const IMPORTS_RUNTIME = (v: string) => ({
     'motion/react': `/_piru/runtime/${v}/motion.js`,
     'react-router': `/_piru/runtime/${v}/react-router.js`,
     '@piru/tienda': `/_piru/runtime/${v}/sdk.js`,
+    // Lo carga `lazy` el runtime sólo con `?demo` (recorrido, isla y pedido de prueba).
+    '@piru/demo': `/_piru/runtime/${v}/demo.js`,
 })
 
 export function esManifiesto(v: unknown): v is ManifiestoSitio {
@@ -130,7 +132,10 @@ export const CABECERAS_SEGURIDAD = {
     'Permissions-Policy': 'camera=(), microphone=(), geolocation=(), payment=()',
 }
 
-export function htmlSitio(m: ManifiestoSitio, opciones: { slug: string; origin: string; nonce: string; api: string }): string {
+export function htmlSitio(
+    m: ManifiestoSitio,
+    opciones: { slug: string; origin: string; nonce: string; api: string; demo?: boolean }
+): string {
     const { slug, origin, nonce } = opciones
     const v = m.runtime
     const titulo = escaparHtml(m.meta.titulo || m.username)
@@ -147,6 +152,7 @@ export function htmlSitio(m: ManifiestoSitio, opciones: { slug: string; origin: 
         slug,
         api: opciones.api,
         tiendaEstandar,
+        demo: opciones.demo === true,
     }
     return `<!doctype html>
 <html lang="es">
@@ -223,7 +229,6 @@ async function servirArchivoSitio(path: string, slug: string, env: EnvPaginas): 
 export function redireccionPlataforma(url: URL, username: string): string | null {
     const path = url.pathname
     const my = 'https://my.piru.app'
-    if (url.searchParams.has('demo')) return `${my}/${encodeURIComponent(username)}?demo`
     if (/^\/(pedido|mesa|sala|pago)(\/|$)/.test(path)) return `${my}${path}${url.search}`
     if (path === '/checkout' || path === '/checkout/') return `${my}/${encodeURIComponent(username)}/checkout${url.search}`
     if (path === '/success' || path === '/success/') return `${my}/${encodeURIComponent(username)}/success${url.search}`
@@ -277,12 +282,23 @@ export async function atenderPaginas(request: Request, slug: string, env: EnvPag
 
     const n = nonce()
     const api = `${env.API_ORIGIN || 'https://api.piru.app'}/api`
-    return new Response(request.method === 'HEAD' ? null : htmlSitio(manifiesto, { slug, origin: url.origin, nonce: n, api }), {
-        headers: {
-            'Content-Type': 'text/html; charset=utf-8',
-            'Cache-Control': 'no-cache',
-            'Content-Security-Policy': cspSitio(n, env),
-            ...CABECERAS_SEGURIDAD,
-        },
-    })
+    return new Response(
+        request.method === 'HEAD'
+            ? null
+            : htmlSitio(manifiesto, {
+                  slug,
+                  origin: url.origin,
+                  nonce: n,
+                  api,
+                  demo: url.searchParams.has('demo'),
+              }),
+        {
+            headers: {
+                'Content-Type': 'text/html; charset=utf-8',
+                'Cache-Control': 'no-cache',
+                'Content-Security-Policy': cspSitio(n, env),
+                ...CABECERAS_SEGURIDAD,
+            },
+        }
+    )
 }

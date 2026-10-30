@@ -86,7 +86,6 @@ test('las rutas de plataforma van a my.piru.app', async () => {
         ['https://bronx.piru.app/pago/tok', 'https://my.piru.app/pago/tok'],
         ['https://bronx.piru.app/checkout?carrito=1', 'https://my.piru.app/bronx/checkout?carrito=1'],
         ['https://bronx.piru.app/success', 'https://my.piru.app/bronx/success'],
-        ['https://bronx.piru.app/?demo', 'https://my.piru.app/bronx?demo'],
     ]
     for (const [desde, hacia] of casos) {
         const res = await worker.fetch(new Request(desde), env())
@@ -94,6 +93,22 @@ test('las rutas de plataforma van a my.piru.app', async () => {
         expect(res.headers.get('location')).toBe(hacia)
     }
     expect(redireccionPlataforma(new URL('https://bronx.piru.app/c/promo'), 'bronx')).toBeNull()
+})
+
+test('?demo muestra el sitio con la demo en vez de redirigir a my.piru.app', async () => {
+    globalThis.fetch = (async () => {
+        throw new Error('no debería pedir al origen')
+    }) as typeof fetch
+    expect(redireccionPlataforma(new URL('https://bronx.piru.app/?demo'), 'bronx')).toBeNull()
+    const res = await worker.fetch(new Request('https://bronx.piru.app/?demo'), env())
+    expect(res.status).toBe(200)
+    const html = await res.text()
+    expect(html).toContain('"demo":true')
+    expect(html).toContain('"@piru/demo":"/_piru/runtime/v1/demo.js"')
+    expect(res.headers.get('cache-control')).toBe('no-cache')
+
+    const normal = await worker.fetch(new Request('https://bronx.piru.app/'), env())
+    expect(await normal.text()).toContain('"demo":false')
 })
 
 test('runtime, bundles y assets salen de R2 con caché inmutable; el SVG sin permisos', async () => {

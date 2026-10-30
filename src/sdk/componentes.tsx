@@ -4,10 +4,11 @@
  * (`PiruErrorBoundary`), el pie con la tienda estándar (`PiruFooter`), la hoja de opciones
  * (`PiruProductSheet`) y los avisos. El sitio no tiene que acordarse de ponerlos.
  */
-import { Component, useEffect, useId, useMemo, useRef, useState, type ComponentType, type ReactNode } from 'react'
+import { Component, lazy, Suspense, useEffect, useId, useMemo, useRef, useState, type ComponentType, type ReactNode } from 'react'
 import { guardarContextoTracking, obtenerVisitorId, obtenerSesionTracking, registrarEventoTrackingUnaVez } from '@/lib/tracking'
 import { formatoPesos } from '@/lib/tienda'
 import {
+    aplicarDemo,
     aplicarEscenario,
     campanaDeEjemplo,
     claveLinea,
@@ -20,6 +21,9 @@ import { CSS_RUNTIME } from './estilos'
 import { ContextoTienda, agregarItem, linksDe, useCarta, useTiendaInterna } from './hooks'
 import type { Tienda } from './store'
 import type { Campana, Escenario } from './tipos'
+
+/** La demo (`?demo`) se descarga sólo cuando el HTML la pidió; si falla, el sitio sigue igual. */
+const PiruDemo = lazy(() => import('@piru/demo').catch(() => ({ default: () => null })))
 
 export type DatosPreview = { respuesta: RespuestaTienda | null; escenario: Escenario | null }
 
@@ -132,18 +136,21 @@ function useCargarDatos(tienda: Tienda, preview: DatosPreview | undefined) {
         if (preview) return
         const controlador = new AbortController()
         const { config } = tienda.get()
+        const demo = config.demo === true
         const cargar = async () => {
             const [respuesta, enlace] = await Promise.all([
                 fetch(`${config.api}/public/restaurante/id/${config.restauranteId}`, { signal: controlador.signal })
                     .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
                     .then((j: { data: RespuestaTienda }) => j.data),
-                resolverEnlace(tienda, controlador.signal),
+                // En la demo no se registra tracking ni se resuelve una campaña: el link es el local.
+                demo ? Promise.resolve(null) : resolverEnlace(tienda, controlador.signal),
             ])
             const campana = enlace?.campana ?? null
-            respuestaRef.current = conCampana(respuesta, campana)
-            tienda.set({ estado: 'listo', datos: normalizarTienda(respuestaRef.current), campana })
+            const conDemo = demo ? aplicarDemo(respuesta) : respuesta
+            respuestaRef.current = conCampana(conDemo, campana)
+            tienda.set({ estado: 'listo', datos: normalizarTienda(respuestaRef.current, new Date(), demo), campana })
             if (enlace?.abrir) tienda.set({ hoja: enlace.abrir })
-            if (!campana)
+            if (!campana && !demo)
                 registrarEventoTrackingUnaVez(config.restauranteId, config.username, 'session_start', 'storefront')
         }
         cargar().catch(() => {
@@ -156,7 +163,9 @@ function useCargarDatos(tienda: Tienda, preview: DatosPreview | undefined) {
     useEffect(() => {
         const intervalo = window.setInterval(() => {
             if (respuestaRef.current && tienda.get().estado === 'listo')
-                tienda.set({ datos: normalizarTienda(respuestaRef.current) })
+                tienda.set({
+                    datos: normalizarTienda(respuestaRef.current, new Date(), tienda.get().config.demo === true),
+                })
         }, 60_000)
         return () => window.clearInterval(intervalo)
     }, [tienda])
@@ -459,6 +468,7 @@ export function PiruSiteRoot({
 }) {
     useCargarDatos(tienda, preview)
     const acento = useAcento(tienda)
+    const demo = tienda.get().config.demo === true
     return (
         <ContextoTienda.Provider value={tienda}>
             <style>{`${CSS_RUNTIME}:root{--piru-acento:${acento.fondo};--piru-acento-texto:${acento.texto}}`}</style>
@@ -468,6 +478,11 @@ export function PiruSiteRoot({
             <PiruFooter />
             <PiruProductSheet />
             <PiruAviso />
+            {demo && (
+                <Suspense fallback={null}>
+                    <PiruDemo tienda={tienda} />
+                </Suspense>
+            )}
         </ContextoTienda.Provider>
     )
 }

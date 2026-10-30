@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import {
+    aplicarDemo,
     aplicarEscenario,
     claveLinea,
     leerLineasGuardadas,
@@ -70,6 +71,25 @@ describe('normalización de la tienda', () => {
         expect(normalizarTienda(aplicarEscenario(real, 'sin-productos')).secciones).toEqual([])
         expect(normalizarTienda(aplicarEscenario(real, 'solo-canje')).canjes.length).toBe(3)
         expect(real.restaurante.pausadoPorSuscripcion).toBe(false)
+    })
+
+    test('la demo deja la tienda abierta, con club de ejemplo y el 10% de Martina', () => {
+        const cerrada = respuesta()
+        cerrada.restaurante.pausadoPorSuscripcion = true
+        cerrada.horarios = [{ diaSemana: 1, horaApertura: '20:00:00', horaCierre: '23:00:00' }]
+        const d = normalizarTienda(aplicarDemo(cerrada), new Date(), true)
+
+        expect(d.local.abierto).toBe(true)
+        expect(d.local.pausado).toBe(false)
+        expect(d.local.sistemaPuntos).toBe(true)
+        expect(d.local.configuracionPuntos).toMatchObject({ pesosPorPunto: 100, permiteCanjeDescuento: true })
+        expect(d.productos.find((p) => p.id === 1)?.descuento).toBe(10)
+        expect(d.productos.find((p) => p.id === 2)?.descuento).toBe(10)
+        // La dirección de Martina, a unas cuadras del local (o del centro si no hay coordenadas).
+        expect(d.checkout.demoDireccion).toMatchObject({ direccion: 'San Martín 1450' })
+        expect(d.checkout.demoDireccion?.lat).toBeCloseTo(-31.6297, 3)
+        // Sin `demo`, la dirección de la demo no se expone.
+        expect(normalizarTienda(respuesta()).checkout.demoDireccion).toBeNull()
     })
 })
 

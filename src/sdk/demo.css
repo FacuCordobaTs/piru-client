@@ -1,0 +1,24 @@
+/*
+ * CSS de la demo del runtime de Páginas (`src/sdk/demo.tsx`). No lo usa la tienda: `build-runtime.ts`
+ * compila este archivo con Tailwind (sin preflight) y lo inyecta bajo `@scope ([data-piru-demo])`,
+ * así el recorrido y la isla conservan el diseño de `components/demo/` sin tocar el sitio.
+ *
+ * Sólo se compilan las clases de la demo (`@source`), no las del sitio: el sitio publicado trae su
+ * propio CSS y no tiene Tailwind. La paleta es la misma de la tienda (`paleta-piru.css`).
+ */
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css" layer(utilities);
+@import "../paleta-piru.css";
+@import "../components/demo/demo.css";
+
+/* El modo oscuro es el del panel (`next-themes` pone `.dark`), no el del sistema. */
+@custom-variant dark (&:is(.dark *));
+
+@source "../components/demo";
+@source "./demo.tsx";
+
+/* `demo.css` pinta la barra de estado del celular con la variable de la tienda. */
+:root,
+:host {
+  --foreground: #191512;
+}

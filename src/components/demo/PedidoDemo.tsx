@@ -31,10 +31,13 @@ export function PedidoDemo({
   pedido,
   local,
   onCerrar,
+  contenedor,
 }: {
   pedido: PedidoDemoInfo | null
   local: string
   onCerrar: () => void
+  /** El contenedor `[data-piru-demo]` del sitio de Páginas; sin él, el portal va al `body`. */
+  contenedor?: HTMLElement | null
 }) {
   // Mientras el diálogo se va, sigue mostrando el último pedido (sin efecto: se copia al pintar).
   const [ultimo, setUltimo] = useState(pedido)
@@ -50,7 +53,7 @@ export function PedidoDemo({
     .join('')
   return (
     <Dialog.Root open={pedido !== null} onOpenChange={(abierto) => !abierto && onCerrar()}>
-      <Dialog.Portal>
+      <Dialog.Portal container={contenedor ?? undefined}>
         <Dialog.Overlay className="demo-fondo fixed inset-0 z-[80] bg-[#120F0D]/55 backdrop-blur-[3px]" />
         <Dialog.Content
           // Como en el recorrido: el foco arranca en el diálogo, no marcado en el primer botón.

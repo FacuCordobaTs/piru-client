@@ -1,5 +1,7 @@
 /**
- * La demo de la tienda: `/:username?demo`, el link que se le manda a un local en la prospección.
+ * La demo de la tienda: `/:username?demo` en la tienda estándar y `<username>.piru.app?demo` en un
+ * sitio de Páginas (lo monta `sdk/demo.tsx` con los mismos componentes). Es el link que se le manda
+ * a un local en la prospección.
  *
  * Sobre su tienda de verdad (su carta, su logo, sus colores), un recorrido le cuenta lo que Piru
  * hace además de tomar pedidos (components/demo/) y la tienda queda como la ve Martina, una

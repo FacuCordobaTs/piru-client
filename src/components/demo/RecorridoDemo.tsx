@@ -90,10 +90,13 @@ export function RecorridoDemo({
   abierto,
   datos,
   onTerminar,
+  contenedor,
 }: {
   abierto: boolean
   datos: DatosDemo
   onTerminar: () => void
+  /** El contenedor `[data-piru-demo]` del sitio de Páginas; sin él, el portal va al `body`. */
+  contenedor?: HTMLElement | null
 }) {
   const [i, setI] = useState(0)
   const [dir, setDir] = useState<1 | -1>(1)
@@ -124,7 +127,7 @@ export function RecorridoDemo({
 
   return (
     <Dialog.Root open={abierto}>
-      <Dialog.Portal>
+      <Dialog.Portal container={contenedor ?? undefined}>
         <Dialog.Overlay className="demo-fondo fixed inset-0 z-[80] bg-[#120F0D]/55 backdrop-blur-[3px]" />
         <Dialog.Content
           ref={caja}

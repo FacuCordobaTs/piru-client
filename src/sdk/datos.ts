@@ -32,6 +32,7 @@ export type RespuestaTienda = {
     horarios?: Turno[]
     sucursales?: Record<string, unknown>[]
     franjas?: Franja[]
+    zonasEspeciales?: Record<string, unknown>[]
 }
 
 /** Producto sin los métodos (`abrir`, `agregar`), que agrega la capa de React. */
@@ -67,6 +68,55 @@ export type ProductoBase = {
 
 export type SeccionBase = { id: string; nombre: string; productos: ProductoBase[] }
 
+/** Datos del local que sólo necesita el checkout (no se exponen en `useLocal()`). */
+export type ConfiguracionPuntosCheckout = {
+    activo: boolean
+    permiteCanjeEnvioGratis: boolean
+    permiteCanjeDescuento: boolean
+    puntosEnvioGratis: number
+    descuentoPuntosCosto: number
+    descuentoMontoMinimo: number
+    descuentoTipo: 'fijo' | 'porcentaje'
+    descuentoValor: number
+    descuentoTope: number
+}
+
+export type SucursalCheckout = {
+    id: number
+    nombre: string
+    direccion: string | null
+    direccionLat: number | null
+    direccionLng: number | null
+    direccionCiudad: string | null
+    transferenciaAlias: string | null
+}
+
+export type ZonaEspecialCheckout = {
+    id: number
+    nombre: string
+    precio: number
+    horaInicio: string
+    horaFin: string
+    enVentana: boolean
+    proximaVentana: string
+}
+
+export type DatosCheckout = {
+    direccionSoloTexto: boolean
+    avisosWhatsappClienteEnabled: boolean
+    comprobantesWhatsapp: string | null
+    transferenciaAlias: string | null
+    usarFranjas: boolean
+    permiteProgramados: boolean
+    soloProgramados: boolean
+    permitirPrePedidosZonas: boolean
+    codigoDescuentoEnabled: boolean
+    configuracionPuntos: ConfiguracionPuntosCheckout | null
+    sucursales: SucursalCheckout[]
+    franjas: Franja[]
+    zonasEspeciales: ZonaEspecialCheckout[]
+}
+
 export type DatosTienda = {
     local: Local
     productos: ProductoBase[]
@@ -74,6 +124,7 @@ export type DatosTienda = {
     canjes: ProductoBase[]
     destacado: ProductoBase | null
     contenido: Contenido
+    checkout: DatosCheckout
 }
 
 const texto = (v: unknown): string | null => (typeof v === 'string' && v.trim() ? v.trim() : null)
@@ -209,9 +260,63 @@ function reglasPuntos(bruto: unknown): ReglasPuntos | null {
     const c = bruto as Record<string, unknown>
     return {
         pesosPorPunto: numero(c.pesosPorPunto),
-        permiteCanjeEnvioGratis: c.permitirCanjeEnvioGratis === true,
-        permiteCanjeDescuento: c.permitirCanjeDescuento === true,
+        permiteCanjeEnvioGratis: c.permitirCanjeEnvioGratis === true || c.permiteCanjeEnvioGratis === true,
+        permiteCanjeDescuento: c.permitirCanjeDescuento === true || c.permiteCanjeDescuento === true,
+        puntosEnvioGratis: numero(c.puntosEnvioGratis) ?? 0,
+        descuentoPuntosCosto: numero(c.descuentoPuntosCosto) ?? 0,
+        descuentoMontoMinimo: numero(c.descuentoMontoMinimo) ?? 0,
+        descuentoTipo: c.descuentoTipo === 'porcentaje' ? 'porcentaje' : 'fijo',
+        descuentoValor: numero(c.descuentoValor) ?? 0,
+        descuentoTope: numero(c.descuentoTope) ?? 0,
     }
+}
+
+function configuracionPuntosCheckout(bruto: unknown): ConfiguracionPuntosCheckout | null {
+    const r = reglasPuntos(bruto)
+    if (!r) return null
+    return {
+        activo: true,
+        permiteCanjeEnvioGratis: r.permiteCanjeEnvioGratis,
+        permiteCanjeDescuento: r.permiteCanjeDescuento,
+        puntosEnvioGratis: r.puntosEnvioGratis ?? 0,
+        descuentoPuntosCosto: r.descuentoPuntosCosto ?? 0,
+        descuentoMontoMinimo: r.descuentoMontoMinimo ?? 0,
+        descuentoTipo: r.descuentoTipo ?? 'fijo',
+        descuentoValor: r.descuentoValor ?? 0,
+        descuentoTope: r.descuentoTope ?? 0,
+    }
+}
+
+function sucursalesCheckout(bruto: unknown): SucursalCheckout[] {
+    if (!Array.isArray(bruto)) return []
+    return bruto
+        .map((s) => s as Record<string, unknown>)
+        .filter((s) => id(s.id))
+        .map((s) => ({
+            id: s.id as number,
+            nombre: texto(s.nombre) ?? '',
+            direccion: texto(s.direccion),
+            direccionLat: numero(s.direccionLat),
+            direccionLng: numero(s.direccionLng),
+            direccionCiudad: texto(s.direccionCiudad),
+            transferenciaAlias: texto(s.transferenciaAlias),
+        }))
+}
+
+function zonasEspecialesCheckout(bruto: unknown): ZonaEspecialCheckout[] {
+    if (!Array.isArray(bruto)) return []
+    return bruto
+        .map((z) => z as Record<string, unknown>)
+        .filter((z) => id(z.id) && texto(z.nombre))
+        .map((z) => ({
+            id: z.id as number,
+            nombre: texto(z.nombre)!,
+            precio: numero(z.precio) ?? 0,
+            horaInicio: texto(z.horaInicio) ?? '',
+            horaFin: texto(z.horaFin) ?? '',
+            enVentana: z.enVentana === true,
+            proximaVentana: texto(z.proximaVentana) ?? '',
+        }))
 }
 
 export function normalizarTienda(respuesta: RespuestaTienda, ahora = new Date()): DatosTienda {
@@ -259,6 +364,21 @@ export function normalizarTienda(respuesta: RespuestaTienda, ahora = new Date())
         .map(normalizarProducto)
     const secciones = armarCarta(productos)
     const tiendaBruta = leerTienda(r.tienda)
+    const checkout: DatosCheckout = {
+        direccionSoloTexto: r.direccionSoloTexto === true,
+        avisosWhatsappClienteEnabled: r.avisosWhatsappClienteEnabled !== false,
+        comprobantesWhatsapp: texto(r.comprobantesWhatsapp),
+        transferenciaAlias: texto(r.transferenciaAlias),
+        usarFranjas: r.usarFranjasHorario === true,
+        permiteProgramados: r.permitirPedidosProgramados === true,
+        soloProgramados: r.soloPedidosProgramados === true,
+        permitirPrePedidosZonas: r.permitirPrePedidosZonasEspeciales === true,
+        codigoDescuentoEnabled: r.codigoDescuentoEnabled !== false,
+        configuracionPuntos: local.sistemaPuntos ? configuracionPuntosCheckout(r.configuracionPuntos) : null,
+        sucursales: sucursalesCheckout(respuesta.sucursales),
+        franjas: Array.isArray(respuesta.franjas) ? respuesta.franjas : [],
+        zonasEspeciales: zonasEspecialesCheckout(respuesta.zonasEspeciales ?? r.zonasEspeciales),
+    }
     return {
         local,
         productos: secciones.flatMap((s) => s.productos),
@@ -266,6 +386,7 @@ export function normalizarTienda(respuesta: RespuestaTienda, ahora = new Date())
         canjes: productos.filter((p) => p.soloCanjePuntos && p.disponible && local.sistemaPuntos),
         destacado: elegirProductoDestacado(productos, tiendaBruta.productoDestacadoId),
         contenido,
+        checkout,
     }
 }
 

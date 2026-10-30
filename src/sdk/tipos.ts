@@ -54,6 +54,9 @@ export interface Sucursal {
     id: number
     nombre: string
     direccion: string | null
+    direccionLat?: number | null
+    direccionLng?: number | null
+    direccionCiudad?: string | null
 }
 
 export interface MetodoPago {
@@ -66,6 +69,17 @@ export interface ReglasPuntos {
     pesosPorPunto: number | null
     permiteCanjeEnvioGratis: boolean
     permiteCanjeDescuento: boolean
+    /** Puntos que cuesta el envío gratis. */
+    puntosEnvioGratis?: number
+    /** Puntos que cuesta el descuento. */
+    descuentoPuntosCosto?: number
+    /** Monto mínimo del carrito para canjear el descuento. */
+    descuentoMontoMinimo?: number
+    /** `fijo` = pesos; `porcentaje` = % del subtotal. */
+    descuentoTipo?: 'fijo' | 'porcentaje'
+    descuentoValor?: number
+    /** Tope en pesos del descuento porcentual (0 = sin tope). */
+    descuentoTope?: number
 }
 
 export interface Local {
@@ -257,7 +271,7 @@ export interface CarritoApi {
     blockReason: MotivoBloqueo
     submitting: boolean
     error: string | null
-    /** Lleva el carrito al checkout de Piru (`my.piru.app`). En la vista previa sólo avisa. */
+    /** Activa el checkout de Piru incluido en la página (`<PiruCheckout />`). Sin él, navega a la tienda estándar. */
     checkout(): Promise<void>
 }
 
@@ -294,6 +308,48 @@ export interface NavegacionCarta {
     ir(indice: number): void
 }
 
+/**
+ * Cómo se presenta el checkout incluido en la página. El diseño elige la forma; la lógica, los
+ * datos del comprador y el cobro quedan dentro del runtime.
+ *
+ * - `pasos`: hoja inferior con un paso por pantalla (datos, entrega, pago).
+ * - `hoja`: hoja inferior con todo el formulario junto.
+ * - `pagina`: pantalla completa con todo el formulario junto, sin pasos.
+ */
+export type CheckoutVariante = 'pasos' | 'hoja' | 'pagina'
+
+/** Lo único que el diseño puede cambiar del checkout: su piel. */
+export interface CheckoutEstilo {
+    /** Color de botones, foco y selección. Por defecto, el acento de la tienda. */
+    acento?: string
+    /** Color del texto. */
+    texto?: string
+    /** Fondo de la hoja o de la página. */
+    superficie?: string
+    /** Color de las líneas y bordes. */
+    linea?: string
+    /** Radio de tarjetas y botones, en px (0 a 32). */
+    radio?: number
+    /** Familia tipográfica; por defecto, la del sitio. */
+    fuente?: string
+    /** Texto del botón que crea el pedido. */
+    textoConfirmar?: string
+}
+
+export interface Checkout {
+    /** `true` mientras el checkout está abierto. */
+    abierto: boolean
+    /** Abre el checkout con el carrito actual. */
+    abrir(): void
+    /** Lo cierra sin borrar el carrito. */
+    cerrar(): void
+}
+
+export interface PiruCheckoutProps {
+    variante?: CheckoutVariante
+    estilo?: CheckoutEstilo
+}
+
 export interface ApiTienda {
     useSitio(): Sitio
     useLocal(): EstadoLocal
@@ -305,6 +361,8 @@ export interface ApiTienda {
     usePuntos(): Puntos
     useLinks(): Links
     useNavegacionCarta(cantidad: number): NavegacionCarta
+    /** Abre y cierra el checkout que vive en la página (`<PiruCheckout />`). */
+    useCheckout(): Checkout
     /** $2.000 o $2.000,50. */
     formatPesos(valor: number | string): string
     /** "19:30" a partir de "19:30:00". */
@@ -321,4 +379,10 @@ export interface ApiTienda {
     ordenVisual<T extends { imagenUrl?: string | null; imagenesExtra?: string[] | null }>(productos: T[]): { conFoto: T[]; sinFoto: T[] }
     /** Bloque de canjes de puntos de Piru (opcional). No muestra nada si el local no tiene canjes. */
     PiruCanjes(props: { titulo?: string }): ReactElement | null
+    /**
+     * El checkout de Piru, incluido una sola vez en la página. `carrito.checkout()` (o
+     * `useCheckout().abrir()`) lo activa; el sitio no recibe ni puede leer los datos que se
+     * cargan adentro. Se le pasan sólo propiedades de diseño.
+     */
+    PiruCheckout(props: PiruCheckoutProps): ReactElement | null
 }

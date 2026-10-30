@@ -19,6 +19,7 @@ import type { EstadoRuntime, Tienda } from './store'
 import type {
     CarritoApi,
     Carta,
+    Checkout,
     Contenido,
     EstadoCampana,
     EstadoLocal,
@@ -188,12 +189,32 @@ export function useCarrito(): CarritoApi {
     }, [tienda, lineasGuardadas, datos, submitting, error])
 }
 
-/** `carrito.checkout()`: crea el carrito en el servidor y navega al checkout de Piru (otro origen). */
+/** Estado del checkout que vive en la página (`<PiruCheckout />`). */
+export function useCheckout(): Checkout {
+    const tienda = useTiendaInterna()
+    const abierto = useEstado((e) => e.checkoutAbierto)
+    return useMemo(
+        () => ({
+            abierto,
+            abrir: () => tienda.set({ checkoutAbierto: true, error: null }),
+            cerrar: () => tienda.set({ checkoutAbierto: false }),
+        }),
+        [tienda, abierto]
+    )
+}
+
+/** `carrito.checkout()`: abre el checkout de la página o, si el diseño no lo incluyó, navega al de Piru. */
 export async function irAlCheckout(tienda: Tienda): Promise<void> {
     const estado = tienda.get()
     if (!estado.datos || estado.submitting) return
     const lineas = lineasCarrito(estado.lineas, [...estado.datos.productos, ...estado.datos.canjes])
     if (motivoBloqueo(lineas, estado.datos.local) !== null) return
+    // Con `<PiruCheckout />` montado, todo el checkout ocurre en esta página: no se navega ni se
+    // crea el carrito de handoff. El sitio no ve los datos que se cargan adentro.
+    if (estado.checkoutMontado) {
+        tienda.set({ checkoutAbierto: true, error: null })
+        return
+    }
     if (estado.sitio.isPreview) {
         tienda.avisar('En la vista previa no se compra: el checkout se abre en el sitio publicado.')
         return

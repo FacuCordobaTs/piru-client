@@ -8,10 +8,12 @@
 import { DIAS, formatoPesos, hhmm, ordenVisual, precioProducto, SEMANA, textoEstado, turnosDelDia } from '@/lib/tienda'
 import { fotosDeProducto } from '@/lib/fotosProducto'
 import { PiruCanjes } from './componentes'
+import { PiruCheckout } from './checkout'
 import {
     useCampana,
     useCarrito,
     useCarta,
+    useCheckout,
     useContenido,
     useHorarios,
     useLinks,
@@ -29,11 +31,13 @@ export {
     useContenido,
     useHorarios,
     useCarrito,
+    useCheckout,
     useCampana,
     usePuntos,
     useLinks,
     useNavegacionCarta,
     PiruCanjes,
+    PiruCheckout,
     DIAS,
     SEMANA,
     ordenVisual,
@@ -54,6 +58,7 @@ void ({
     useContenido,
     useHorarios,
     useCarrito,
+    useCheckout,
     useCampana,
     usePuntos,
     useLinks,
@@ -69,6 +74,7 @@ void ({
     precioProducto: (p: { precio: number | string; descuento?: number | null }) => precioProducto(p),
     ordenVisual,
     PiruCanjes,
+    PiruCheckout,
 } satisfies ApiTienda)
 
 // Sólo para el boot del runtime.

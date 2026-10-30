@@ -26,6 +26,10 @@ export type EstadoRuntime = {
     error: string | null
     /** Producto con la hoja de opciones abierta. */
     hoja: number | null
+    /** El checkout incluido en la página está abierto. */
+    checkoutAbierto: boolean
+    /** La página montó `<PiruCheckout />`: `carrito.checkout()` puede abrirlo en vez de navegar. */
+    checkoutMontado: boolean
     campana: Campana | null
     aviso: { texto: string; tono: 'info' | 'ok' | 'error' } | null
 }
@@ -60,6 +64,8 @@ export function crearTienda(config: ConfigSitio) {
         submitting: false,
         error: null,
         hoja: null,
+        checkoutAbierto: false,
+        checkoutMontado: false,
         campana: null,
         aviso: null,
     }

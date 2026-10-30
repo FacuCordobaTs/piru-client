@@ -11,6 +11,7 @@ import {
 } from '../src/sdk/datos'
 import { hidratarCarrito } from '../src/features/tienda/carritoPaginas'
 import type { ProductoTienda } from '../src/features/tienda/datos'
+import { calcularTotalesCheckout, descuentoPuntosCheckout, itemsParaPedido } from '../src/sdk/checkoutDatos'
 
 const respuesta = (): RespuestaTienda => ({
     restaurante: {
@@ -124,5 +125,38 @@ describe('checkout de Páginas', () => {
         expect(descartados).toBe(3)
         expect(items).toHaveLength(1)
         expect(items[0]).toMatchObject({ productoId: 2, nombre: 'Doble - Doble', precio: '9700.00', cantidad: 2, ingredientesExcluidosNombres: ['Cebolla'], nota: 'sin sal', esCanjePuntos: false })
+    })
+
+    test('arma el pedido con los extras del catálogo, no con precios del sitio', () => {
+        const d = normalizarTienda(respuesta())
+        const [item] = itemsParaPedido(
+            [{ productoId: 2, cantidad: 2, varianteId: 22, agregados: [5], ingredientesExcluidos: [9], nota: 'sin sal', key: 'k' }],
+            d.productos
+        )
+        expect(item).toEqual({
+            productoId: 2,
+            cantidad: 2,
+            varianteId: 22,
+            agregados: [{ id: 5, nombre: 'Cheddar', precio: '700' }],
+            ingredientesExcluidos: [9],
+            nota: 'sin sal',
+        })
+    })
+
+    test('los puntos y el total respetan la regla del backend', () => {
+        const base = { permiteCanjeEnvioGratis: true, permiteCanjeDescuento: true, puntosEnvioGratis: 300, descuentoPuntosCosto: 500, descuentoMontoMinimo: 0, descuentoTope: 0 }
+        expect(descuentoPuntosCheckout({ ...base, activo: true, descuentoTipo: 'fijo', descuentoValor: 500 }, 10000)).toBe(500)
+        expect(descuentoPuntosCheckout({ ...base, activo: true, descuentoTipo: 'porcentaje', descuentoValor: 10, descuentoTope: 300 }, 10000)).toBe(300)
+        expect(descuentoPuntosCheckout({ ...base, activo: true, descuentoTipo: 'fijo', descuentoValor: 500, descuentoMontoMinimo: 12000 }, 10000)).toBe(0)
+        expect(descuentoPuntosCheckout(null, 10000)).toBe(0)
+
+        expect(calcularTotalesCheckout({ itemsTotal: 10000, deliveryFee: 1900, canjeEnvio: false, descuentoPuntos: 500, descuento: 200 })).toMatchObject({
+            subtotal: 10000,
+            envio: 1900,
+            descuentoPuntos: 500,
+            descuento: 200,
+            total: 11200,
+        })
+        expect(calcularTotalesCheckout({ itemsTotal: 10000, deliveryFee: 1900, canjeEnvio: true, descuentoPuntos: 500, descuento: 0 }).total).toBe(9500)
     })
 })

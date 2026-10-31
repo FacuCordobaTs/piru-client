@@ -237,6 +237,17 @@ export function useDeliveryCampanas({
                 })
 
                 // Configurar beneficio de descuento si está presente
+                if (data.puntos?.activo && data.puntos.cantidad > 0) {
+                    setDescuentoGrowthCodigo(null)
+                    const desde = Number(data.puntos.montoMinimo) > 0
+                        ? ` en un pedido desde $${Number(data.puntos.montoMinimo).toLocaleString('es-AR')}`
+                        : ''
+                    setBannerGrowth({
+                        titulo: 'Sumás puntos extra',
+                        detalle: `${Number(data.puntos.cantidad).toLocaleString('es-AR')} puntos${desde}. Se acreditan cuando se cobra el pedido.`,
+                    })
+                    toast.success(`Sumás ${Number(data.puntos.cantidad).toLocaleString('es-AR')} puntos extra al cobrar 🎁`)
+                }
                 if (data.descuento?.activo && data.descuento?.porcentaje > 0) {
                     const pct = data.descuento.porcentaje
                     const exp = data.descuento.expiraAt
@@ -399,6 +410,18 @@ export function useDeliveryCampanas({
 
     useEffect(() => {
         if (!campana || searchParams.has('tk') || searchParams.has('c') || tkAplicadoRef.current) return
+
+        if (campana.beneficioTipo === 'puntos' && (campana.puntosBeneficio ?? 0) > 0) {
+            setDescuentoGrowthCodigo(null)
+            const desde = Number(campana.puntosMontoMinimo ?? 0) > 0
+                ? ` en un pedido desde $${Number(campana.puntosMontoMinimo).toLocaleString('es-AR')}`
+                : ''
+            setBannerGrowth({
+                titulo: 'Sumás puntos extra',
+                detalle: `${Number(campana.puntosBeneficio).toLocaleString('es-AR')} puntos${desde}. Se acreditan cuando se cobra el pedido.`,
+            })
+            return
+        }
 
         if (campana.tipo === 'reactivacion' || campana.slug === 'reactivacion') {
             const pct = campana.descuentoPorcentaje > 0 ? campana.descuentoPorcentaje : 10

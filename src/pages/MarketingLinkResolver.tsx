@@ -6,7 +6,7 @@ import { contextoParaResolverMarketing, guardarContextoTracking, limpiarContexto
 import { rutaTienda, usernameSitio } from '@/store-sites/actual'
 
 type Destino = { tipo: 'tienda' } | { tipo: 'producto'; productoId: number } | { tipo: 'carrito'; carritoRep: string }
-type Respuesta = { data?: { encontrada?: boolean; destino?: Destino; contexto?: { campaniaSlug?: string; campanaId?: number }; beneficio?: { codigoDescuentoId: number; codigo: string }; campana?: CampanaPublica } }
+type Respuesta = { data?: { encontrada?: boolean; destino?: Destino; contexto?: { campaniaSlug?: string; campanaId?: number }; beneficio?: { codigoDescuentoId?: number; codigo?: string; puntos?: { cantidad: number; montoMinimo: number } }; campana?: CampanaPublica } }
 const API_URL = (import.meta.env.VITE_API_URL || 'https://api.piru.app/api').replace(/\/$/, '')
 
 function urlDestino(username: string, destino?: Destino) {
@@ -60,6 +60,9 @@ export function CampanaLinkResolver() {
           productoId: destino?.tipo === 'producto' ? destino.productoId : (campanaBase?.productoId ?? null),
           carritoRep: destino?.tipo === 'carrito' ? destino.carritoRep : (campanaBase?.carritoRep ?? null),
           descuentoPorcentaje: campanaBase?.descuentoPorcentaje ?? 0,
+          beneficioTipo: campanaBase?.beneficioTipo,
+          puntosBeneficio: campanaBase?.puntosBeneficio ?? 0,
+          puntosMontoMinimo: campanaBase?.puntosMontoMinimo ?? 0,
           limiteUsos: campanaBase?.limiteUsos ?? null,
           usosActuales: campanaBase?.usosActuales ?? 0,
           usosRestantes: campanaBase?.usosRestantes ?? null,

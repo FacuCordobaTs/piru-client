@@ -82,6 +82,9 @@ export interface CampanaPublica {
     productoId: number | null
     carritoRep?: string | null
     descuentoPorcentaje: number
+    beneficioTipo?: 'descuento' | 'puntos'
+    puntosBeneficio?: number
+    puntosMontoMinimo?: number
     limiteUsos: number | null
     usosActuales: number
     usosRestantes: number | null

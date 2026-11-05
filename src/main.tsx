@@ -15,6 +15,7 @@ import PedidoStatus from './pages/PedidoStatus'
 import { TrackingBootstrap } from './components/TrackingBootstrap'
 import { CampanaLinkResolver, RecetaLinkResolver } from './pages/MarketingLinkResolver'
 import CheckoutPaginas from './pages/CheckoutPaginas'
+import GrupoPaginas from './pages/GrupoPaginas'
 import { storeSlugFromHostname } from './lib/store-domain'
 import { getStoreSite } from './store-sites/registry'
 
@@ -80,6 +81,11 @@ const rutas = [
   {
     path: "/:username/checkout",
     element: <CheckoutPaginas />,
+  },
+  // Pedido en grupo desde un sitio de Páginas (`usePedidoGrupal`).
+  {
+    path: "/:username/grupo",
+    element: <GrupoPaginas />,
   },
   {
     path: "/:username/success",

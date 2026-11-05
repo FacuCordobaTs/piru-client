@@ -112,7 +112,7 @@ export function cspSitio(nonce: string, env: EnvPaginas): string {
         "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
         "font-src 'self' https://fonts.gstatic.com",
         `img-src 'self' data: blob: ${imagenes}`,
-        "media-src 'self' blob:",
+        `media-src 'self' blob: ${imagenes}`,
         // 'self': el beacon de Cloudflare (`/cdn-cgi/rum`) va al mismo origen, que controla el Worker.
         `connect-src 'self' ${api}`,
         'frame-src https://www.google.com https://maps.google.com',

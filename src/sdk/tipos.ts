@@ -345,6 +345,17 @@ export interface Checkout {
     cerrar(): void
 }
 
+/**
+ * El pedido en grupo ("pedir entre varios"): se crea un link para compartir y cada persona elige
+ * lo suyo desde su celular. Lo arma Piru en la tienda estándar; la página sólo ofrece el botón.
+ */
+export interface PedidoGrupal {
+    /** La tienda cargó y no está pausada: se puede armar un pedido en grupo. */
+    disponible: boolean
+    /** Lleva a crear el pedido en grupo (en la tienda de Piru). En la vista previa del editor no navega. */
+    abrir(): void
+}
+
 export interface PiruCheckoutProps {
     variante?: CheckoutVariante
     estilo?: CheckoutEstilo
@@ -363,6 +374,8 @@ export interface ApiTienda {
     useNavegacionCarta(cantidad: number): NavegacionCarta
     /** Abre y cierra el checkout que vive en la página (`<PiruCheckout />`). */
     useCheckout(): Checkout
+    /** Pedir entre varios: abre el armado del pedido en grupo de Piru. */
+    usePedidoGrupal(): PedidoGrupal
     /** $2.000 o $2.000,50. */
     formatPesos(valor: number | string): string
     /** "19:30" a partir de "19:30:00". */

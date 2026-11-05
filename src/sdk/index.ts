@@ -19,6 +19,7 @@ import {
     useLinks,
     useLocal,
     useNavegacionCarta,
+    usePedidoGrupal,
     usePuntos,
     useSitio,
 } from './hooks'
@@ -36,6 +37,7 @@ export {
     usePuntos,
     useLinks,
     useNavegacionCarta,
+    usePedidoGrupal,
     PiruCanjes,
     PiruCheckout,
     DIAS,
@@ -63,6 +65,7 @@ void ({
     usePuntos,
     useLinks,
     useNavegacionCarta,
+    usePedidoGrupal,
     formatPesos,
     formatHora,
     turnosDelDia,

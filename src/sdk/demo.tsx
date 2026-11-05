@@ -79,7 +79,7 @@ export default function PiruDemo({ tienda }: { tienda: Tienda }) {
                 nombre: local.nombre,
                 imagenUrl: local.logo,
                 imagenLightUrl: local.logoClaro,
-                // El pedido grupal (sala) todavía no existe en Páginas: no se lo ofrecemos.
+                // En una página el pedido en grupo depende de su sección «Pedir entre varios», que el runtime no ve: el recorrido no lo promete.
                 orderGroupEnabled: false,
             },
             productos,

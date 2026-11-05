@@ -27,6 +27,7 @@ import type {
     ItemCarrito,
     Links,
     NavegacionCarta,
+    PedidoGrupal,
     Producto,
     Puntos,
     ResultadoAgregar,
@@ -291,6 +292,30 @@ export function useLinks(): Links {
     const datos = useEstado((e) => e.datos)
     // eslint-disable-next-line react-hooks/exhaustive-deps
     return useMemo(() => linksDe(tienda.get()), [tienda, datos])
+}
+
+/**
+ * Pedir entre varios: la sala la crea la tienda estándar (`/<username>/grupo`), donde también se
+ * comparte el link y se cierra el pedido. En la vista previa avisa en vez de salir del editor.
+ */
+export function usePedidoGrupal(): PedidoGrupal {
+    const tienda = useTiendaInterna()
+    const estado = useEstado((e) => e.estado)
+    const pausado = useEstado((e) => e.datos?.local.pausado ?? false)
+    return useMemo(
+        () => ({
+            disponible: estado === 'listo' && !pausado,
+            abrir: () => {
+                const { config, sitio } = tienda.get()
+                if (sitio.isPreview) {
+                    tienda.avisar('En la vista previa no se abre el pedido en grupo. Probalo en tu página publicada.')
+                    return
+                }
+                window.location.assign(`${config.tiendaEstandar.replace(/\/$/, '')}/grupo`)
+            },
+        }),
+        [tienda, estado, pausado]
+    )
 }
 
 export function useNavegacionCarta(cantidad: number): NavegacionCarta {

@@ -1,6 +1,6 @@
 /*
  * La demo de la tienda (components/demo/). Las escenas usan las piezas de las ilustraciones de la
- * guía de marketers (marketers/src/components/escenas/escenas.css) y el celular es el marco de la
+ * guía de Marketing (admin/src/marketing/components/escenas/escenas.css) y el celular es el marco de la
  * landing (landing/src/components/marcos/Telefono.astro). Regla de oro de esas piezas: el estado
  * final es el estilo normal y la animación sólo dice de dónde viene, así que con movimiento
  * reducido (al final del archivo) queda la ilustración completa y quieta.

@@ -9,7 +9,7 @@
  * de recompra que la trajo. Es una simulación en el navegador: no registra visitas ni eventos (ni
  * GTM ni pixel), no consulta ni guarda nada de Martina y el pedido no se crea.
  *
- * Repite reglas del dominio, como las ilustraciones de la guía de marketers: la escalera de
+ * Repite reglas del dominio, como las ilustraciones de la guía de Marketing: la escalera de
  * recompra (el 2º mensaje va con 10%), el club de puntos (1 punto cada $100, se acreditan al
  * cobrar) y el "se está yendo" (1,5 veces su ritmo sin pedir). Si cambia una regla, se actualiza
  * también acá y en las escenas.
@@ -30,7 +30,7 @@ export function urlPanelDemo(username: string): string {
   return `${URL_PANEL.replace(/\/+$/, '')}/demo/${encodeURIComponent(username)}`
 }
 
-/** La clienta de la demo: la misma de la landing y del recorrido de marketers. */
+/** La clienta de la demo: la misma de la landing y del recorrido de Marketing. */
 export const CLIENTA_DEMO = {
   nombre: 'Martina González',
   corto: 'Martina',

@@ -49,7 +49,7 @@
   --color-sidebar-ring: var(--sidebar-ring);
 }
 
-/* La paleta de Piru (la de la landing y la app de marketers) para la demo de la tienda
+/* La paleta de Piru (la de la landing y Marketing del panel) para la demo de la tienda
    (components/demo/): fija, no la cambian el tema del local ni el modo oscuro. Vive en
    paleta-piru.css porque el runtime de Páginas compila la misma paleta para la demo del sitio. */
 

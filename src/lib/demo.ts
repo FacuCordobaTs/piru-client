@@ -11,7 +11,7 @@
  *
  * Repite reglas del dominio, como las ilustraciones de la guía de Marketing: la escalera de
  * recompra (el 2º mensaje va con 10%), el club de puntos (1 punto cada $100, se acreditan al
- * cobrar) y el "se está yendo" (1,5 veces su ritmo sin pedir). Si cambia una regla, se actualiza
+ * despachar) y el "se está yendo" (1,5 veces su ritmo sin pedir). Si cambia una regla, se actualiza
  * también acá y en las escenas.
  */
 
@@ -190,7 +190,7 @@ type RestauranteMensaje = {
 
 /**
  * El pedido de la demo no se crea: se arma acá con el mismo texto que el cliente le manda al local
- * por WhatsApp (`buildWhatsappOrderMessage`, el del flujo real) y los puntos que sumaría al cobrarse.
+ * por WhatsApp (`buildWhatsappOrderMessage`, el del flujo real) y los puntos que sumaría al despacharse.
  */
 export function armarPedidoDemo(
   checkout: CheckoutPedidoDemo,

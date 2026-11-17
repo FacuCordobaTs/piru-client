@@ -244,9 +244,9 @@ export function useDeliveryCampanas({
                         : ''
                     setBannerGrowth({
                         titulo: 'Sumás puntos extra',
-                        detalle: `${Number(data.puntos.cantidad).toLocaleString('es-AR')} puntos${desde}. Se acreditan cuando se cobra el pedido.`,
+                        detalle: `${Number(data.puntos.cantidad).toLocaleString('es-AR')} puntos${desde}. Se acreditan cuando se despacha el pedido.`,
                     })
-                    toast.success(`Sumás ${Number(data.puntos.cantidad).toLocaleString('es-AR')} puntos extra al cobrar 🎁`)
+                    toast.success(`Sumás ${Number(data.puntos.cantidad).toLocaleString('es-AR')} puntos extra al despachar 🎁`)
                 }
                 if (data.descuento?.activo && data.descuento?.porcentaje > 0) {
                     const pct = data.descuento.porcentaje
@@ -418,7 +418,7 @@ export function useDeliveryCampanas({
                 : ''
             setBannerGrowth({
                 titulo: 'Sumás puntos extra',
-                detalle: `${Number(campana.puntosBeneficio).toLocaleString('es-AR')} puntos${desde}. Se acreditan cuando se cobra el pedido.`,
+                detalle: `${Number(campana.puntosBeneficio).toLocaleString('es-AR')} puntos${desde}. Se acreditan cuando se despacha el pedido.`,
             })
             return
         }

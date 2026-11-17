@@ -8,7 +8,7 @@ const TOPE = 1000
 const RUTA = 'M 104 212 C 150 236, 196 150, 246 112'
 
 /**
- * Paso 4: un pedido cobrado le suma puntos a Martina (1 cada $100, la regla por defecto del club)
+ * Paso 4: un pedido despachado le suma puntos a Martina (1 cada $100, la regla por defecto del club)
  * y llega a los 740 que tiene en la demo: ya alcanza el envío gratis o el descuento, y le falta
  * poco para un producto del local.
  */
@@ -23,7 +23,7 @@ export function ClubPuntos({ datos }: { datos: DatosDemo }) {
   ]
   return (
     <Escena
-      etiqueta={`Un pedido cobrado le suma ${suma} puntos a ${CLIENTA_DEMO.corto}, que llega a ${CLIENTA_DEMO.puntos} en el club de ${datos.local}: ya puede canjear el envío gratis o el descuento.`}
+      etiqueta={`Un pedido despachado le suma ${suma} puntos a ${CLIENTA_DEMO.corto}, que llega a ${CLIENTA_DEMO.puntos} en el club de ${datos.local}: ya puede canjear el envío gratis o el descuento.`}
     >
       <div className="e-izquierda e-tarjeta absolute left-[8px] top-[22px] w-[152px] p-3" style={d(0)}>
         <p className="text-[12px] font-semibold text-ink">Pedido #1302</p>

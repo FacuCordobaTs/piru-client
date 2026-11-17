@@ -97,7 +97,7 @@ export function PedidoDemo({
 
           <Dialog.Description className="mt-3.5 shrink-0 text-balance text-[14.5px] leading-[1.5] text-ink-2">
             En tu tienda, el pedido te llega así a tu WhatsApp, queda en tu panel y {nombre} suma{' '}
-            {mostrado?.puntos ?? 0} puntos cuando lo cobrás.
+            {mostrado?.puntos ?? 0} puntos cuando lo despachás.
           </Dialog.Description>
 
           <div className="mt-4 flex w-full shrink-0 flex-col items-center gap-1">

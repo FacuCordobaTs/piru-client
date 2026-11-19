@@ -7,12 +7,19 @@
  * bienvenida, la isla que lleva al panel y el pedido de prueba. Se montan sobre el diseño propio
  * en un contenedor `[data-piru-demo]` y su CSS (Tailwind compilado en `build-runtime.ts`) va bajo
  * `@scope`, así no toca los estilos del sitio.
+ *
+ * Antes del recorrido pasa la intro (en cada carga) y todo toma el aspecto del sitio
+ * (`temaSitio.ts`). El celular del recorrido y de la intro muestra la página real en un iframe
+ * (`?demo&vista`); adentro de ese iframe esta demo no monta nada.
  */
 import { useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { IslaPanelDemo } from '@/components/demo/IslaPanelDemo'
 import { PedidoDemo } from '@/components/demo/PedidoDemo'
 import { RecorridoDemo } from '@/components/demo/RecorridoDemo'
+import { IntroDemo, productoIntro } from '@/components/demo/IntroDemo'
+import { ESTILO_VISTA, VistaSitio, esVistaSitio, urlVistaSitio } from '@/components/demo/VistaSitio'
+import { useTemaSitio } from '@/components/demo/temaSitio'
 import { datosDemo } from '@/components/demo/escenas/datos'
 import { useCarta, useLocal, useSitio } from '@piru/tienda'
 import { marcarRecorridoDemoVisto, recorridoDemoVisto, type PedidoDemoInfo } from '@/lib/demo'
@@ -20,6 +27,11 @@ import type { Tienda } from './store'
 import CSS_DEMO from 'piru:demo-css'
 
 export default function PiruDemo({ tienda }: { tienda: Tienda }) {
+    if (esVistaSitio()) return <style>{ESTILO_VISTA}</style>
+    return <Demo tienda={tienda} />
+}
+
+function Demo({ tienda }: { tienda: Tienda }) {
     const { local } = useLocal()
     const carta = useCarta()
     const sitio = useSitio()
@@ -27,6 +39,9 @@ export default function PiruDemo({ tienda }: { tienda: Tienda }) {
     const [pedido, setPedido] = useState<PedidoDemoInfo | null>(tienda.get().pedidoDemo)
     const [recorrido, setRecorrido] = useState(() => !recorridoDemoVisto(sitio.username))
     const [isla, setIsla] = useState(false)
+    const [intro, setIntro] = useState(true)
+    const tema = useTemaSitio(local?.colores.primario)
+    const vistaUrl = useMemo(urlVistaSitio, [])
     const [scrollDir, setScrollDir] = useState<'up' | 'down' | null>(null)
 
     // El checkout de la página no crea el pedido en la demo: guarda acá el mensaje de WhatsApp.
@@ -34,10 +49,10 @@ export default function PiruDemo({ tienda }: { tienda: Tienda }) {
 
     // La isla baja medio segundo después de cerrar el recorrido (o de cargar, si ya lo vio).
     useEffect(() => {
-        if (recorrido) return
+        if (recorrido || intro) return
         const tiempo = window.setTimeout(() => setIsla(true), 500)
         return () => window.clearTimeout(tiempo)
-    }, [recorrido])
+    }, [recorrido, intro])
 
     // La isla se corre un poco con el scroll, como en la tienda estándar.
     useEffect(() => {
@@ -74,7 +89,7 @@ export default function PiruDemo({ tienda }: { tienda: Tienda }) {
                 disponible: p.disponible,
             }))
         )
-        return datosDemo(
+        const base = datosDemo(
             {
                 nombre: local.nombre,
                 imagenUrl: local.logo,
@@ -85,7 +100,8 @@ export default function PiruDemo({ tienda }: { tienda: Tienda }) {
             productos,
             window.location.host
         )
-    }, [local, carta])
+        return { ...base, vistaUrl }
+    }, [local, carta, vistaUrl])
 
     const terminarRecorrido = () => {
         marcarRecorridoDemoVisto(sitio.username)
@@ -101,8 +117,19 @@ export default function PiruDemo({ tienda }: { tienda: Tienda }) {
                         {local && datos && (
                             <>
                                 <IslaPanelDemo username={sitio.username} visible={isla} scrollDir={scrollDir} />
+                                {intro && (
+                                    <IntroDemo
+                                        local={local.nombre}
+                                        tema={tema}
+                                        logo={local.logoClaro ?? local.logo}
+                                        producto={productoIntro(datos.destacados)}
+                                        pagina={<VistaSitio url={vistaUrl} />}
+                                        onTerminar={() => setIntro(false)}
+                                    />
+                                )}
                                 <RecorridoDemo
-                                    abierto={recorrido}
+                                    abierto={recorrido && !intro}
+                                    tema={tema}
                                     datos={datos}
                                     onTerminar={terminarRecorrido}
                                     contenedor={host}
@@ -121,3 +148,4 @@ export default function PiruDemo({ tienda }: { tienda: Tienda }) {
         </div>
     )
 }
+

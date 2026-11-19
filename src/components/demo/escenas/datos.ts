@@ -26,6 +26,8 @@ export interface DatosDemo {
   categorias: CategoriaDemo[]
   /** Los primeros de la carta, con foto si hay: siempre tres, con relleno si la carta es corta. */
   destacados: ProductoDemo[]
+  /** La página real (`VistaSitio`) para el celular, en vez de la réplica de la tienda (`TiendaReplica`). */
+  vistaUrl?: string | null
 }
 
 type ProductoTienda = {

@@ -8,6 +8,7 @@ import { ClienteBase } from './escenas/ClienteBase'
 import { Recompra } from './escenas/Recompra'
 import { ClubPuntos } from './escenas/ClubPuntos'
 import { PanelAdmin } from './escenas/PanelAdmin'
+import { varsTema, type TemaDemo } from './temaSitio'
 
 interface Paso {
   id: string
@@ -20,7 +21,7 @@ interface Paso {
 }
 
 /** La parte de la descripción que remite a lo que el local ve en su tienda, detrás del diálogo. */
-const Vivo = ({ children }: { children: ReactNode }) => <strong className="font-semibold text-ink">{children}</strong>
+const Vivo = ({ children }: { children: ReactNode }) => <strong className="demo-fuerte font-semibold text-ink">{children}</strong>
 
 const PASOS: Paso[] = [
   {
@@ -85,18 +86,23 @@ const PASOS: Paso[] = [
  * se puede cerrar hasta el último paso, que presenta el botón del panel que aparece después arriba
  * de la tienda. Cada paso: el número, el título, una ilustración animada con los datos del local,
  * la descripción y un botón. Deslizar sobre la ilustración (o las flechas) también avanza o vuelve.
+ * Con `tema` toma los colores y las fuentes del sitio que tiene detrás (`temaSitio.ts`); sin él,
+ * la paleta de Piru.
  */
 export function RecorridoDemo({
   abierto,
   datos,
   onTerminar,
   contenedor,
+  tema,
 }: {
   abierto: boolean
   datos: DatosDemo
   onTerminar: () => void
   /** El contenedor `[data-piru-demo]` del sitio de Páginas; sin él, el portal va al `body`. */
   contenedor?: HTMLElement | null
+  /** El aspecto del sitio de detrás: fondo, texto, acento y fuentes. */
+  tema?: TemaDemo | null
 }) {
   const [i, setI] = useState(0)
   const [dir, setDir] = useState<1 | -1>(1)
@@ -131,6 +137,8 @@ export function RecorridoDemo({
         <Dialog.Overlay className="demo-fondo fixed inset-0 z-[80] bg-[#120F0D]/55 backdrop-blur-[3px]" />
         <Dialog.Content
           ref={caja}
+          data-tema={tema ? '' : undefined}
+          style={tema ? { ...varsTema(tema), fontFamily: tema.cuerpo } : undefined}
           // El foco arranca en el diálogo y no en el botón: así el botón no queda marcado para
           // quien lo toca con el dedo. Con teclado, Enter y las flechas avanzan igual.
           onOpenAutoFocus={(e) => {
@@ -147,12 +155,12 @@ export function RecorridoDemo({
           }}
           className="demo-caja fixed left-1/2 top-1/2 z-[90] flex max-h-[calc(100dvh-24px)] w-[min(440px,calc(100vw-24px))] -translate-x-1/2 -translate-y-1/2 flex-col items-center rounded-[28px] bg-paper px-5 pb-5 pt-4 text-center font-sans text-ink shadow-[0_40px_100px_-30px_rgb(0_0_0/.55)] outline-none sm:px-7 sm:pb-6 sm:pt-5"
         >
-          <p className="shrink-0 text-[12.5px] font-semibold tabular-nums text-ink-3" aria-live="polite">
+          <p className="demo-tenue shrink-0 text-[12.5px] font-semibold tabular-nums text-ink-3" aria-live="polite">
             {i + 1} de {PASOS.length}
           </p>
 
           <div key={`titulo-${i}`} data-dir={dir} className="demo-texto mt-1.5 flex min-h-[2.3em] w-full shrink-0 items-center justify-center text-[25px] sm:text-[29px]">
-            <Dialog.Title className="text-balance text-[1em] font-bold leading-[1.12] tracking-[-0.02em] text-ink">
+            <Dialog.Title className="demo-titulo text-balance text-[1em] font-bold leading-[1.12] tracking-[-0.02em] text-ink">
               {paso.titulo}
             </Dialog.Title>
           </div>
@@ -180,13 +188,13 @@ export function RecorridoDemo({
             data-dir={dir}
             className="demo-texto mt-3 flex min-h-[6em] w-full shrink-0 items-center justify-center text-[14.5px] leading-[1.5]"
           >
-            <Dialog.Description className="text-balance text-ink-2">{paso.texto}</Dialog.Description>
+            <Dialog.Description className="demo-suave text-balance text-ink-2">{paso.texto}</Dialog.Description>
           </div>
 
           <button
             type="button"
             onClick={siguiente}
-            className="mt-3 inline-flex h-12 min-w-[176px] shrink-0 items-center justify-center gap-2 rounded-full bg-brand px-6 text-[15.5px] font-semibold tracking-[-0.01em] text-white shadow-[inset_0_1px_0_rgb(255_255_255/.35),0_10px_24px_-10px_rgb(255_122_0/.75),0_2px_4px_rgb(158_62_0/.18)] transition-[transform,background-color] duration-200 hover:bg-brand-deep active:scale-[.97] focus-visible:outline-2 focus-visible:outline-offset-[3px] focus-visible:outline-brand-deep"
+            className="demo-boton mt-3 inline-flex h-12 min-w-[176px] shrink-0 items-center justify-center gap-2 rounded-full bg-brand px-6 text-[15.5px] font-semibold tracking-[-0.01em] text-white shadow-[inset_0_1px_0_rgb(255_255_255/.35),0_10px_24px_-10px_rgb(255_122_0/.75),0_2px_4px_rgb(158_62_0/.18)] transition-[transform,background-color] duration-200 hover:bg-brand-deep active:scale-[.97] focus-visible:outline-2 focus-visible:outline-offset-[3px] focus-visible:outline-brand-deep"
           >
             {paso.boton}
             {!ultimo && <ArrowRight className="size-4" strokeWidth={2.4} />}

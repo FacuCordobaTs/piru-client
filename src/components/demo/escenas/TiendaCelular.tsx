@@ -2,13 +2,14 @@ import { Check, Link2, MessageCircle } from 'lucide-react'
 import { Escena } from './Escena'
 import { Telefono } from './Telefono'
 import { TiendaReplica } from './TiendaReplica'
+import { VistaSitio } from '../VistaSitio'
 import { d } from './animacion'
 import type { DatosDemo } from './datos'
 
 const ANCHO_CELULAR = 178
 
 /**
- * Paso 1: la tienda del local en un celular que asoma desde abajo del escenario (el recorrido
+ * Paso 1: la tienda del local (en un sitio de Páginas, la página real) en un celular que asoma desde abajo del escenario (el recorrido
  * apoya esta escena en el borde inferior), con tres avisos: su link, sin comisiones y el pedido
  * en su WhatsApp.
  */
@@ -20,7 +21,7 @@ export function TiendaCelular({ datos }: { datos: DatosDemo }) {
       <div className="e-asoma absolute top-[14px]" style={{ left: (360 - ANCHO_CELULAR) / 2, width: ANCHO_CELULAR, ...d(0) }}>
         <div className="origin-top-left" style={{ transform: `scale(${ANCHO_CELULAR / 412})` }}>
           <Telefono>
-            <TiendaReplica datos={datos} />
+            {datos.vistaUrl ? <VistaSitio url={datos.vistaUrl} /> : <TiendaReplica datos={datos} />}
           </Telefono>
         </div>
       </div>

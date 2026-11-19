@@ -103,7 +103,8 @@ const jsonEnHtml = (valor: unknown) => JSON.stringify(valor).replace(/</g, '\\u0
 const colorSeguro = (valor: string | null | undefined, porDefecto: string) =>
     valor && /^#[0-9a-f]{3,8}$/i.test(valor) ? valor : porDefecto
 
-export function cspSitio(nonce: string, env: EnvPaginas): string {
+/** `demo`: la demo muestra el sitio dentro de sí mismo (`VistaSitio`, un iframe del mismo origen). */
+export function cspSitio(nonce: string, env: EnvPaginas, demo = false): string {
     const api = env.API_ORIGIN || 'https://api.piru.app'
     const imagenes = env.IMAGES_ORIGIN || 'https://images.piru.app'
     return [
@@ -115,13 +116,13 @@ export function cspSitio(nonce: string, env: EnvPaginas): string {
         `media-src 'self' blob: ${imagenes}`,
         // 'self': el beacon de Cloudflare (`/cdn-cgi/rum`) va al mismo origen, que controla el Worker.
         `connect-src 'self' ${api}`,
-        'frame-src https://www.google.com https://maps.google.com',
+        `frame-src ${demo ? "'self' " : ''}https://www.google.com https://maps.google.com`,
         "worker-src 'none'",
         "manifest-src 'self'",
         "form-action 'none'",
         "base-uri 'none'",
         "object-src 'none'",
-        "frame-ancestors 'none'",
+        demo ? "frame-ancestors 'self'" : "frame-ancestors 'none'",
         'upgrade-insecure-requests',
     ].join('; ')
 }
@@ -296,7 +297,7 @@ export async function atenderPaginas(request: Request, slug: string, env: EnvPag
             headers: {
                 'Content-Type': 'text/html; charset=utf-8',
                 'Cache-Control': 'no-cache',
-                'Content-Security-Policy': cspSitio(n, env),
+                'Content-Security-Policy': cspSitio(n, env, url.searchParams.has('demo')),
                 ...CABECERAS_SEGURIDAD,
             },
         }

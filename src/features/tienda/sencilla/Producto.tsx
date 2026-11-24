@@ -31,13 +31,14 @@ export function TarjetaSencilla<T extends ProductoCarta>({
             onClick={() => onAbrir(producto)}
             className="group flex min-w-0 flex-col text-left focus-visible:outline-none"
         >
-            <span className="relative block aspect-[4/5] overflow-hidden rounded-[22px] bg-secondary group-focus-visible:outline-2 group-focus-visible:outline-offset-4 group-focus-visible:outline-ring">
+            <span className="relative block overflow-hidden rounded-[22px] bg-secondary group-focus-visible:outline-2 group-focus-visible:outline-offset-4 group-focus-visible:outline-ring">
+                {/* La tarjeta toma el alto de la foto: nunca se recorta. */}
                 <img
                     src={foto}
                     alt={producto.nombre}
                     loading="lazy"
                     decoding="async"
-                    className="absolute inset-0 size-full object-cover transition-transform duration-500 ease-out [@media(hover:hover)]:group-hover:scale-[1.03]"
+                    className="block h-auto w-full transition-transform duration-500 ease-out [@media(hover:hover)]:group-hover:scale-[1.03]"
                 />
                 {descuento > 0 && (
                     <span className="absolute left-3 top-3 rounded-full bg-foreground px-2.5 py-1 text-[12px] font-semibold text-background">

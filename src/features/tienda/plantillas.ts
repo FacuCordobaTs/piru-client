@@ -14,6 +14,10 @@ import { HistoriaModerna } from './moderna/Historia'
 import { PedidoModerna } from './moderna/Pedido'
 import { PieModerna } from './moderna/Pie'
 import { PortadaModerna } from './moderna/Portada'
+import { CartaSencilla } from './sencilla/Carta'
+import { PedidoSencilla } from './sencilla/Pedido'
+import { HistoriaSencilla, PieSencilla } from './sencilla/Pie'
+import { PortadaSencilla } from './sencilla/Portada'
 import type { Plantilla } from './tipos'
 
 export const plantillas = {
@@ -37,5 +41,12 @@ export const plantillas = {
         Historia: HistoriaArtesanal,
         Pie: PieArtesanal,
         Pedido: PedidoArtesanal,
+    },
+    sencilla: {
+        Portada: PortadaSencilla,
+        Carta: CartaSencilla,
+        Historia: HistoriaSencilla,
+        Pie: PieSencilla,
+        Pedido: PedidoSencilla,
     },
 } satisfies Record<PlantillaId, Plantilla>

@@ -239,7 +239,8 @@ export function armarCarta(productos: ProductoBase[]): SeccionBase[] {
 export function normalizarContenido(bruto: unknown): Contenido {
     const t = leerTienda(bruto)
     return {
-        plantilla: t.plantilla ?? 'artesanal',
+        // `sencilla` es sólo de la tienda estándar (plan Inicial); Páginas no la tiene.
+        plantilla: !t.plantilla || t.plantilla === 'sencilla' ? 'artesanal' : t.plantilla,
         frase: t.frase ?? null,
         bajada: t.bajada ?? null,
         portadaUrl: t.portadaUrl ?? null,

@@ -134,7 +134,17 @@ const PESOS_FUENTE: Record<string, string> = {
     'Zilla Slab': ':wght@400;500;600;700',
 }
 
+const PILA_SISTEMA = "-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Inter'"
+
 export function armarFuentes(tienda: TiendaConfig): Fuentes {
+    // Sencilla usa la letra del sistema (San Francisco en Apple) con Inter de respaldo.
+    if (resolverPlantilla(tienda.plantilla) === 'sencilla')
+        return {
+            titulos: `${PILA_SISTEMA}, ${PILA_SANS}`,
+            cuerpo: `${PILA_SISTEMA}, ${PILA_SANS}`,
+            pesoTitulos: 600,
+            hojas: [`https://fonts.googleapis.com/css2?family=Inter${PESOS_FUENTE.Inter}&display=swap`],
+        }
     const base = BASES_PLANTILLA[resolverPlantilla(tienda.plantilla)]
     const f = {
         ...tienda.fuentes,

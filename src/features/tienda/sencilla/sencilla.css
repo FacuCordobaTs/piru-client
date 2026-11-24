@@ -1,0 +1,16 @@
+/* Sencilla: blanco y negro, letra del sistema y nada que distraiga de las fotos. */
+[data-plantilla='sencilla'] {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+[data-plantilla='sencilla'] .tienda-display {
+    letter-spacing: -0.025em;
+}
+.sencilla-acciones > button {
+    height: 40px;
+    padding: 0 16px;
+    border-width: 1px;
+    border-color: var(--border);
+    font-size: 13px;
+    font-weight: 500;
+}

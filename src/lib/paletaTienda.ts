@@ -94,8 +94,11 @@ export function armarPaleta(
     restaurante: ColoresRestaurante | null | undefined,
     tienda: { plantilla?: PlantillaId; colores?: ColoresTienda }
 ): Paleta {
-    const base = BASES_PLANTILLA[resolverPlantilla(tienda.plantilla)]
-    const c = tienda.colores ?? {}
+    const id = resolverPlantilla(tienda.plantilla)
+    const base = BASES_PLANTILLA[id]
+    // Sencilla es blanco y negro: ni la marca ni los overrides cambian sus colores.
+    if (id === 'sencilla') restaurante = null
+    const c = (id === 'sencilla' ? undefined : tienda.colores) ?? {}
     const primario = colorHex(restaurante?.colorPrimario)
     const secundario = restaurante?.usarColorUnico ? undefined : colorHex(restaurante?.colorSecundario)
     const marca = colorHex(c.acento) ?? primario ?? secundario ?? base.acento

@@ -1,4 +1,5 @@
-export const PLANTILLAS = ['elegante', 'moderna', 'artesanal'] as const
+/** `sencilla` es la del plan Inicial: el backend la impone, no se elige. */
+export const PLANTILLAS = ['elegante', 'moderna', 'artesanal', 'sencilla'] as const
 export type PlantillaId = (typeof PLANTILLAS)[number]
 
 /** El backend sólo elige una clave conocida; nunca envía código o clases para ejecutar. */
@@ -36,6 +37,16 @@ export const BASES_PLANTILLA = {
         titulos: 'Fraunces',
         cuerpo: 'Nunito Sans',
         peso: 700,
+    },
+    sencilla: {
+        fondo: '#ffffff',
+        texto: '#1d1d1f',
+        superficie: '#ffffff',
+        acento: '#1d1d1f',
+        marca: { tinte: 0 },
+        titulos: 'Inter',
+        cuerpo: 'Inter',
+        peso: 600,
     },
 } satisfies Record<
     PlantillaId,

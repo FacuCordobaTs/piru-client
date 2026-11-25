@@ -112,7 +112,8 @@ export function cspSitio(nonce: string, env: EnvPaginas, demo = false): string {
         `script-src 'self' 'nonce-${nonce}'`,
         "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
         "font-src 'self' https://fonts.gstatic.com",
-        `img-src 'self' data: blob: ${imagenes}`,
+        // Las fotos de los temas (`public/temas` de Páginas) viven en pages.piru.app.
+        `img-src 'self' data: blob: ${imagenes} https://pages.piru.app`,
         `media-src 'self' blob: ${imagenes}`,
         // 'self': el beacon de Cloudflare (`/cdn-cgi/rum`) va al mismo origen, que controla el Worker.
         `connect-src 'self' ${api}`,

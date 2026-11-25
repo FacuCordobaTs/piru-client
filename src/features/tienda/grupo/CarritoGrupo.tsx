@@ -86,6 +86,7 @@ export function CarritoGrupo({ modelo }: { modelo: MenuGrupoModel }) {
                     direccionSoloTexto={restaurante?.direccionSoloTexto === true}
                     onTituloChange={setTituloCheckout}
                     enviarPedidoWhatsapp={restaurante?.avisosWhatsappClienteEnabled === false}
+                    telefonoPorWhatsapp={restaurante?.avisosWhatsappClienteEnabled === false && restaurante?.whatsappVinculadoPedidos === true}
                     localCerrado={localCerrado}
                     contextoMarketing={
                         restaurante?.username ? contextoParaPedidoMarketing(restaurante.username) : undefined

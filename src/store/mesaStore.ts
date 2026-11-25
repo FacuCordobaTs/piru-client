@@ -29,6 +29,7 @@ interface Restaurante extends RestauranteTienda {
   comprobantesWhatsapp?: string | null
   transferenciaAlias?: string | null
   avisosWhatsappClienteEnabled?: boolean
+  whatsappVinculadoPedidos?: boolean
   sistemaPuntos?: boolean | null
   configuracionPuntos?: RestaurantePublico['configuracionPuntos']
 }

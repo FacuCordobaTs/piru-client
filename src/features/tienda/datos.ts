@@ -27,6 +27,8 @@ export interface RestaurantePublico extends RestauranteTienda {
     soloPedidosProgramados?: boolean
     pausadoPorSuscripcion?: boolean
     avisosWhatsappClienteEnabled?: boolean
+    /** WhatsApp del local vinculado: el número del cliente sale del mensaje del pedido. */
+    whatsappVinculadoPedidos?: boolean
     orderGroupEnabled?: boolean
     deliveryFee?: string | number | null
     sistemaPuntos?: boolean

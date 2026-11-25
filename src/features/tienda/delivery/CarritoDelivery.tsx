@@ -105,6 +105,7 @@ export function CarritoDelivery({ modelo }: { modelo: MenuDeliveryModel }) {
                     itemsResumen={esPedidoHabitual ? cartItems : undefined}
                     pedidoHabitual={esPedidoHabitual}
                     enviarPedidoWhatsapp={restaurante?.avisosWhatsappClienteEnabled === false}
+                    telefonoPorWhatsapp={restaurante?.avisosWhatsappClienteEnabled === false && restaurante?.whatsappVinculadoPedidos === true}
                     submittingOrder={submittingOrder}
                     localCerrado={!estadoAbierto.abierto || !!restaurante?.pausadoPorSuscripcion}
                     contextoMarketing={

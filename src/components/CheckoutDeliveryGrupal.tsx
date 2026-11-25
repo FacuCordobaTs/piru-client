@@ -197,6 +197,8 @@ interface CheckoutDeliveryGrupalProps {
   localCerrado?: boolean
   /** Sin Avisos automáticos, el cliente debe enviar el pedido desde su WhatsApp. */
   enviarPedidoWhatsapp?: boolean
+  /** El local tiene su WhatsApp vinculado: el celular se toma del mensaje del pedido y no se pide. */
+  telefonoPorWhatsapp?: boolean
   /** Bloquea toda confirmación mientras el alta del pedido está en curso. */
   submittingOrder?: boolean
   /** Contexto transitorio del Smart Link para atribuir exclusivamente el pedido final. */
@@ -237,6 +239,7 @@ export function CheckoutDeliveryGrupal({
   pedidoHabitual = false,
   localCerrado = false,
   enviarPedidoWhatsapp = false,
+  telefonoPorWhatsapp = false,
   submittingOrder = false,
   contextoMarketing,
   codigoPromocionalInicial,
@@ -247,6 +250,10 @@ export function CheckoutDeliveryGrupal({
   const [tipoPedido, setTipoPedido] = useState<'delivery' | 'takeaway'>(checkoutData?.tipoPedido || 'delivery')
   const [nombre, setNombre] = useState(checkoutData?.nombre || localStorage.getItem('cliente_nombre') || '')
   const [telefono, setTelefono] = useState(checkoutData?.telefono || localStorage.getItem('cliente_telefono') || '')
+  // Con el WhatsApp del local vinculado el celular llega con el mensaje del pedido: sólo se pide si ya
+  // lo teníamos (puntos, direcciones guardadas) para que el cliente pueda corregirlo.
+  const [pedirTelefono] = useState(() => !telefonoPorWhatsapp || Boolean(telefono.trim()))
+  const faltaTelefono = (valor?: string | null) => pedirTelefono && !valor?.trim()
   const [direccion, setDireccion] = useState(checkoutData?.direccion || '')
   const [lat, setLat] = useState<number | null>(checkoutData?.lat ?? null)
   const [lng, setLng] = useState<number | null>(checkoutData?.lng ?? null)
@@ -685,11 +692,11 @@ export function CheckoutDeliveryGrupal({
 
   const handleGuardarEdicion = () => {
     if (submittingOrder) return
-    if (tipoPedido === 'delivery' && (!nombre.trim() || !telefono.trim() || !direccion.trim())) {
+    if (tipoPedido === 'delivery' && (!nombre.trim() || faltaTelefono(telefono) || !direccion.trim())) {
       toast.error('Completa nombre, celular y dirección')
       return
     }
-    if (tipoPedido === 'takeaway' && (!nombre.trim() || !telefono.trim())) {
+    if (tipoPedido === 'takeaway' && (!nombre.trim() || faltaTelefono(telefono))) {
       toast.error('Completa nombre y celular')
       return
     }
@@ -774,7 +781,7 @@ export function CheckoutDeliveryGrupal({
       toast.error('Completa los datos de envío antes de confirmar')
       return
     }
-    if (!checkoutData.nombre?.trim() || !checkoutData.telefono?.trim()) {
+    if (!checkoutData.nombre?.trim() || faltaTelefono(checkoutData.telefono)) {
       toast.error('Faltan nombre o celular')
       return
     }
@@ -802,7 +809,7 @@ export function CheckoutDeliveryGrupal({
 
   const guardarCambiosHabituales = () => {
     if (!checkoutData || submittingOrder) return
-    if (!nombre.trim() || !telefono.trim()) {
+    if (!nombre.trim() || faltaTelefono(telefono)) {
       toast.error('Completa nombre y celular')
       return
     }
@@ -883,7 +890,7 @@ export function CheckoutDeliveryGrupal({
   const validarPaso = (p: number): boolean => {
     const k = pasos[p]
     if (k === 'datos') {
-      if (!nombre.trim() || !telefono.trim()) { toast.error('Completa nombre y celular'); return false }
+      if (!nombre.trim() || faltaTelefono(telefono)) { toast.error('Completa nombre y celular'); return false }
     }
     if (k === 'ubicacion') {
       if (tipoPedido === 'delivery') {
@@ -1029,10 +1036,17 @@ export function CheckoutDeliveryGrupal({
         <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-1">Nombre</Label>
         <Input id="nombre-grupal" placeholder="Quien recibe el pedido" className={inputCls} value={nombre || ''} onChange={e => setNombre(e.target.value)} />
       </div>
-      <div className="space-y-2">
-        <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-1">Celular</Label>
-        <Input id="telefono-grupal" type="tel" placeholder="Ej: 5491112345678" className={inputCls} value={telefono || ''} onChange={e => setTelefono((e.target.value || '').replace(/\D/g, ''))} />
-      </div>
+      {pedirTelefono ? (
+        <div className="space-y-2">
+          <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-1">Celular</Label>
+          <Input id="telefono-grupal" type="tel" placeholder="Ej: 5491112345678" className={inputCls} value={telefono || ''} onChange={e => setTelefono((e.target.value || '').replace(/\D/g, ''))} />
+        </div>
+      ) : (
+        <p className="flex items-start gap-2 px-1 text-xs text-muted-foreground">
+          <MessageCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          No hace falta tu celular: lo tomamos del WhatsApp cuando nos mandes el pedido.
+        </p>
+      )}
     </div>
   )
 
@@ -1649,11 +1663,15 @@ export function CheckoutDeliveryGrupal({
           <p className="text-xs text-muted-foreground mb-0.5">Nombre</p>
           <p className="text-sm font-semibold">{checkoutData?.nombre}</p>
         </div>
-        <div className="mx-4 border-t border-dashed border-border" />
-        <div className="px-4 py-3.5">
-          <p className="text-xs text-muted-foreground mb-0.5">Celular</p>
-          <p className="text-sm font-semibold">{checkoutData?.telefono}</p>
-        </div>
+        {checkoutData?.telefono?.trim() && (
+          <>
+            <div className="mx-4 border-t border-dashed border-border" />
+            <div className="px-4 py-3.5">
+              <p className="text-xs text-muted-foreground mb-0.5">Celular</p>
+              <p className="text-sm font-semibold">{checkoutData.telefono}</p>
+            </div>
+          </>
+        )}
         {checkoutData?.tipoPedido === 'delivery' && checkoutData.direccion && (
           <>
             <div className="mx-4 border-t border-dashed border-border" />

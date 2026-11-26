@@ -188,6 +188,12 @@ async function main() {
     const dts = generarDts()
     writeFileSync(path.join(salida, 'piru-tienda.d.ts'), dts)
     writeFileSync(path.join(salida, 'manifest.json'), JSON.stringify({ version: RUNTIME_VERSION, hashes }, null, 2))
+    // El Worker pone el hash en la URL de cada módulo (`?h=`): el runtime se sirve con caché de un
+    // año, así que sin esto un navegador que ya lo cargó nunca ve la versión nueva.
+    writeFileSync(
+        path.join(raiz, 'cloudflare/runtime-hashes.generado.ts'),
+        `// Generado por scripts/build-runtime.ts. No editar.\nexport const HASHES_RUNTIME: Record<string, string> = ${JSON.stringify(hashes, null, 4)}\n`
+    )
 
     const sitios = path.resolve(raiz, '../sitios')
     if (existsSync(sitios)) {

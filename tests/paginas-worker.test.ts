@@ -66,7 +66,7 @@ test('con sitio activo devuelve el HTML con import map, CSP con nonce y metadato
     const csp = res.headers.get('content-security-policy')!
     const nonce = csp.match(/'nonce-([^']+)'/)![1]
     expect(html).toContain(`<script type="importmap" nonce="${nonce}">`)
-    expect(html).toContain('"@piru/tienda":"/_piru/runtime/v1/sdk.js"')
+    expect(html).toMatch(/"@piru\/tienda":"\/_piru\/runtime\/v1\/sdk\.js\?h=[0-9a-f]{16}"/)
     expect(html).toContain('data-page="/_piru/s/a3f9c0de11223344aabb.js"')
     expect(html).toContain('href="/_piru/s/4f2a00112233aabbccdd.css"')
     expect(html).toContain('content="https://bronx.piru.app/_piru/a/9be1')
@@ -104,7 +104,7 @@ test('?demo muestra el sitio con la demo en vez de redirigir a my.piru.app', asy
     expect(res.status).toBe(200)
     const html = await res.text()
     expect(html).toContain('"demo":true')
-    expect(html).toContain('"@piru/demo":"/_piru/runtime/v1/demo.js"')
+    expect(html).toMatch(/"@piru\/demo":"\/_piru\/runtime\/v1\/demo\.js\?h=[0-9a-f]{16}"/)
     expect(res.headers.get('cache-control')).toBe('no-cache')
 
     const normal = await worker.fetch(new Request('https://bronx.piru.app/'), env())

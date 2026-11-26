@@ -8,6 +8,8 @@
  *
  * Tipos mínimos de R2/KV para no depender de `@cloudflare/workers-types`.
  */
+import { HASHES_RUNTIME } from './runtime-hashes.generado'
+
 
 export interface ObjetoR2 {
     body: ReadableStream
@@ -65,16 +67,22 @@ const TIPOS: Record<string, string> = {
 }
 const MODULOS_RUNTIME = new Set(['react', 'react-jsx-runtime', 'react-dom', 'react-dom-client', 'motion', 'react-router', 'sdk', 'boot', 'demo'])
 
+/** URL de un módulo del runtime con su hash (`?h=`): cambia cuando cambia el archivo, que se sirve con caché de un año. */
+const rt = (v: string, archivo: string) => {
+    const hash = v === 'v1' ? HASHES_RUNTIME[archivo] : undefined
+    return `/_piru/runtime/${v}/${archivo}${hash ? `?h=${hash}` : ''}`
+}
+
 export const IMPORTS_RUNTIME = (v: string) => ({
-    react: `/_piru/runtime/${v}/react.js`,
-    'react/jsx-runtime': `/_piru/runtime/${v}/react-jsx-runtime.js`,
-    'react-dom': `/_piru/runtime/${v}/react-dom.js`,
-    'react-dom/client': `/_piru/runtime/${v}/react-dom-client.js`,
-    'motion/react': `/_piru/runtime/${v}/motion.js`,
-    'react-router': `/_piru/runtime/${v}/react-router.js`,
-    '@piru/tienda': `/_piru/runtime/${v}/sdk.js`,
-    // Lo carga `lazy` el runtime sólo con `?demo` (recorrido, isla y pedido de prueba).
-    '@piru/demo': `/_piru/runtime/${v}/demo.js`,
+    react: rt(v, 'react.js'),
+    'react/jsx-runtime': rt(v, 'react-jsx-runtime.js'),
+    'react-dom': rt(v, 'react-dom.js'),
+    'react-dom/client': rt(v, 'react-dom-client.js'),
+    'motion/react': rt(v, 'motion.js'),
+    'react-router': rt(v, 'react-router.js'),
+    '@piru/tienda': rt(v, 'sdk.js'),
+    // Lo carga `lazy` el runtime sólo con `?demo` (la animación y el pedido de prueba).
+    '@piru/demo': rt(v, 'demo.js'),
 })
 
 export function esManifiesto(v: unknown): v is ManifiestoSitio {
@@ -173,15 +181,15 @@ ${icono ? `<link rel="icon" href="${escaparHtml(icono)}"><link rel="apple-touch-
 <style>html,body{background:${fondo};margin:0}</style>
 ${m.css ? `<link rel="stylesheet" href="/_piru/s/${m.css}.css">` : ''}
 <script type="importmap" nonce="${nonce}">${jsonEnHtml({ imports: IMPORTS_RUNTIME(v) })}</script>
-<link rel="modulepreload" href="/_piru/runtime/${v}/react.js">
-<link rel="modulepreload" href="/_piru/runtime/${v}/sdk.js">
+<link rel="modulepreload" href="${rt(v, 'react.js')}">
+<link rel="modulepreload" href="${rt(v, 'sdk.js')}">
 <link rel="modulepreload" href="/_piru/s/${m.bundle}.js">
 <script id="piru-config" type="application/json">${jsonEnHtml(config)}</script>
 </head>
 <body>
 <div id="root"></div>
 <noscript>Pedí desde <a href="${escaparHtml(tiendaEstandar)}">la tienda</a>.</noscript>
-<script type="module" src="/_piru/runtime/${v}/boot.js" data-page="/_piru/s/${m.bundle}.js" nonce="${nonce}"></script>
+<script type="module" src="${rt(v, 'boot.js')}" data-page="/_piru/s/${m.bundle}.js" nonce="${nonce}"></script>
 </body>
 </html>`
 }

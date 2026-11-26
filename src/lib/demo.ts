@@ -162,6 +162,7 @@ export interface PedidoDemoInfo {
 }
 
 type ItemDemo = {
+  nombre?: string
   precio: string | number
   cantidad?: number
   puntosGanados?: number | string | null

@@ -37,7 +37,6 @@ function MenuDeliveryPagina({ campana }: { campana: CampanaPublica | null }) {
         username,
         restaurante,
         productos,
-        scrollDir,
         pedidoDemo,
         setPedidoDemo,
         estadoAbierto,
@@ -126,7 +125,6 @@ function MenuDeliveryPagina({ campana }: { campana: CampanaPublica | null }) {
                             username={username ?? ''}
                             restaurante={restaurante}
                             productos={productos}
-                            scrollDir={scrollDir}
                             pedido={pedidoDemo}
                             onCerrarPedido={() => setPedidoDemo(null)}
                         />

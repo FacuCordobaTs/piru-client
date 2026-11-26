@@ -4,7 +4,7 @@ import { LayoutDashboard } from 'lucide-react'
 import { URL_PANEL, type PedidoDemoInfo } from '@/lib/demo'
 
 /** Una línea del mensaje con el formato de WhatsApp: *negrita* y _cursiva_. */
-function Linea({ texto }: { texto: string }) {
+export function Linea({ texto }: { texto: string }) {
   const partes = texto.split(/(\*[^*\n]+\*|_[^_\n]+_)/g)
   return (
     <>

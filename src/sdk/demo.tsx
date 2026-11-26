@@ -3,22 +3,19 @@
  * config del HTML y `PiruSiteRoot` carga este módulo aparte (`lazy`): el sitio publicado que no es
  * una demo no descarga nada de esto.
  *
- * Son los mismos componentes de la tienda estándar (`components/demo/`): el recorrido de
- * bienvenida, la isla que lleva al panel y el pedido de prueba. Se montan sobre el diseño propio
+ * Son los mismos componentes de la tienda estándar (`components/demo/`): la animación de
+ * pantalla completa (`PeliculaDemo`) y el pedido de prueba. Se montan sobre el diseño propio
  * en un contenedor `[data-piru-demo]` y su CSS (Tailwind compilado en `build-runtime.ts`) va bajo
  * `@scope`, así no toca los estilos del sitio.
  *
- * Antes del recorrido pasa la intro (en cada carga) y todo toma el aspecto del sitio
- * (`temaSitio.ts`). El celular del recorrido y de la intro muestra la página real en un iframe
- * (`?demo&vista`); adentro de ese iframe esta demo no monta nada.
+ * La animación toma el aspecto del sitio (`temaSitio.ts`) y su celular muestra la página real en
+ * un iframe (`?demo&vista`); adentro de ese iframe esta demo no monta nada.
  */
 import { useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { IslaPanelDemo } from '@/components/demo/IslaPanelDemo'
 import { PedidoDemo } from '@/components/demo/PedidoDemo'
-import { RecorridoDemo } from '@/components/demo/RecorridoDemo'
-import { IntroDemo, productoIntro } from '@/components/demo/IntroDemo'
-import { ESTILO_VISTA, VistaSitio, esVistaSitio, urlVistaSitio } from '@/components/demo/VistaSitio'
+import { PeliculaDemo } from '@/components/demo/PeliculaDemo'
+import { ESTILO_VISTA, esVistaSitio, urlVistaSitio } from '@/components/demo/VistaSitio'
 import { useTemaSitio } from '@/components/demo/temaSitio'
 import { datosDemo } from '@/components/demo/escenas/datos'
 import { useCarta, useLocal, useSitio } from '@piru/tienda'
@@ -37,42 +34,13 @@ function Demo({ tienda }: { tienda: Tienda }) {
     const sitio = useSitio()
     const [host, setHost] = useState<HTMLDivElement | null>(null)
     const [pedido, setPedido] = useState<PedidoDemoInfo | null>(tienda.get().pedidoDemo)
-    const [recorrido, setRecorrido] = useState(() => !recorridoDemoVisto(sitio.username))
-    const [isla, setIsla] = useState(false)
-    const [intro, setIntro] = useState(true)
+    const [saltable] = useState(() => recorridoDemoVisto(sitio.username))
+    const [pelicula, setPelicula] = useState(true)
     const tema = useTemaSitio(local?.colores.primario)
-    const vistaUrl = useMemo(urlVistaSitio, [])
-    const [scrollDir, setScrollDir] = useState<'up' | 'down' | null>(null)
+    const vistaUrl = useMemo(() => urlVistaSitio(), [])
 
     // El checkout de la página no crea el pedido en la demo: guarda acá el mensaje de WhatsApp.
     useEffect(() => tienda.subscribe(() => setPedido(tienda.get().pedidoDemo)), [tienda])
-
-    // La isla baja medio segundo después de cerrar el recorrido (o de cargar, si ya lo vio).
-    useEffect(() => {
-        if (recorrido || intro) return
-        const tiempo = window.setTimeout(() => setIsla(true), 500)
-        return () => window.clearTimeout(tiempo)
-    }, [recorrido, intro])
-
-    // La isla se corre un poco con el scroll, como en la tienda estándar.
-    useEffect(() => {
-        let ultimo = window.scrollY
-        let timer: number | null = null
-        const alScroll = () => {
-            const y = window.scrollY
-            const delta = y - ultimo
-            ultimo = y
-            if (Math.abs(delta) < 2) return
-            setScrollDir(delta > 0 ? 'down' : 'up')
-            if (timer) window.clearTimeout(timer)
-            timer = window.setTimeout(() => setScrollDir(null), 150)
-        }
-        window.addEventListener('scroll', alScroll, { passive: true })
-        return () => {
-            window.removeEventListener('scroll', alScroll)
-            if (timer) window.clearTimeout(timer)
-        }
-    }, [])
 
     // La misma información que la demo de la tienda estándar: el local, su logo y su carta.
     const datos = useMemo(() => {
@@ -89,24 +57,12 @@ function Demo({ tienda }: { tienda: Tienda }) {
                 disponible: p.disponible,
             }))
         )
-        const base = datosDemo(
-            {
-                nombre: local.nombre,
-                imagenUrl: local.logo,
-                imagenLightUrl: local.logoClaro,
-                // En una página el pedido en grupo depende de su sección «Pedir entre varios», que el runtime no ve: el recorrido no lo promete.
-                orderGroupEnabled: false,
-            },
+        return datosDemo(
+            { nombre: local.nombre, imagenUrl: local.logo, imagenLightUrl: local.logoClaro, orderGroupEnabled: false },
             productos,
             window.location.host
         )
-        return { ...base, vistaUrl }
-    }, [local, carta, vistaUrl])
-
-    const terminarRecorrido = () => {
-        marcarRecorridoDemoVisto(sitio.username)
-        setRecorrido(false)
-    }
+    }, [local, carta])
 
     return (
         <div ref={setHost} data-piru-demo="" style={{ display: 'contents' }}>
@@ -116,24 +72,16 @@ function Demo({ tienda }: { tienda: Tienda }) {
                         <style>{CSS_DEMO}</style>
                         {local && datos && (
                             <>
-                                <IslaPanelDemo username={sitio.username} visible={isla} scrollDir={scrollDir} />
-                                {intro && (
-                                    <IntroDemo
-                                        local={local.nombre}
+                                {pelicula && (
+                                    <PeliculaDemo
+                                        datos={datos}
                                         tema={tema}
-                                        logo={local.logoClaro ?? local.logo}
-                                        producto={productoIntro(datos.destacados)}
-                                        pagina={<VistaSitio url={vistaUrl} />}
-                                        onTerminar={() => setIntro(false)}
+                                        vistaUrl={vistaUrl}
+                                        saltable={saltable}
+                                        onVista={() => marcarRecorridoDemoVisto(sitio.username)}
+                                        onTerminar={() => setPelicula(false)}
                                     />
                                 )}
-                                <RecorridoDemo
-                                    abierto={recorrido && !intro}
-                                    tema={tema}
-                                    datos={datos}
-                                    onTerminar={terminarRecorrido}
-                                    contenedor={host}
-                                />
                                 <PedidoDemo
                                     pedido={pedido}
                                     local={local.nombre}
@@ -148,4 +96,3 @@ function Demo({ tienda }: { tienda: Tienda }) {
         </div>
     )
 }
-

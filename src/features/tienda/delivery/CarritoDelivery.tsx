@@ -89,6 +89,9 @@ export function CarritoDelivery({ modelo }: { modelo: MenuDeliveryModel }) {
                     clienteNombre={demo ? CLIENTA_DEMO.nombre : localStorage.getItem('cliente_nombre') || ''}
                     checkoutData={checkoutDeliveryData}
                     editSemaphore={editSemaphoreLocal}
+                    restauranteUbicacion={restaurante?.direccionLat && restaurante?.direccionLng
+                        ? { lat: Number(restaurante.direccionLat), lng: Number(restaurante.direccionLng) }
+                        : null}
                     restauranteDireccion={restaurante?.direccionTexto ?? restaurante?.direccion ?? undefined}
                     direccionSoloTexto={restaurante?.direccionSoloTexto === true}
                     onTituloChange={setTituloCheckout}

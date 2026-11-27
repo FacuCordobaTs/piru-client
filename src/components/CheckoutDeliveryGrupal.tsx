@@ -165,6 +165,8 @@ interface CheckoutDeliveryGrupalProps {
   checkoutData: CheckoutDeliveryData | null
   editSemaphore: CheckoutEditSemaphore | null
   restauranteDireccion?: string
+  /** Ubicación del local: sesga las sugerencias de dirección cuando no hay sucursales cargadas. */
+  restauranteUbicacion?: { lat: number; lng: number } | null
   /** Preferencia pública del restaurante; evita mostrar Maps mientras carga el detalle del checkout. */
   direccionSoloTexto?: boolean
   /** 'completo' = formulario completo scrolleable (drawer expandido). 'pasos' = wizard paso a paso (drawer comprimido). */
@@ -229,6 +231,7 @@ export function CheckoutDeliveryGrupal({
   checkoutData,
   editSemaphore,
   restauranteDireccion,
+  restauranteUbicacion,
   direccionSoloTexto: direccionSoloTextoProp,
   modo,
   onVolverCarrito,
@@ -384,6 +387,7 @@ export function CheckoutDeliveryGrupal({
       ? [{ lat: sucursalLat, lng: sucursalLng }]
       : []
   })
+  if (ubicacionesSucursales.length === 0 && restauranteUbicacion) ubicacionesSucursales.push(restauranteUbicacion)
   const direccionRetiro = sucursales.length === 1
     ? sucursales[0].direccion
     : restauranteDireccion

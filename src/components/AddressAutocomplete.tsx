@@ -88,9 +88,14 @@ const SAN_CRISTOBAL_BOUNDS = {
                 if (viewport) autocomplete.setOptions({ bounds: viewport, strictBounds: true })
             }).catch(() => {})
         } else if (biasLocations.length > 0) {
+            // Un margen de ~25 km alrededor de los locales: sin él, un solo punto
+            // arma un rectángulo vacío y Google sugiere calles de todo el país.
             const bounds = new google.maps.LatLngBounds()
-            for (const point of biasLocations) bounds.extend(point)
-            autocomplete.setBounds(bounds)
+            for (const point of biasLocations) {
+                bounds.extend({ lat: point.lat - 0.25, lng: point.lng - 0.25 })
+                bounds.extend({ lat: point.lat + 0.25, lng: point.lng + 0.25 })
+            }
+            autocomplete.setOptions({ bounds, strictBounds: true })
         }
 
         autocomplete.addListener('place_changed', () => {
@@ -230,3 +235,4 @@ const SAN_CRISTOBAL_BOUNDS = {
         </div>
     )
 }
+
